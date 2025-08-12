@@ -1,0 +1,30 @@
+# Git Submodules Configuration for Helianthus Game Server
+# Third-party dependencies will be added here as submodules
+
+# Example structure (uncomment and modify when adding actual dependencies):
+# 
+# [submodule "ThirdParty/GoogleTest"]
+#     path = ThirdParty/GoogleTest
+#     url = https://github.com/google/googletest.git
+#     branch = main
+#
+# [submodule "ThirdParty/Protobuf"]  
+#     path = ThirdParty/Protobuf
+#     url = https://github.com/protocolbuffers/protobuf.git
+#     branch = main
+#
+# [submodule "ThirdParty/Spdlog"]
+#     path = ThirdParty/Spdlog  
+#     url = https://github.com/gabime/spdlog.git
+#     branch = v1.x
+#
+# Scripting engines (when Phase 1.5 begins):
+# [submodule "ThirdParty/Lua"]
+#     path = ThirdParty/Lua
+#     url = https://github.com/lua/lua.git
+#     branch = master
+#
+# [submodule "ThirdParty/V8"]
+#     path = ThirdParty/V8
+#     url = https://github.com/v8/v8.git
+#     branch = main

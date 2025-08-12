@@ -1,0 +1,25 @@
+cc_library(
+    name = "network",
+    srcs = [
+        "NetworkManager.cpp",
+        "TcpSocket.cpp", 
+        "UdpSocket.cpp",
+        "NetworkBuffer.cpp",
+        "ConnectionPool.cpp",
+    ],
+    hdrs = [
+        "INetworkSocket.h",
+        "INetworkManager.h", 
+        "NetworkManager.h",
+        "TcpSocket.h",
+        "UdpSocket.h", 
+        "NetworkBuffer.h",
+        "ConnectionPool.h",
+        "NetworkTypes.h",
+    ],
+    deps = [
+        "//:helianthus_config",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)

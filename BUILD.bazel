@@ -1,0 +1,49 @@
+# Root BUILD file for Helianthus Game Server
+
+package(default_visibility = ["//visibility:public"])
+
+# Global configuration
+config_setting(
+    name = "enable_lua_scripting",
+    define_values = {"ENABLE_LUA_SCRIPTING": "1"},
+)
+
+config_setting(
+    name = "enable_python_scripting", 
+    define_values = {"ENABLE_PYTHON_SCRIPTING": "1"},
+)
+
+config_setting(
+    name = "enable_js_scripting",
+    define_values = {"ENABLE_JS_SCRIPTING": "1"},
+)
+
+config_setting(
+    name = "enable_dotnet_scripting",
+    define_values = {"ENABLE_DOTNET_SCRIPTING": "1"},
+)
+
+# Global C++ flags
+cc_library(
+    name = "helianthus_config",
+    hdrs = ["HelianthusConfig.h"],
+    defines = select({
+        ":enable_lua_scripting": ["HELIANTHUS_ENABLE_LUA=1"],
+        "//conditions:default": ["HELIANTHUS_ENABLE_LUA=0"],
+    }) + select({
+        ":enable_python_scripting": ["HELIANTHUS_ENABLE_PYTHON=1"], 
+        "//conditions:default": ["HELIANTHUS_ENABLE_PYTHON=0"],
+    }) + select({
+        ":enable_js_scripting": ["HELIANTHUS_ENABLE_JS=1"],
+        "//conditions:default": ["HELIANTHUS_ENABLE_JS=0"],
+    }) + select({
+        ":enable_dotnet_scripting": ["HELIANTHUS_ENABLE_DOTNET=1"],
+        "//conditions:default": ["HELIANTHUS_ENABLE_DOTNET=0"],
+    }),
+    copts = [
+        "-std=c++17",
+        "-Wall",
+        "-Wextra",
+        "-O2",
+    ],
+)

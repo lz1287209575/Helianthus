@@ -1,0 +1,27 @@
+cc_library(
+    name = "discovery",
+    srcs = [
+        "ServiceRegistry.cpp",
+        "ServiceDiscovery.cpp", 
+        "LoadBalancer.cpp",
+        "HealthChecker.cpp",
+    ],
+    hdrs = [
+        "IServiceRegistry.h",
+        "IServiceDiscovery.h", 
+        "ILoadBalancer.h",
+        "IHealthChecker.h",
+        "ServiceRegistry.h",
+        "ServiceDiscovery.h",
+        "LoadBalancer.h", 
+        "HealthChecker.h",
+        "DiscoveryTypes.h",
+    ],
+    deps = [
+        "//:helianthus_config",
+        "//Shared/Common:common",
+        "//Shared/Network:network",
+        "//Shared/Message:message",
+    ],
+    visibility = ["//visibility:public"],
+)

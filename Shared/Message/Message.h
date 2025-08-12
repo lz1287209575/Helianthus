@@ -1,0 +1,127 @@
+#pragma once
+
+#include "MessageTypes.h"
+#include <vector>
+#include <string>
+#include <memory>
+
+namespace Helianthus::Message
+{
+    /**
+     * @brief Core message class for inter-service communication
+     * 
+     * This class encapsulates message data, headers, and provides
+     * serialization/deserialization capabilities for network transmission.
+     */
+    class Message
+    {
+    public:
+        // Constructors
+        Message();
+        explicit Message(MESSAGE_TYPE MessageType);
+        Message(MESSAGE_TYPE MessageType, const std::vector<uint8_t>& Payload);
+        Message(MESSAGE_TYPE MessageType, const std::string& JsonPayload);
+        
+        // Copy and move constructors
+        Message(const Message& Other);
+        Message(Message&& Other) noexcept;
+        Message& operator=(const Message& Other);
+        Message& operator=(Message&& Other) noexcept;
+        
+        virtual ~Message() = default;
+
+        // Header access
+        MessageHeader& GetHeader() { return Header; }
+        const MessageHeader& GetHeader() const { return Header; }
+        void SetHeader(const MessageHeader& Header) { this->Header = Header; }
+
+        // Payload management
+        void SetPayload(const std::vector<uint8_t>& Payload);
+        void SetPayload(const std::string& JsonPayload);
+        void SetPayload(const uint8_t* Data, size_t Size);
+        
+        const std::vector<uint8_t>& GetPayload() const { return Payload; }
+        std::vector<uint8_t>& GetPayload() { return Payload; }
+        
+        size_t GetPayloadSize() const { return Payload.size(); }
+        bool HasPayload() const { return !Payload.empty(); }
+        
+        // JSON payload helpers
+        std::string GetJsonPayload() const;
+        bool SetJsonPayload(const std::string& Json);
+        
+        // Message properties
+        MessageId GetMessageId() const { return Header.MessageId; }
+        void SetMessageId(MessageId Id) { Header.MessageId = Id; }
+        
+        MESSAGE_TYPE GetMessageType() const { return Header.MessageType; }
+        void SetMessageType(MESSAGE_TYPE Type) { Header.MessageType = Type; }
+        
+        MESSAGE_PRIORITY GetPriority() const { return Header.Priority; }
+        void SetPriority(MESSAGE_PRIORITY Priority) { Header.Priority = Priority; }
+        
+        DELIVERY_MODE GetDeliveryMode() const { return Header.DeliveryMode; }
+        void SetDeliveryMode(DELIVERY_MODE Mode) { Header.DeliveryMode = Mode; }
+        
+        Common::ServerId GetSenderId() const { return Header.SenderId; }
+        void SetSenderId(Common::ServerId Id) { Header.SenderId = Id; }
+        
+        Common::ServerId GetReceiverId() const { return Header.ReceiverId; }
+        void SetReceiverId(Common::ServerId Id) { Header.ReceiverId = Id; }
+        
+        TopicId GetTopicId() const { return Header.TopicId; }
+        void SetTopicId(TopicId Id) { Header.TopicId = Id; }
+        
+        Common::TimestampMs GetTimestamp() const { return Header.Timestamp; }
+        void SetTimestamp(Common::TimestampMs Timestamp) { Header.Timestamp = Timestamp; }
+        
+        uint32_t GetSequenceNumber() const { return Header.SequenceNumber; }
+        void SetSequenceNumber(uint32_t SequenceNumber) { Header.SequenceNumber = SequenceNumber; }
+
+        // Serialization
+        std::vector<uint8_t> Serialize() const;
+        bool Deserialize(const std::vector<uint8_t>& Data);
+        bool Deserialize(const uint8_t* Data, size_t Size);
+        
+        // Validation
+        bool IsValid() const;
+        uint32_t CalculateChecksum() const;
+        bool ValidateChecksum() const;
+        void UpdateChecksum();
+        
+        // Utility functions
+        size_t GetTotalSize() const; // Header + Payload size
+        void Reset(); // Clear all data
+        Message Clone() const; // Deep copy
+        
+        // String representation for debugging
+        std::string ToString() const;
+        std::string GetHeaderString() const;
+        
+        // Compression (if enabled)
+        bool Compress();
+        bool Decompress();
+        bool IsCompressed() const { return IsCompressedFlag; }
+        
+        // Encryption (if enabled) 
+        bool Encrypt(const std::string& Key);
+        bool Decrypt(const std::string& Key);
+        bool IsEncrypted() const { return IsEncryptedFlag; }
+
+        // Static factory methods
+        static MessagePtr Create(MESSAGE_TYPE MessageType);
+        static MessagePtr Create(MESSAGE_TYPE MessageType, const std::vector<uint8_t>& Payload);
+        static MessagePtr Create(MESSAGE_TYPE MessageType, const std::string& JsonPayload);
+        static MessagePtr CreateResponse(const Message& OriginalMessage, MESSAGE_TYPE ResponseType);
+
+    private:
+        MessageHeader Header;
+        std::vector<uint8_t> Payload;
+        bool IsCompressedFlag = false;
+        bool IsEncryptedFlag = false;
+        
+        void UpdateHeaderFromPayload();
+        uint32_t CalculateCRC32(const uint8_t* Data, size_t Size) const;
+    };
+
+} // namespace Helianthus::Message
