@@ -8,7 +8,7 @@
 namespace Helianthus::Network
 {
     // Network connection state enumeration
-    enum class CONNECTION_STATE : uint8_t
+    enum class ConnectionState : uint8_t
     {
         DISCONNECTED = 0,
         CONNECTING = 1,
@@ -18,7 +18,7 @@ namespace Helianthus::Network
     };
 
     // Network protocol types
-    enum class PROTOCOL_TYPE : uint8_t
+    enum class ProtocolType : uint8_t
     {
         TCP = 0,
         UDP = 1,
@@ -26,7 +26,7 @@ namespace Helianthus::Network
     };
 
     // Network error codes
-    enum class NETWORK_ERROR : int32_t
+    enum class NetworkError : int32_t
     {
         NONE = 0,
         CONNECTION_FAILED = -1,

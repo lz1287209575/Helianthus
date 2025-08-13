@@ -1,22 +1,16 @@
 cc_library(
     name = "network",
     srcs = [
-        "NetworkManager.cpp",
-        "TcpSocket.cpp", 
-        "UdpSocket.cpp",
-        "NetworkBuffer.cpp",
-        "ConnectionPool.cpp",
+        "Sockets/TcpSocket.cpp",
     ],
     hdrs = [
         "INetworkSocket.h",
-        "INetworkManager.h", 
-        "NetworkManager.h",
-        "TcpSocket.h",
-        "UdpSocket.h", 
-        "NetworkBuffer.h",
-        "ConnectionPool.h",
+        "INetworkManager.h",
         "NetworkTypes.h",
+        "Sockets/TcpSocket.h",
     ],
+    strip_include_prefix = ".",
+    include_prefix = "Network",
     deps = [
         "//:helianthus_config",
         "//Shared/Common:common",

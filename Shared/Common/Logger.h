@@ -20,7 +20,7 @@ namespace Helianthus::Common
     public:
         struct LoggerConfig
         {
-            LOG_LEVEL Level = static_cast<LOG_LEVEL>(HELIANTHUS_DEFAULT_LOG_LEVEL);
+            LogLevel Level = static_cast<LogLevel>(HELIANTHUS_DEFAULT_LOG_LEVEL);
             bool EnableConsole = true;
             bool EnableFile = true;
             std::string FilePath = "logs/helianthus.log";
@@ -69,8 +69,8 @@ namespace Helianthus::Common
         }
 
         // Configuration
-        static void SetLevel(LOG_LEVEL Level);
-        static LOG_LEVEL GetLevel();
+        static void SetLevel(LogLevel Level);
+        static LogLevel GetLevel();
         static void Flush();
 
     private:
@@ -78,8 +78,8 @@ namespace Helianthus::Common
         static LoggerConfig CurrentConfig;
         static bool IsInitializedFlag;
 
-        static spdlog::level::level_enum ConvertLogLevel(LOG_LEVEL Level);
-        static LOG_LEVEL ConvertLogLevel(spdlog::level::level_enum Level);
+        static spdlog::level::level_enum ConvertLogLevel(LogLevel Level);
+        static LogLevel ConvertLogLevel(spdlog::level::level_enum Level);
     };
 
     // Convenience macros for logging

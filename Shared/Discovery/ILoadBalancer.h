@@ -20,14 +20,14 @@ namespace Helianthus::Discovery
         virtual ~ILoadBalancer() = default;
 
         // Initialization and lifecycle
-        virtual DISCOVERY_RESULT Initialize(const LoadBalanceConfig& Config) = 0;
+        virtual DiscoveryResult Initialize(const LoadBalanceConfig& Config) = 0;
         virtual void Shutdown() = 0;
         virtual bool IsInitialized() const = 0;
 
         // Service instance management
-        virtual DISCOVERY_RESULT AddServiceInstance(ServiceInstancePtr Instance) = 0;
-        virtual DISCOVERY_RESULT RemoveServiceInstance(ServiceInstanceId InstanceId) = 0;
-        virtual DISCOVERY_RESULT UpdateServiceInstance(ServiceInstancePtr Instance) = 0;
+        virtual DiscoveryResult AddServiceInstance(ServiceInstancePtr Instance) = 0;
+        virtual DiscoveryResult RemoveServiceInstance(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult UpdateServiceInstance(ServiceInstancePtr Instance) = 0;
         virtual void ClearServiceInstances(const std::string& ServiceName = "") = 0;
         virtual std::vector<ServiceInstancePtr> GetServiceInstances(const std::string& ServiceName) const = 0;
         virtual uint32_t GetServiceInstanceCount(const std::string& ServiceName) const = 0;
@@ -46,15 +46,15 @@ namespace Helianthus::Discovery
         virtual LOAD_BALANCE_STRATEGY GetDefaultStrategy() const = 0;
 
         // Weight management
-        virtual DISCOVERY_RESULT SetInstanceWeight(ServiceInstanceId InstanceId, LoadWeight Weight) = 0;
+        virtual DiscoveryResult SetInstanceWeight(ServiceInstanceId InstanceId, LoadWeight Weight) = 0;
         virtual LoadWeight GetInstanceWeight(ServiceInstanceId InstanceId) const = 0;
         virtual void SetDefaultWeight(LoadWeight Weight) = 0;
         virtual LoadWeight GetDefaultWeight() const = 0;
         virtual void RebalanceWeights(const std::string& ServiceName) = 0;
 
         // Connection tracking
-        virtual DISCOVERY_RESULT RecordConnection(ServiceInstanceId InstanceId) = 0;
-        virtual DISCOVERY_RESULT RecordDisconnection(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult RecordConnection(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult RecordDisconnection(ServiceInstanceId InstanceId) = 0;
         virtual uint32_t GetActiveConnections(ServiceInstanceId InstanceId) const = 0;
         virtual uint32_t GetTotalActiveConnections(const std::string& ServiceName) const = 0;
         virtual void ResetConnectionCounts(const std::string& ServiceName = "") = 0;
@@ -77,7 +77,7 @@ namespace Helianthus::Discovery
         virtual void DisableStickySession(const std::string& ServiceName) = 0;
         virtual bool IsStickySessionEnabled(const std::string& ServiceName) const = 0;
         virtual ServiceInstancePtr GetStickyInstance(const std::string& ServiceName, const std::string& SessionId) = 0;
-        virtual DISCOVERY_RESULT BindSession(const std::string& ServiceName, const std::string& SessionId, ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult BindSession(const std::string& ServiceName, const std::string& SessionId, ServiceInstanceId InstanceId) = 0;
         virtual void UnbindSession(const std::string& ServiceName, const std::string& SessionId) = 0;
 
         // Consistent hashing

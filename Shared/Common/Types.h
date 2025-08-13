@@ -22,7 +22,7 @@ namespace Helianthus::Common
     static constexpr ServerId InvalidServerId = 0;
 
     // Result codes
-    enum class RESULT_CODE : int32_t
+    enum class ReusltCode : int32_t
     {
         SUCCESS = 0,
         FAILED = -1,
@@ -38,7 +38,7 @@ namespace Helianthus::Common
     };
 
     // Log levels
-    enum class LOG_LEVEL : uint8_t
+    enum class LogLevel : uint8_t
     {
         DEBUG = HELIANTHUS_LOG_LEVEL_DEBUG,
         INFO = HELIANTHUS_LOG_LEVEL_INFO,
@@ -68,7 +68,7 @@ namespace Helianthus::Common
     // Service information
     struct ServiceInfo
     {
-        ServerId ServerId = InvalidServerId;
+        ServerId ServerIdValue = InvalidServerId;
         std::string ServiceName;
         std::string ServiceVersion;
         std::string HostAddress;
@@ -77,8 +77,8 @@ namespace Helianthus::Common
         TimestampMs LastHeartbeat = 0;
         
         ServiceInfo() = default;
-        ServiceInfo(ServerId ServerId, const std::string& ServiceName, const std::string& HostAddress, uint16_t Port)
-            : ServerId(ServerId), ServiceName(ServiceName), HostAddress(HostAddress), Port(Port) {}
+        ServiceInfo(ServerId InServerId, const std::string& InServiceName, const std::string& InHostAddress, uint16_t InPort)
+            : ServerIdValue(InServerId), ServiceName(InServiceName), HostAddress(InHostAddress), Port(InPort) {}
     };
 
 } // namespace Helianthus::Common

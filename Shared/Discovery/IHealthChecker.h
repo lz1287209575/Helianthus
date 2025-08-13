@@ -21,14 +21,14 @@ namespace Helianthus::Discovery
         virtual ~IHealthChecker() = default;
 
         // Initialization and lifecycle
-        virtual DISCOVERY_RESULT Initialize(const HealthCheckConfig& DefaultConfig) = 0;
+        virtual DiscoveryResult Initialize(const HealthCheckConfig& DefaultConfig) = 0;
         virtual void Shutdown() = 0;
         virtual bool IsInitialized() const = 0;
 
         // Health check registration
-        virtual DISCOVERY_RESULT RegisterHealthCheck(ServiceInstanceId InstanceId, const HealthCheckConfig& Config) = 0;
-        virtual DISCOVERY_RESULT UpdateHealthCheck(ServiceInstanceId InstanceId, const HealthCheckConfig& Config) = 0;
-        virtual DISCOVERY_RESULT UnregisterHealthCheck(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult RegisterHealthCheck(ServiceInstanceId InstanceId, const HealthCheckConfig& Config) = 0;
+        virtual DiscoveryResult UpdateHealthCheck(ServiceInstanceId InstanceId, const HealthCheckConfig& Config) = 0;
+        virtual DiscoveryResult UnregisterHealthCheck(ServiceInstanceId InstanceId) = 0;
         virtual bool IsHealthCheckRegistered(ServiceInstanceId InstanceId) const = 0;
         virtual HealthCheckConfig GetHealthCheckConfig(ServiceInstanceId InstanceId) const = 0;
 
@@ -53,11 +53,11 @@ namespace Helianthus::Discovery
         virtual uint32_t GetConsecutiveSuccesses(ServiceInstanceId InstanceId) const = 0;
 
         // Health check types and implementations
-        virtual DISCOVERY_RESULT PerformTcpHealthCheck(ServiceInstanceId InstanceId, const Network::NetworkAddress& Address, uint32_t TimeoutMs) = 0;
-        virtual DISCOVERY_RESULT PerformHttpHealthCheck(ServiceInstanceId InstanceId, const std::string& Url, const std::string& ExpectedResponse, uint32_t TimeoutMs) = 0;
-        virtual DISCOVERY_RESULT PerformCustomHealthCheck(ServiceInstanceId InstanceId, std::function<bool()> HealthCheckFunction) = 0;
-        virtual DISCOVERY_RESULT PerformHeartbeatCheck(ServiceInstanceId InstanceId) = 0;
-        virtual DISCOVERY_RESULT PerformPingCheck(ServiceInstanceId InstanceId, const Network::NetworkAddress& Address, uint32_t TimeoutMs) = 0;
+        virtual DiscoveryResult PerformTcpHealthCheck(ServiceInstanceId InstanceId, const Network::NetworkAddress& Address, uint32_t TimeoutMs) = 0;
+        virtual DiscoveryResult PerformHttpHealthCheck(ServiceInstanceId InstanceId, const std::string& Url, const std::string& ExpectedResponse, uint32_t TimeoutMs) = 0;
+        virtual DiscoveryResult PerformCustomHealthCheck(ServiceInstanceId InstanceId, std::function<bool()> HealthCheckFunction) = 0;
+        virtual DiscoveryResult PerformHeartbeatCheck(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult PerformPingCheck(ServiceInstanceId InstanceId, const Network::NetworkAddress& Address, uint32_t TimeoutMs) = 0;
 
         // Health thresholds and configuration
         virtual void SetHealthThresholds(ServiceInstanceId InstanceId, uint32_t UnhealthyThreshold, uint32_t HealthyThreshold) = 0;
@@ -104,9 +104,9 @@ namespace Helianthus::Discovery
         virtual uint32_t GetGlobalHealthCheckTimeout() const = 0;
 
         // Custom health check providers
-        virtual DISCOVERY_RESULT RegisterCustomHealthCheckProvider(HEALTH_CHECK_TYPE Type, std::function<HealthScore(ServiceInstanceId)> Provider) = 0;
-        virtual void UnregisterCustomHealthCheckProvider(HEALTH_CHECK_TYPE Type) = 0;
-        virtual bool IsCustomHealthCheckProviderRegistered(HEALTH_CHECK_TYPE Type) const = 0;
+        virtual DiscoveryResult RegisterCustomHealthCheckProvider(HealthCheckType Type, std::function<HealthScore(ServiceInstanceId)> Provider) = 0;
+        virtual void UnregisterCustomHealthCheckProvider(HealthCheckType Type) = 0;
+        virtual bool IsCustomHealthCheckProviderRegistered(HealthCheckType Type) const = 0;
 
         // Health degradation and recovery
         virtual void SetHealthDegradationRate(ServiceInstanceId InstanceId, float DegradationRate) = 0;
@@ -126,7 +126,7 @@ namespace Helianthus::Discovery
         virtual std::vector<std::string> GetHealthCheckLog(ServiceInstanceId InstanceId, uint32_t MaxEntries = 100) const = 0;
         virtual void EnableHealthCheckLogging(bool Enable = true) = 0;
         virtual bool IsHealthCheckLoggingEnabled() const = 0;
-        virtual void SetHealthCheckLogLevel(Common::LOG_LEVEL Level) = 0;
+        virtual void SetHealthCheckLogLevel(Common::LogLevel Level) = 0;
 
         // Advanced health metrics
         virtual void UpdateCustomHealthMetric(ServiceInstanceId InstanceId, const std::string& MetricName, float Value) = 0;

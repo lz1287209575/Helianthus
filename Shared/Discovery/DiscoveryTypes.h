@@ -38,7 +38,7 @@ namespace Helianthus::Discovery
     };
 
     // Health check types
-    enum class HEALTH_CHECK_TYPE : uint8_t
+    enum class HealthCheckType : uint8_t
     {
         TCP_CONNECT = 0,
         HTTP_GET = 1,
@@ -48,7 +48,7 @@ namespace Helianthus::Discovery
     };
 
     // Discovery result codes
-    enum class DISCOVERY_RESULT : int32_t
+    enum class DiscoveryResult : int32_t
     {
         SUCCESS = 0,
         FAILED = -1,
@@ -92,7 +92,7 @@ namespace Helianthus::Discovery
     // Health check configuration
     struct HealthCheckConfig
     {
-        HEALTH_CHECK_TYPE Type = HEALTH_CHECK_TYPE::TCP_CONNECT;
+        HealthCheckType Type = HealthCheckType::TCP_CONNECT;
         uint32_t IntervalMs = 30000;        // 30 seconds
         uint32_t TimeoutMs = 5000;          // 5 seconds
         uint32_t MaxRetries = 3;
@@ -215,7 +215,7 @@ namespace Helianthus::Discovery
 
     // Callback function types
     using ServiceStateChangeCallback = std::function<void(ServiceInstanceId InstanceId, SERVICE_STATE OldState, SERVICE_STATE NewState)>;
-    using ServiceRegistrationCallback = std::function<void(ServiceInstanceId InstanceId, DISCOVERY_RESULT Result)>;
+    using ServiceRegistrationCallback = std::function<void(ServiceInstanceId InstanceId, DiscoveryResult Result)>;
     using ServiceDiscoveryCallback = std::function<void(const std::string& ServiceName, const std::vector<ServiceInstancePtr>& Instances)>;
     using HealthCheckCallback = std::function<void(ServiceInstanceId InstanceId, bool IsHealthy, HealthScore Score)>;
     using LoadBalanceCallback = std::function<void(ServiceInstanceId SelectedInstanceId, const std::string& Reason)>;

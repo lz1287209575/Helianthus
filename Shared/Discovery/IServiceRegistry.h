@@ -20,15 +20,15 @@ namespace Helianthus::Discovery
         virtual ~IServiceRegistry() = default;
 
         // Initialization and lifecycle
-        virtual DISCOVERY_RESULT Initialize(const RegistryConfig& Config) = 0;
+        virtual DiscoveryResult Initialize(const RegistryConfig& Config) = 0;
         virtual void Shutdown() = 0;
         virtual bool IsInitialized() const = 0;
 
         // Service registration
-        virtual DISCOVERY_RESULT RegisterService(const ServiceInstance& Instance, ServiceInstanceId& OutInstanceId) = 0;
-        virtual DISCOVERY_RESULT UpdateService(ServiceInstanceId InstanceId, const ServiceInstance& Instance) = 0;
-        virtual DISCOVERY_RESULT DeregisterService(ServiceInstanceId InstanceId) = 0;
-        virtual DISCOVERY_RESULT DeregisterServiceByName(const std::string& ServiceName) = 0;
+        virtual DiscoveryResult RegisterService(const ServiceInstance& Instance, ServiceInstanceId& OutInstanceId) = 0;
+        virtual DiscoveryResult UpdateService(ServiceInstanceId InstanceId, const ServiceInstance& Instance) = 0;
+        virtual DiscoveryResult DeregisterService(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult DeregisterServiceByName(const std::string& ServiceName) = 0;
 
         // Service information retrieval
         virtual ServiceInstancePtr GetService(ServiceInstanceId InstanceId) const = 0;
@@ -55,21 +55,21 @@ namespace Helianthus::Discovery
         virtual std::vector<ServiceInstancePtr> FindServicesByZone(const std::string& Zone) const = 0;
 
         // Service state management
-        virtual DISCOVERY_RESULT UpdateServiceState(ServiceInstanceId InstanceId, SERVICE_STATE State) = 0;
-        virtual DISCOVERY_RESULT UpdateServiceHealth(ServiceInstanceId InstanceId, HealthScore Score) = 0;
-        virtual DISCOVERY_RESULT UpdateServiceLoad(ServiceInstanceId InstanceId, uint32_t ActiveConnections) = 0;
+        virtual DiscoveryResult UpdateServiceState(ServiceInstanceId InstanceId, SERVICE_STATE State) = 0;
+        virtual DiscoveryResult UpdateServiceHealth(ServiceInstanceId InstanceId, HealthScore Score) = 0;
+        virtual DiscoveryResult UpdateServiceLoad(ServiceInstanceId InstanceId, uint32_t ActiveConnections) = 0;
         virtual SERVICE_STATE GetServiceState(ServiceInstanceId InstanceId) const = 0;
 
         // Heartbeat and TTL management
-        virtual DISCOVERY_RESULT SendHeartbeat(ServiceInstanceId InstanceId) = 0;
-        virtual DISCOVERY_RESULT SetServiceTtl(ServiceInstanceId InstanceId, uint32_t TtlMs) = 0;
-        virtual DISCOVERY_RESULT RenewService(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult SendHeartbeat(ServiceInstanceId InstanceId) = 0;
+        virtual DiscoveryResult SetServiceTtl(ServiceInstanceId InstanceId, uint32_t TtlMs) = 0;
+        virtual DiscoveryResult RenewService(ServiceInstanceId InstanceId) = 0;
         virtual void CleanupExpiredServices() = 0;
 
         // Service groups and load balancing
-        virtual DISCOVERY_RESULT CreateServiceGroup(const std::string& ServiceName, const LoadBalanceConfig& Config, ServiceGroupId& OutGroupId) = 0;
-        virtual DISCOVERY_RESULT UpdateServiceGroup(ServiceGroupId GroupId, const LoadBalanceConfig& Config) = 0;
-        virtual DISCOVERY_RESULT DeleteServiceGroup(ServiceGroupId GroupId) = 0;
+        virtual DiscoveryResult CreateServiceGroup(const std::string& ServiceName, const LoadBalanceConfig& Config, ServiceGroupId& OutGroupId) = 0;
+        virtual DiscoveryResult UpdateServiceGroup(ServiceGroupId GroupId, const LoadBalanceConfig& Config) = 0;
+        virtual DiscoveryResult DeleteServiceGroup(ServiceGroupId GroupId) = 0;
         virtual ServiceGroupPtr GetServiceGroup(ServiceGroupId GroupId) const = 0;
         virtual ServiceGroupPtr GetServiceGroupByName(const std::string& ServiceName) const = 0;
 
@@ -84,12 +84,12 @@ namespace Helianthus::Discovery
         virtual void UpdateConfig(const RegistryConfig& Config) = 0;
         virtual RegistryConfig GetCurrentConfig() const = 0;
         virtual void RefreshRegistry() = 0;
-        virtual DISCOVERY_RESULT ValidateRegistry() = 0;
+        virtual DiscoveryResult ValidateRegistry() = 0;
 
         // Persistence (if enabled)
-        virtual DISCOVERY_RESULT SaveRegistryState() = 0;
-        virtual DISCOVERY_RESULT LoadRegistryState() = 0;
-        virtual DISCOVERY_RESULT ClearPersistedState() = 0;
+        virtual DiscoveryResult SaveRegistryState() = 0;
+        virtual DiscoveryResult LoadRegistryState() = 0;
+        virtual DiscoveryResult ClearPersistedState() = 0;
 
         // Event callbacks
         virtual void SetServiceStateChangeCallback(ServiceStateChangeCallback Callback) = 0;
@@ -97,10 +97,10 @@ namespace Helianthus::Discovery
         virtual void RemoveAllCallbacks() = 0;
 
         // Replication (if enabled)
-        virtual DISCOVERY_RESULT EnableReplication(const std::vector<Network::NetworkAddress>& ReplicaNodes) = 0;
+        virtual DiscoveryResult EnableReplication(const std::vector<Network::NetworkAddress>& ReplicaNodes) = 0;
         virtual void DisableReplication() = 0;
         virtual bool IsReplicationEnabled() const = 0;
-        virtual DISCOVERY_RESULT SyncWithReplicas() = 0;
+        virtual DiscoveryResult SyncWithReplicas() = 0;
 
         // Administrative functions
         virtual void SetMaintenanceMode(bool Enable) = 0;

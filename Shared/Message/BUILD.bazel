@@ -1,18 +1,7 @@
 cc_library(
     name = "message",
-    srcs = [
-        "MessageQueue.cpp",
-        "MessageBus.cpp",
-        "Message.cpp",
-        "MessageRouter.cpp",
-    ],
     hdrs = [
-        "IMessageQueue.h",
-        "IMessageBus.h",
-        "MessageQueue.h",
-        "MessageBus.h",
         "Message.h",
-        "MessageRouter.h",
         "MessageTypes.h",
     ],
     deps = [

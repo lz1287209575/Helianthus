@@ -1,0 +1,9 @@
+cc_binary(
+    name = "tcp_socket_test",
+    srcs = ["TcpSocketTest.cpp"],
+    deps = [
+        "//Shared/Network:network",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)

@@ -21,7 +21,7 @@ namespace Helianthus::Discovery
         virtual ~IServiceDiscovery() = default;
 
         // Initialization and lifecycle
-        virtual DISCOVERY_RESULT Initialize(const std::vector<Network::NetworkAddress>& RegistryEndpoints) = 0;
+        virtual DiscoveryResult Initialize(const std::vector<Network::NetworkAddress>& RegistryEndpoints) = 0;
         virtual void Shutdown() = 0;
         virtual bool IsInitialized() const = 0;
 
@@ -37,14 +37,14 @@ namespace Helianthus::Discovery
         virtual std::future<std::vector<ServiceInstancePtr>> DiscoverAllServicesAsync(const std::string& ServiceName) = 0;
 
         // Service watching and subscriptions
-        virtual DISCOVERY_RESULT WatchService(const std::string& ServiceName, ServiceDiscoveryCallback Callback) = 0;
-        virtual DISCOVERY_RESULT UnwatchService(const std::string& ServiceName) = 0;
-        virtual DISCOVERY_RESULT WatchAllServices(ServiceDiscoveryCallback Callback) = 0;
+        virtual DiscoveryResult WatchService(const std::string& ServiceName, ServiceDiscoveryCallback Callback) = 0;
+        virtual DiscoveryResult UnwatchService(const std::string& ServiceName) = 0;
+        virtual DiscoveryResult WatchAllServices(ServiceDiscoveryCallback Callback) = 0;
         virtual void UnwatchAllServices() = 0;
 
         // Connection management
-        virtual Network::ConnectionId ConnectToService(const std::string& ServiceName, Network::PROTOCOL_TYPE Protocol = Network::PROTOCOL_TYPE::TCP) = 0;
-        virtual Network::ConnectionId ConnectToServiceInstance(ServiceInstanceId InstanceId, Network::PROTOCOL_TYPE Protocol = Network::PROTOCOL_TYPE::TCP) = 0;
+        virtual Network::ConnectionId ConnectToService(const std::string& ServiceName, Network::ProtocolType Protocol = Network::ProtocolType::TCP) = 0;
+        virtual Network::ConnectionId ConnectToServiceInstance(ServiceInstanceId InstanceId, Network::ProtocolType Protocol = Network::ProtocolType::TCP) = 0;
         virtual void DisconnectFromService(Network::ConnectionId ConnectionId) = 0;
         virtual std::vector<Network::ConnectionId> GetActiveConnections(const std::string& ServiceName) const = 0;
 
@@ -70,7 +70,7 @@ namespace Helianthus::Discovery
         virtual void RefreshCache() = 0;
 
         // Registry connectivity
-        virtual DISCOVERY_RESULT ConnectToRegistry(const Network::NetworkAddress& RegistryEndpoint) = 0;
+        virtual DiscoveryResult ConnectToRegistry(const Network::NetworkAddress& RegistryEndpoint) = 0;
         virtual void DisconnectFromRegistry() = 0;
         virtual void DisconnectFromAllRegistries() = 0;
         virtual bool IsConnectedToRegistry() const = 0;
@@ -117,7 +117,7 @@ namespace Helianthus::Discovery
 
         // Batch operations
         virtual std::unordered_map<std::string, ServiceInstancePtr> DiscoverMultipleServices(const std::vector<std::string>& ServiceNames) = 0;
-        virtual DISCOVERY_RESULT ConnectToMultipleServices(const std::vector<std::string>& ServiceNames, std::unordered_map<std::string, Network::ConnectionId>& OutConnections) = 0;
+        virtual DiscoveryResult ConnectToMultipleServices(const std::vector<std::string>& ServiceNames, std::unordered_map<std::string, Network::ConnectionId>& OutConnections) = 0;
     };
 
 } // namespace Helianthus::Discovery

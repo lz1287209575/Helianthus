@@ -1,21 +1,11 @@
 cc_library(
     name = "common",
-    srcs = [
-        "Logger.cpp",
-        "ThreadPool.cpp",
-        "Timer.cpp",
-        "Utils.cpp",
-    ],
     hdrs = [
         "Logger.h",
-        "ThreadPool.h", 
-        "Timer.h",
-        "Utils.h",
         "Types.h",
     ],
     deps = [
         "//:helianthus_config",
-        "@spdlog//:spdlog",
     ],
     visibility = ["//visibility:public"],
 )
