@@ -21,23 +21,23 @@ namespace Helianthus::Network
 
     NetworkManager::NetworkManager(NetworkManager&& Other) noexcept
         : Config(std::move(Other.Config))
-        , IsInitialized(Other.IsInitialized.load())
-        , IsShuttingDown(Other.IsShuttingDown.load())
+        , InitializedFlag(Other.InitializedFlag.load())
+        , ShuttingDownFlag(Other.ShuttingDownFlag.load())
         , Connections(std::move(Other.Connections))
         , NextConnectionId(Other.NextConnectionId.load())
         , ConnectionGroups(std::move(Other.ConnectionGroups))
-        , IsServerRunning(Other.IsServerRunning.load())
+        , ServerRunningFlag(Other.ServerRunningFlag.load())
         , ServerSocket(std::move(Other.ServerSocket))
         , IncomingMessages(std::move(Other.IncomingMessages))
         , OutgoingMessages(std::move(Other.OutgoingMessages))
         , StopMessageProcessing(Other.StopMessageProcessing.load())
-        , MessageHandler(std::move(Other.MessageHandler))
-        , ConnectionHandler(std::move(Other.ConnectionHandler))
+        , MessageHandlerFunc(std::move(Other.MessageHandlerFunc))
+        , ConnectionHandlerFunc(std::move(Other.ConnectionHandlerFunc))
         , Stats(std::move(Other.Stats))
         , StopServerAccept(Other.StopServerAccept.load())
     {
-        Other.IsInitialized = false;
-        Other.IsShuttingDown = false;
+        Other.InitializedFlag = false;
+        Other.ShuttingDownFlag = false;
     }
 
     NetworkManager& NetworkManager::operator=(NetworkManager&& Other) noexcept
@@ -47,37 +47,37 @@ namespace Helianthus::Network
             Shutdown();
             
             Config = std::move(Other.Config);
-            IsInitialized = Other.IsInitialized.load();
-            IsShuttingDown = Other.IsShuttingDown.load();
+            InitializedFlag = Other.InitializedFlag.load();
+            ShuttingDownFlag = Other.ShuttingDownFlag.load();
             Connections = std::move(Other.Connections);
             NextConnectionId = Other.NextConnectionId.load();
             ConnectionGroups = std::move(Other.ConnectionGroups);
-            IsServerRunning = Other.IsServerRunning.load();
+            ServerRunningFlag = Other.ServerRunningFlag.load();
             ServerSocket = std::move(Other.ServerSocket);
             IncomingMessages = std::move(Other.IncomingMessages);
             OutgoingMessages = std::move(Other.OutgoingMessages);
             StopMessageProcessing = Other.StopMessageProcessing.load();
-            MessageHandler = std::move(Other.MessageHandler);
-            ConnectionHandler = std::move(Other.ConnectionHandler);
+            MessageHandlerFunc = std::move(Other.MessageHandlerFunc);
+            ConnectionHandlerFunc = std::move(Other.ConnectionHandlerFunc);
             Stats = std::move(Other.Stats);
             StopServerAccept = Other.StopServerAccept.load();
             
-            Other.IsInitialized = false;
-            Other.IsShuttingDown = false;
+            Other.InitializedFlag = false;
+            Other.ShuttingDownFlag = false;
         }
         return *this;
     }
 
     NetworkError NetworkManager::Initialize(const NetworkConfig& Config)
     {
-        if (IsInitialized)
+        if (InitializedFlag)
         {
             return NetworkError::ALREADY_INITIALIZED;
         }
 
-        Config = Config;
-        IsInitialized = true;
-        IsShuttingDown = false;
+        this->Config = Config;
+        InitializedFlag = true;
+        ShuttingDownFlag = false;
 
         // Start message processing thread
         StartMessageProcessingThread();
@@ -87,12 +87,12 @@ namespace Helianthus::Network
 
     void NetworkManager::Shutdown()
     {
-        if (!IsInitialized)
+        if (!InitializedFlag)
         {
             return;
         }
 
-        IsShuttingDown = true;
+        ShuttingDownFlag = true;
         
         // Stop server if running
         StopServer();
@@ -106,17 +106,17 @@ namespace Helianthus::Network
         // Clear handlers
         RemoveAllHandlers();
         
-        IsInitialized = false;
+        InitializedFlag = false;
     }
 
     bool NetworkManager::IsInitialized() const
     {
-        return IsInitialized;
+        return InitializedFlag;
     }
 
     NetworkError NetworkManager::CreateConnection(const NetworkAddress& Address, ConnectionId& OutConnectionId)
     {
-        if (!IsInitialized || IsShuttingDown)
+        if (!InitializedFlag || ShuttingDownFlag)
         {
             return NetworkError::NOT_INITIALIZED;
         }
@@ -274,7 +274,7 @@ namespace Helianthus::Network
 
     NetworkError NetworkManager::StartServer(const NetworkAddress& BindAddress)
     {
-        if (IsServerRunning)
+        if (ServerRunningFlag)
         {
             return NetworkError::SERVER_ALREADY_RUNNING;
         }
@@ -292,7 +292,7 @@ namespace Helianthus::Network
             return Result;
         }
 
-        IsServerRunning = true;
+        ServerRunningFlag = true;
         StartServerAcceptThread();
 
         return NetworkError::SUCCESS;
@@ -300,7 +300,7 @@ namespace Helianthus::Network
 
     NetworkError NetworkManager::StopServer()
     {
-        if (!IsServerRunning)
+        if (!ServerRunningFlag)
         {
             return NetworkError::SUCCESS;
         }
@@ -313,13 +313,13 @@ namespace Helianthus::Network
             ServerSocket.reset();
         }
 
-        IsServerRunning = false;
+        ServerRunningFlag = false;
         return NetworkError::SUCCESS;
     }
 
     bool NetworkManager::IsServerRunning() const
     {
-        return IsServerRunning;
+        return ServerRunningFlag;
     }
 
     NetworkError NetworkManager::SendMessage(ConnectionId Id, const Message::Message& Msg)
@@ -475,38 +475,38 @@ namespace Helianthus::Network
     void NetworkManager::NotifyMessageReceived(const Message::Message& Msg)
     {
         std::lock_guard<std::mutex> Lock(HandlersMutex);
-        if (MessageHandler)
+        if (MessageHandlerFunc)
         {
-            MessageHandler(Msg);
+            MessageHandlerFunc(Msg);
         }
     }
 
     void NetworkManager::NotifyConnectionStateChange(ConnectionId Id, NetworkError Error)
     {
         std::lock_guard<std::mutex> Lock(HandlersMutex);
-        if (ConnectionHandler)
+        if (ConnectionHandlerFunc)
         {
-            ConnectionHandler(Id, Error);
+            ConnectionHandlerFunc(Id, Error);
         }
     }
 
     void NetworkManager::SetMessageHandler(MessageHandler Handler)
     {
         std::lock_guard<std::mutex> Lock(HandlersMutex);
-        MessageHandler = std::move(Handler);
+        MessageHandlerFunc = std::move(Handler);
     }
 
     void NetworkManager::SetConnectionHandler(ConnectionHandler Handler)
     {
         std::lock_guard<std::mutex> Lock(HandlersMutex);
-        ConnectionHandler = std::move(Handler);
+        ConnectionHandlerFunc = std::move(Handler);
     }
 
     void NetworkManager::RemoveAllHandlers()
     {
         std::lock_guard<std::mutex> Lock(HandlersMutex);
-        MessageHandler = nullptr;
-        ConnectionHandler = nullptr;
+        MessageHandlerFunc = nullptr;
+        ConnectionHandlerFunc = nullptr;
     }
 
     NetworkStats NetworkManager::GetNetworkStats() const
@@ -532,7 +532,7 @@ namespace Helianthus::Network
 
     void NetworkManager::MessageProcessingLoop()
     {
-        while (!StopMessageProcessing && !IsShuttingDown)
+        while (!StopMessageProcessing && !ShuttingDownFlag)
         {
             // Process incoming messages
             while (HasIncomingMessages())
@@ -566,7 +566,7 @@ namespace Helianthus::Network
 
     void NetworkManager::ServerAcceptLoop()
     {
-        while (!StopServerAccept && IsServerRunning)
+        while (!StopServerAccept && ServerRunningFlag)
         {
             AcceptConnection();
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -637,7 +637,7 @@ namespace Helianthus::Network
         return Result;
     }
 
-    void NetworkManager::UpdateConfig(const NetworkConfig& Config) { Config = Config; }
+    void NetworkManager::UpdateConfig(const NetworkConfig& Config) { this->Config = Config; }
     NetworkConfig NetworkManager::GetCurrentConfig() const { return Config; }
     std::string NetworkManager::GetConnectionInfo(ConnectionId Id) const { return "Connection " + std::to_string(Id); }
     std::vector<NetworkAddress> NetworkManager::GetLocalAddresses() const { return {}; }

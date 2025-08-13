@@ -139,40 +139,40 @@ namespace Helianthus::Discovery
 
     private:
         // Configuration and state
-        RegistryConfig Config_;
-        std::atomic<bool> IsInitialized_ = false;
-        std::atomic<bool> IsInMaintenanceMode_ = false;
-        std::atomic<bool> IsShuttingDown_ = false;
+        RegistryConfig Config;
+        std::atomic<bool> InitializedFlag = false;
+        std::atomic<bool> MaintenanceModeFlag = false;
+        std::atomic<bool> ShuttingDownFlag = false;
 
         // Service storage
-        mutable std::mutex ServicesMutex_;
-        std::unordered_map<ServiceInstanceId, ServiceInstanceEntry> Services_;
-        std::unordered_map<std::string, std::vector<ServiceInstanceId>> ServicesByName_;
+        mutable std::mutex ServicesMutex;
+        std::unordered_map<ServiceInstanceId, ServiceInstanceEntry> Services;
+        std::unordered_map<std::string, std::vector<ServiceInstanceId>> ServicesByName;
         
         // Service groups
-        mutable std::mutex GroupsMutex_;
-        std::unordered_map<ServiceGroupId, ServiceGroupPtr> ServiceGroups_;
-        std::unordered_map<std::string, ServiceGroupId> GroupsByName_;
+        mutable std::mutex GroupsMutex;
+        std::unordered_map<ServiceGroupId, ServiceGroupPtr> ServiceGroups;
+        std::unordered_map<std::string, ServiceGroupId> GroupsByName;
 
         // ID generation
-        std::atomic<ServiceInstanceId> NextInstanceId_ = 1;
-        std::atomic<ServiceGroupId> NextGroupId_ = 1;
+        std::atomic<ServiceInstanceId> NextInstanceId = 1;
+        std::atomic<ServiceGroupId> NextGroupId = 1;
 
         // Statistics
-        mutable std::mutex StatsMutex_;
-        DiscoveryStats Stats_;
+        mutable std::mutex StatsMutex;
+        DiscoveryStats Stats;
 
         // Callbacks
-        ServiceStateChangeCallback StateChangeCallback_;
-        ServiceRegistrationCallback RegistrationCallback_;
+        ServiceStateChangeCallback StateChangeCallback;
+        ServiceRegistrationCallback RegistrationCallback;
 
         // Cleanup thread
-        std::thread CleanupThread_;
-        std::atomic<bool> StopCleanup_ = false;
+        std::thread CleanupThread;
+        std::atomic<bool> StopCleanup = false;
 
         // Replication (placeholder)
-        std::atomic<bool> ReplicationEnabled_ = false;
-        std::vector<Network::NetworkAddress> ReplicaNodes_;
+        std::atomic<bool> ReplicationEnabled = false;
+        std::vector<Network::NetworkAddress> ReplicaNodes;
     };
 
 } // namespace Helianthus::Discovery

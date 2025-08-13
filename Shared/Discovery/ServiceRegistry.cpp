@@ -17,9 +17,9 @@ namespace Helianthus::Discovery
 
     ServiceRegistry::ServiceRegistry(ServiceRegistry&& Other) noexcept
         : Config(std::move(Other.Config))
-        , IsInitialized(Other.IsInitialized.load())
-        , IsInMaintenanceMode(Other.IsInMaintenanceMode.load())
-        , IsShuttingDown(Other.IsShuttingDown.load())
+        , InitializedFlag(Other.InitializedFlag.load())
+        , MaintenanceModeFlag(Other.MaintenanceModeFlag.load())
+        , ShuttingDownFlag(Other.ShuttingDownFlag.load())
         , Services(std::move(Other.Services))
         , ServicesByName(std::move(Other.ServicesByName))
         , ServiceGroups(std::move(Other.ServiceGroups))
@@ -33,8 +33,8 @@ namespace Helianthus::Discovery
         , ReplicationEnabled(Other.ReplicationEnabled.load())
         , ReplicaNodes(std::move(Other.ReplicaNodes))
     {
-        Other.IsInitialized = false;
-        Other.IsShuttingDown = false;
+        Other.InitializedFlag = false;
+        Other.ShuttingDownFlag = false;
     }
 
     ServiceRegistry& ServiceRegistry::operator=(ServiceRegistry&& Other) noexcept
@@ -44,9 +44,9 @@ namespace Helianthus::Discovery
             Shutdown();
             
             Config = std::move(Other.Config);
-            IsInitialized = Other.IsInitialized.load();
-            IsInMaintenanceMode = Other.IsInMaintenanceMode.load();
-            IsShuttingDown = Other.IsShuttingDown.load();
+            InitializedFlag = Other.InitializedFlag.load();
+            MaintenanceModeFlag = Other.MaintenanceModeFlag.load();
+            ShuttingDownFlag = Other.ShuttingDownFlag.load();
             Services = std::move(Other.Services);
             ServicesByName = std::move(Other.ServicesByName);
             ServiceGroups = std::move(Other.ServiceGroups);
@@ -60,22 +60,22 @@ namespace Helianthus::Discovery
             ReplicationEnabled = Other.ReplicationEnabled.load();
             ReplicaNodes = std::move(Other.ReplicaNodes);
             
-            Other.IsInitialized = false;
-            Other.IsShuttingDown = false;
+            Other.InitializedFlag = false;
+            Other.ShuttingDownFlag = false;
         }
         return *this;
     }
 
     DiscoveryResult ServiceRegistry::Initialize(const RegistryConfig& Config)
     {
-        if (IsInitialized)
+        if (InitializedFlag)
         {
             return DiscoveryResult::INTERNAL_ERROR;
         }
 
-        Config = Config;
-        IsInitialized = true;
-        IsShuttingDown = false;
+        this->Config = Config;
+        InitializedFlag = true;
+        ShuttingDownFlag = false;
         
         // Start cleanup thread if cleanup interval is configured
         if (Config.CleanupIntervalMs > 0)
@@ -88,12 +88,12 @@ namespace Helianthus::Discovery
 
     void ServiceRegistry::Shutdown()
     {
-        if (!IsInitialized)
+        if (!InitializedFlag)
         {
             return;
         }
 
-        IsShuttingDown = true;
+        ShuttingDownFlag = true;
         StopCleanupThread();
         
         std::lock_guard<std::mutex> ServicesLock(ServicesMutex);
@@ -104,17 +104,17 @@ namespace Helianthus::Discovery
         ServiceGroups.clear();
         GroupsByName.clear();
         
-        IsInitialized = false;
+        InitializedFlag = false;
     }
 
     bool ServiceRegistry::IsInitialized() const
     {
-        return IsInitialized;
+        return InitializedFlag;
     }
 
     DiscoveryResult ServiceRegistry::RegisterService(const ServiceInstance& Instance, ServiceInstanceId& OutInstanceId)
     {
-        if (!IsInitialized || IsInMaintenanceMode)
+        if (!InitializedFlag || MaintenanceModeFlag)
         {
             return DiscoveryResult::INTERNAL_ERROR;
         }
@@ -403,7 +403,7 @@ namespace Helianthus::Discovery
 
     void ServiceRegistry::CleanupLoop()
     {
-        while (!StopCleanup && !IsShuttingDown)
+        while (!StopCleanup && !ShuttingDownFlag)
         {
             CleanupExpiredServicesInternal();
             std::this_thread::sleep_for(std::chrono::milliseconds(Config.CleanupIntervalMs));
@@ -607,7 +607,7 @@ namespace Helianthus::Discovery
     DiscoveryStats ServiceRegistry::GetRegistryStats() const { return Stats; }
     uint32_t ServiceRegistry::GetHealthyServiceCount() const { return 0; }
     std::unordered_map<std::string, uint32_t> ServiceRegistry::GetServiceCountByName() const { return {}; }
-    void ServiceRegistry::UpdateConfig(const RegistryConfig& Config) { Config = Config; }
+    void ServiceRegistry::UpdateConfig(const RegistryConfig& Config) { this->Config = Config; }
     RegistryConfig ServiceRegistry::GetCurrentConfig() const { return Config; }
     void ServiceRegistry::RefreshRegistry() {}
     DiscoveryResult ServiceRegistry::ValidateRegistry() { return DiscoveryResult::SUCCESS; }
@@ -621,8 +621,8 @@ namespace Helianthus::Discovery
     void ServiceRegistry::DisableReplication() {}
     bool ServiceRegistry::IsReplicationEnabled() const { return ReplicationEnabled; }
     DiscoveryResult ServiceRegistry::SyncWithReplicas() { return DiscoveryResult::SUCCESS; }
-    void ServiceRegistry::SetMaintenanceMode(bool Enable) { IsInMaintenanceMode = Enable; }
-    bool ServiceRegistry::IsInMaintenanceMode() const { return IsInMaintenanceMode; }
+    void ServiceRegistry::SetMaintenanceMode(bool Enable) { MaintenanceModeFlag = Enable; }
+    bool ServiceRegistry::IsInMaintenanceMode() const { return MaintenanceModeFlag; }
     void ServiceRegistry::ResetRegistry() { Services.clear(); ServicesByName.clear(); ServiceGroups.clear(); GroupsByName.clear(); }
     std::string ServiceRegistry::GetRegistryInfo() const { return "ServiceRegistry"; }
 

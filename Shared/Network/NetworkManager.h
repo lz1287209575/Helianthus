@@ -125,41 +125,41 @@ namespace Helianthus::Network
 
     private:
         // Configuration and state
-        NetworkConfig Config_;
-        std::atomic<bool> IsInitialized_ = false;
-        std::atomic<bool> IsShuttingDown_ = false;
+        NetworkConfig Config;
+        std::atomic<bool> InitializedFlag = false;
+        std::atomic<bool> ShuttingDownFlag = false;
 
         // Connection management
-        mutable std::mutex ConnectionsMutex_;
-        std::unordered_map<ConnectionId, ConnectionEntry> Connections_;
-        std::atomic<ConnectionId> NextConnectionId_ = 1;
+        mutable std::mutex ConnectionsMutex;
+        std::unordered_map<ConnectionId, ConnectionEntry> Connections;
+        std::atomic<ConnectionId> NextConnectionId = 1;
 
         // Connection grouping
-        mutable std::mutex GroupsMutex_;
-        std::unordered_map<std::string, std::set<ConnectionId>> ConnectionGroups_;
+        mutable std::mutex GroupsMutex;
+        std::unordered_map<std::string, std::set<ConnectionId>> ConnectionGroups;
 
         // Server state
-        std::atomic<bool> IsServerRunning_ = false;
-        std::unique_ptr<Sockets::TcpSocket> ServerSocket_;
-        std::thread ServerAcceptThread_;
+        std::atomic<bool> ServerRunningFlag = false;
+        std::unique_ptr<Sockets::TcpSocket> ServerSocket;
+        std::thread ServerAcceptThread;
 
         // Message processing
-        std::unique_ptr<Message::MessageQueue> IncomingMessages_;
-        std::unique_ptr<Message::MessageQueue> OutgoingMessages_;
-        std::thread MessageProcessingThread_;
-        std::atomic<bool> StopMessageProcessing_ = false;
+        std::unique_ptr<Message::MessageQueue> IncomingMessages;
+        std::unique_ptr<Message::MessageQueue> OutgoingMessages;
+        std::thread MessageProcessingThread;
+        std::atomic<bool> StopMessageProcessing = false;
 
         // Event handlers
-        mutable std::mutex HandlersMutex_;
-        MessageHandler MessageHandler_;
-        ConnectionHandler ConnectionHandler_;
+        mutable std::mutex HandlersMutex;
+        MessageHandler MessageHandlerFunc;
+        ConnectionHandler ConnectionHandlerFunc;
 
         // Statistics
-        mutable std::mutex StatsMutex_;
-        NetworkStats Stats_;
+        mutable std::mutex StatsMutex;
+        NetworkStats Stats;
 
         // Thread management
-        std::atomic<bool> StopServerAccept_ = false;
+        std::atomic<bool> StopServerAccept = false;
     };
 
 } // namespace Helianthus::Network

@@ -20,12 +20,12 @@ namespace Helianthus::Message
     MessageQueue::MessageQueue(MessageQueue&& Other) noexcept
         : Queue(std::move(Other.Queue))
         , Config(std::move(Other.Config))
-        , IsInitialized(Other.IsInitialized.load())
+        , InitializedFlag(Other.InitializedFlag.load())
         , IsThreadSafeEnabled(Other.IsThreadSafeEnabled.load())
-        , IsShuttingDown(Other.IsShuttingDown.load())
+        , ShuttingDownFlag(Other.ShuttingDownFlag.load())
         , Stats(std::move(Other.Stats))
         , DroppedMessageCount(Other.DroppedMessageCount.load())
-        , MessageCallback(std::move(Other.MessageCallback))
+        , MessageCallbackFunc(std::move(Other.MessageCallbackFunc))
         , QueueFullCallback(std::move(Other.QueueFullCallback))
         , QueueEmptyCallback(std::move(Other.QueueEmptyCallback))
         , AutoDequeueEnabled(Other.AutoDequeueEnabled.load())
@@ -34,8 +34,8 @@ namespace Helianthus::Message
         , TypeIndex(std::move(Other.TypeIndex))
     {
         // Reset other's state
-        Other.IsInitialized = false;
-        Other.IsShuttingDown = false;
+        Other.InitializedFlag = false;
+        Other.ShuttingDownFlag = false;
     }
 
     MessageQueue& MessageQueue::operator=(MessageQueue&& Other) noexcept
@@ -46,12 +46,12 @@ namespace Helianthus::Message
             
             Queue = std::move(Other.Queue);
             Config = std::move(Other.Config);
-            IsInitialized = Other.IsInitialized.load();
+            InitializedFlag = Other.InitializedFlag.load();
             IsThreadSafeEnabled = Other.IsThreadSafeEnabled.load();
-            IsShuttingDown = Other.IsShuttingDown.load();
+            ShuttingDownFlag = Other.ShuttingDownFlag.load();
             Stats = std::move(Other.Stats);
             DroppedMessageCount = Other.DroppedMessageCount.load();
-            MessageCallback = std::move(Other.MessageCallback);
+            MessageCallbackFunc = std::move(Other.MessageCallbackFunc);
             QueueFullCallback = std::move(Other.QueueFullCallback);
             QueueEmptyCallback = std::move(Other.QueueEmptyCallback);
             AutoDequeueEnabled = Other.AutoDequeueEnabled.load();
@@ -60,34 +60,34 @@ namespace Helianthus::Message
             TypeIndex = std::move(Other.TypeIndex);
             
             // Reset other's state
-            Other.IsInitialized = false;
-            Other.IsShuttingDown = false;
+            Other.InitializedFlag = false;
+            Other.ShuttingDownFlag = false;
         }
         return *this;
     }
 
     MessageResult MessageQueue::Initialize(const MessageQueueConfig& Config)
     {
-        if (IsInitialized)
+        if (InitializedFlag)
         {
             return MessageResult::ALREADY_EXISTS;
         }
         
-        Config = Config;
-        IsInitialized = true;
-        IsShuttingDown = false;
+        this->Config = Config;
+        InitializedFlag = true;
+        ShuttingDownFlag = false;
         
         return MessageResult::SUCCESS;
     }
 
     void MessageQueue::Shutdown()
     {
-        if (!IsInitialized)
+        if (!InitializedFlag)
         {
             return;
         }
         
-        IsShuttingDown = true;
+        ShuttingDownFlag = true;
         
         // Stop auto dequeue if enabled
         if (AutoDequeueEnabled)
@@ -105,12 +105,12 @@ namespace Helianthus::Message
         // Clear the queue
         Clear();
         
-        IsInitialized = false;
+        InitializedFlag = false;
     }
 
     bool MessageQueue::IsInitialized() const
     {
-        return IsInitialized;
+        return InitializedFlag;
     }
 
     MessageResult MessageQueue::Enqueue(MessagePtr Message)
@@ -161,10 +161,10 @@ namespace Helianthus::Message
             auto WaitResult = QueueCondition.wait_for(
                 Lock,
                 std::chrono::milliseconds(TimeoutMs),
-                [this] { return !Queue.empty() || IsShuttingDown; }
+                [this] { return !Queue.empty() || ShuttingDownFlag; }
             );
             
-            if (!WaitResult || IsShuttingDown)
+            if (!WaitResult || ShuttingDownFlag)
             {
                 return nullptr;
             }
@@ -489,9 +489,9 @@ namespace Helianthus::Message
     MessageStats MessageQueue::GetStats() const
     {
         std::lock_guard<std::mutex> Lock(StatsMutex);
-        MessageStats Stats = Stats;
-        Stats.QueueSize = GetSize();
-        return Stats;
+        MessageStats LocalStats = Stats;
+        LocalStats.QueueSize = GetSize();
+        return LocalStats;
     }
 
     void MessageQueue::ResetStats()
@@ -508,7 +508,7 @@ namespace Helianthus::Message
 
     void MessageQueue::UpdateConfig(const MessageQueueConfig& Config)
     {
-        Config = Config;
+        this->Config = Config;
     }
 
     MessageQueueConfig MessageQueue::GetCurrentConfig() const
@@ -518,7 +518,7 @@ namespace Helianthus::Message
 
     void MessageQueue::SetMessageCallback(MessageCallback Callback)
     {
-        MessageCallback = std::move(Callback);
+        MessageCallbackFunc = std::move(Callback);
     }
 
     void MessageQueue::SetQueueFullCallback(std::function<void(MessagePtr)> Callback)
@@ -533,7 +533,7 @@ namespace Helianthus::Message
 
     void MessageQueue::RemoveAllCallbacks()
     {
-        MessageCallback = nullptr;
+        MessageCallbackFunc = nullptr;
         QueueFullCallback = nullptr;
         QueueEmptyCallback = nullptr;
     }
@@ -575,11 +575,11 @@ namespace Helianthus::Message
             Lock,
             std::chrono::milliseconds(TimeoutMs),
             [this, MessageType] {
-                return FindFirstMessage(MessageType) != nullptr || IsShuttingDown;
+                return FindFirstMessage(MessageType) != nullptr || ShuttingDownFlag;
             }
         );
         
-        if (!WaitResult || IsShuttingDown)
+        if (!WaitResult || ShuttingDownFlag)
         {
             return MessageResult::TIMEOUT;
         }
@@ -633,7 +633,7 @@ namespace Helianthus::Message
 
     MessageResult MessageQueue::EnqueueInternal(MessagePtr Message)
     {
-        if (!IsInitialized || IsShuttingDown)
+        if (!InitializedFlag || ShuttingDownFlag)
         {
             return MessageResult::FAILED;
         }
@@ -690,9 +690,9 @@ namespace Helianthus::Message
 
     void MessageQueue::TriggerCallbacks(const MessagePtr& Message)
     {
-        if (MessageCallback)
+        if (MessageCallbackFunc)
         {
-            MessageCallback(Message);
+            MessageCallbackFunc(Message);
         }
         
         if (Queue.empty() && QueueEmptyCallback)
@@ -706,9 +706,9 @@ namespace Helianthus::Message
         while (!StopAutoDequeue && AutoDequeueEnabled)
         {
             auto Message = Dequeue();
-            if (Message && MessageCallback)
+            if (Message && MessageCallbackFunc)
             {
-                MessageCallback(Message);
+                MessageCallbackFunc(Message);
             }
             
             std::this_thread::sleep_for(std::chrono::milliseconds(AutoDequeueIntervalMs));

@@ -122,9 +122,9 @@ namespace Helianthus::Message
         
         // Configuration and state
         MessageQueueConfig Config;
-        std::atomic<bool> IsInitialized = false;
+        std::atomic<bool> InitializedFlag = false;
         std::atomic<bool> IsThreadSafeEnabled = true;
-        std::atomic<bool> IsShuttingDown = false;
+        std::atomic<bool> ShuttingDownFlag = false;
         
         // Statistics
         mutable std::mutex StatsMutex;
@@ -132,7 +132,7 @@ namespace Helianthus::Message
         std::atomic<uint32_t> DroppedMessageCount = 0;
         
         // Callbacks
-        MessageCallback MessageCallback;
+        MessageCallback MessageCallbackFunc;
         std::function<void(MessagePtr)> QueueFullCallback;
         std::function<void()> QueueEmptyCallback;
         
