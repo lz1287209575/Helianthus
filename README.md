@@ -1,6 +1,6 @@
 # Helianthus 游戏服务器
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/your-org/helianthus)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/lz1287209575/helianthus)
 [![C++](https://img.shields.io/badge/C%2B%2B-17%2F20-blue)](https://isocpp.org/)
 [![Bazel](https://img.shields.io/badge/build-Bazel-green)](https://bazel.build/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -28,7 +28,7 @@ Helianthus 是一个高性能、可扩展的微服务游戏服务器架构，采
 
 ### 1. 克隆项目
 ```bash
-git clone https://github.com/your-org/helianthus.git
+git clone https://github.com/lz1287209575/helianthus.git
 cd helianthus
 ```
 
@@ -243,8 +243,8 @@ config.EnableReplication = true;
 
 ## 🙋 支持与联系
 
-- **问题反馈**: [GitHub Issues](https://github.com/your-org/helianthus/issues)
-- **功能建议**: [GitHub Discussions](https://github.com/your-org/helianthus/discussions)
+- **问题反馈**: [GitHub Issues](https://github.com/lz1287209575/helianthus/issues)
+- **功能建议**: [GitHub Discussions](https://github.com/lz1287209575/helianthus/discussions)
 - **文档**: [项目文档](https://helianthus-docs.example.com)
 
 ## 🌟 致谢
