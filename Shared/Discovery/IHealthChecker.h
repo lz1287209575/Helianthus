@@ -46,7 +46,7 @@ namespace Helianthus::Discovery
 
         // Health status retrieval
         virtual HealthScore GetHealthScore(ServiceInstanceId InstanceId) const = 0;
-        virtual SERVICE_STATE GetHealthState(ServiceInstanceId InstanceId) const = 0;
+        virtual ServiceState GetHealthState(ServiceInstanceId InstanceId) const = 0;
         virtual bool IsHealthy(ServiceInstanceId InstanceId) const = 0;
         virtual Common::TimestampMs GetLastHealthCheckTime(ServiceInstanceId InstanceId) const = 0;
         virtual uint32_t GetConsecutiveFailures(ServiceInstanceId InstanceId) const = 0;
@@ -117,7 +117,7 @@ namespace Helianthus::Discovery
 
         // Event callbacks and notifications
         virtual void SetHealthCheckCallback(HealthCheckCallback Callback) = 0;
-        virtual void SetHealthStateChangeCallback(std::function<void(ServiceInstanceId, SERVICE_STATE, SERVICE_STATE)> Callback) = 0;
+        virtual void SetHealthStateChangeCallback(std::function<void(ServiceInstanceId, ServiceState, ServiceState)> Callback) = 0;
         virtual void SetHealthAlertCallback(std::function<void(ServiceInstanceId, HealthScore, const std::string&)> Callback) = 0;
         virtual void RemoveAllCallbacks() = 0;
 

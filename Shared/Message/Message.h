@@ -18,9 +18,9 @@ namespace Helianthus::Message
     public:
         // Constructors
         Message();
-        explicit Message(MESSAGE_TYPE MessageType);
-        Message(MESSAGE_TYPE MessageType, const std::vector<uint8_t>& Payload);
-        Message(MESSAGE_TYPE MessageType, const std::string& JsonPayload);
+        explicit Message(MessageType MessageType);
+        Message(MessageType MessageType, const std::vector<uint8_t>& Payload);
+        Message(MessageType MessageType, const std::string& JsonPayload);
         
         // Copy and move constructors
         Message(const Message& Other);
@@ -54,14 +54,14 @@ namespace Helianthus::Message
         MessageId GetMessageId() const { return Header.MessageId; }
         void SetMessageId(MessageId Id) { Header.MessageId = Id; }
         
-        MESSAGE_TYPE GetMessageType() const { return Header.MessageType; }
-        void SetMessageType(MESSAGE_TYPE Type) { Header.MessageType = Type; }
+        MessageType GetMessageType() const { return Header.MessageType; }
+        void SetMessageType(MessageType Type) { Header.MessageType = Type; }
         
-        MESSAGE_PRIORITY GetPriority() const { return Header.Priority; }
-        void SetPriority(MESSAGE_PRIORITY Priority) { Header.Priority = Priority; }
+        MessagePriority GetPriority() const { return Header.Priority; }
+        void SetPriority(MessagePriority Priority) { Header.Priority = Priority; }
         
-        DELIVERY_MODE GetDeliveryMode() const { return Header.DeliveryMode; }
-        void SetDeliveryMode(DELIVERY_MODE Mode) { Header.DeliveryMode = Mode; }
+        DeliveryMode GetDeliveryMode() const { return Header.DeliveryMode; }
+        void SetDeliveryMode(DeliveryMode Mode) { Header.DeliveryMode = Mode; }
         
         Common::ServerId GetSenderId() const { return Header.SenderId; }
         void SetSenderId(Common::ServerId Id) { Header.SenderId = Id; }
@@ -109,10 +109,10 @@ namespace Helianthus::Message
         bool IsEncrypted() const { return IsEncryptedFlag; }
 
         // Static factory methods
-        static MessagePtr Create(MESSAGE_TYPE MessageType);
-        static MessagePtr Create(MESSAGE_TYPE MessageType, const std::vector<uint8_t>& Payload);
-        static MessagePtr Create(MESSAGE_TYPE MessageType, const std::string& JsonPayload);
-        static MessagePtr CreateResponse(const Message& OriginalMessage, MESSAGE_TYPE ResponseType);
+        static MessagePtr Create(MessageType MessageType);
+        static MessagePtr Create(MessageType MessageType, const std::vector<uint8_t>& Payload);
+        static MessagePtr Create(MessageType MessageType, const std::string& JsonPayload);
+        static MessagePtr CreateResponse(const Message& OriginalMessage, MessageType ResponseType);
 
     private:
         MessageHeader Header;

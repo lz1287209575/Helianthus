@@ -28,6 +28,7 @@ namespace Helianthus::Network
     // Network error codes
     enum class NetworkError : int32_t
     {
+        SUCCESS = 0,
         NONE = 0,
         CONNECTION_FAILED = -1,
         SOCKET_CREATE_FAILED = -2,
@@ -40,7 +41,14 @@ namespace Helianthus::Network
         BUFFER_OVERFLOW = -9,
         INVALID_ADDRESS = -10,
         PERMISSION_DENIED = -11,
-        NETWORK_UNREACHABLE = -12
+        NETWORK_UNREACHABLE = -12,
+        ALREADY_INITIALIZED = -13,
+        NOT_INITIALIZED = -14,
+        CONNECTION_NOT_FOUND = -15,
+        CONNECTION_CLOSED = -16,
+        SERIALIZATION_FAILED = -17,
+        GROUP_NOT_FOUND = -18,
+        SERVER_ALREADY_RUNNING = -19
     };
 
     // Network address structure
@@ -74,16 +82,32 @@ namespace Helianthus::Network
         uint32_t PingMs = 0;
     };
 
+    // Network statistics
+    struct NetworkStats
+    {
+        uint64_t TotalConnectionsCreated = 0;
+        uint64_t TotalConnectionsClosed = 0;
+        uint32_t ActiveConnections = 0;
+        uint64_t TotalMessagesSent = 0;
+        uint64_t TotalMessagesReceived = 0;
+        uint64_t TotalBytesSent = 0;
+        uint64_t TotalBytesReceived = 0;
+        uint64_t AverageLatencyMs = 0;
+        uint64_t MaxLatencyMs = 0;
+    };
+
     // Network configuration
     struct NetworkConfig
     {
         uint32_t MaxConnections = HELIANTHUS_MAX_CONNECTIONS;
-        uint32_t BufferSize = HELIANTHUS_DEFAULT_BUFFER_SIZE;
-        uint32_t TimeoutMs = HELIANTHUS_NETWORK_TIMEOUT_MS;
+        uint32_t BufferSizeBytes = HELIANTHUS_DEFAULT_BUFFER_SIZE;
+        uint32_t ConnectionTimeoutMs = HELIANTHUS_NETWORK_TIMEOUT_MS;
+        uint32_t KeepAliveIntervalMs = 30000;
         uint32_t ThreadPoolSize = HELIANTHUS_DEFAULT_THREAD_POOL_SIZE;
         bool EnableNagle = false;
         bool EnableKeepalive = true;
-        uint32_t KeepaliveIntervalMs = 30000;
+        bool EnableCompression = false;
+        bool EnableEncryption = false;
     };
 
     // Forward declarations

@@ -11,7 +11,7 @@
 namespace Helianthus::Discovery
 {
     // Service states
-    enum class SERVICE_STATE : uint8_t
+    enum class ServiceState : uint8_t
     {
         UNKNOWN = 0,
         STARTING = 1,
@@ -24,7 +24,7 @@ namespace Helianthus::Discovery
     };
 
     // Load balancing strategies
-    enum class LOAD_BALANCE_STRATEGY : uint8_t
+    enum class LoadBalanceStrategy : uint8_t
     {
         ROUND_ROBIN = 0,
         WEIGHTED_ROUND_ROBIN = 1,
@@ -106,7 +106,7 @@ namespace Helianthus::Discovery
     // Load balancing configuration
     struct LoadBalanceConfig
     {
-        LOAD_BALANCE_STRATEGY Strategy = LOAD_BALANCE_STRATEGY::ROUND_ROBIN;
+        LoadBalanceStrategy Strategy = LoadBalanceStrategy::ROUND_ROBIN;
         LoadWeight DefaultWeight = DefaultWeight;
         uint32_t MaxConnections = 1000;
         uint32_t ConnectionTimeoutMs = 5000;
@@ -121,7 +121,7 @@ namespace Helianthus::Discovery
         ServiceInstanceId InstanceId = InvalidServiceInstanceId;
         Common::ServiceInfo BaseInfo;
         std::vector<ServiceEndpoint> Endpoints;
-        SERVICE_STATE State = SERVICE_STATE::UNKNOWN;
+        ServiceState State = ServiceState::UNKNOWN;
         HealthCheckConfig HealthConfig;
         LoadWeight Weight = DefaultWeight;
         HealthScore CurrentHealthScore = 0;
@@ -139,7 +139,7 @@ namespace Helianthus::Discovery
         
         bool IsHealthy() const 
         { 
-            return State == SERVICE_STATE::HEALTHY && CurrentHealthScore > MaxHealthScore / 2; 
+            return State == ServiceState::HEALTHY && CurrentHealthScore > MaxHealthScore / 2; 
         }
         
         bool CanAcceptConnections() const 
@@ -214,7 +214,7 @@ namespace Helianthus::Discovery
     using ServiceGroupPtr = std::shared_ptr<ServiceGroup>;
 
     // Callback function types
-    using ServiceStateChangeCallback = std::function<void(ServiceInstanceId InstanceId, SERVICE_STATE OldState, SERVICE_STATE NewState)>;
+    using ServiceStateChangeCallback = std::function<void(ServiceInstanceId InstanceId, ServiceState OldState, ServiceState NewState)>;
     using ServiceRegistrationCallback = std::function<void(ServiceInstanceId InstanceId, DiscoveryResult Result)>;
     using ServiceDiscoveryCallback = std::function<void(const std::string& ServiceName, const std::vector<ServiceInstancePtr>& Instances)>;
     using HealthCheckCallback = std::function<void(ServiceInstanceId InstanceId, bool IsHealthy, HealthScore Score)>;

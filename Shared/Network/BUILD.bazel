@@ -2,18 +2,21 @@ cc_library(
     name = "network",
     srcs = [
         "Sockets/TcpSocket.cpp",
+        "NetworkManager.cpp",
     ],
     hdrs = [
         "INetworkSocket.h",
         "INetworkManager.h",
         "NetworkTypes.h",
         "Sockets/TcpSocket.h",
+        "NetworkManager.h",
     ],
     strip_include_prefix = ".",
     include_prefix = "Network",
     deps = [
         "//:helianthus_config",
         "//Shared/Common:common",
+        "//Shared/Message:message",
     ],
     visibility = ["//visibility:public"],
 )

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Shared/Common/Types.h"
-#include "Shared/Network/NetworkTypes.h"
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -11,7 +10,7 @@
 namespace Helianthus::Message
 {
     // Message priority levels
-    enum class MESSAGE_PRIORITY : uint8_t
+    enum class MessagePriority : uint8_t
     {
         LOW = 0,
         NORMAL = 1,
@@ -20,7 +19,7 @@ namespace Helianthus::Message
     };
 
     // Message types for routing
-    enum class MESSAGE_TYPE : uint16_t
+    enum class MessageType : uint16_t
     {
         // System messages
         SYSTEM_HEARTBEAT = 1000,
@@ -52,7 +51,7 @@ namespace Helianthus::Message
     };
 
     // Message delivery modes
-    enum class DELIVERY_MODE : uint8_t
+    enum class DeliveryMode : uint8_t
     {
         FIRE_AND_FORGET = 0,    // No acknowledgment required
         RELIABLE = 1,           // Requires acknowledgment
@@ -62,7 +61,7 @@ namespace Helianthus::Message
     };
 
     // Message result codes
-    enum class MESSAGE_RESULT : int32_t
+    enum class MessageResult : int32_t
     {
         SUCCESS = 0,
         FAILED = -1,
@@ -72,7 +71,9 @@ namespace Helianthus::Message
         NO_SUBSCRIBERS = -5,
         SERIALIZATION_FAILED = -6,
         DESERIALIZATION_FAILED = -7,
-        ROUTING_FAILED = -8
+        ROUTING_FAILED = -8,
+        ALREADY_EXISTS = -9,
+        NOT_FOUND = -10
     };
 
     // Message ID and related types
@@ -88,9 +89,9 @@ namespace Helianthus::Message
     struct MessageHeader
     {
         MessageId MessageId = InvalidMessageId;
-        MESSAGE_TYPE MessageType = MESSAGE_TYPE::CUSTOM_MESSAGE_START;
-        MESSAGE_PRIORITY Priority = MESSAGE_PRIORITY::NORMAL;
-        DELIVERY_MODE DeliveryMode = DELIVERY_MODE::FIRE_AND_FORGET;
+        MessageType MessageType = MessageType::CUSTOM_MESSAGE_START;
+        MessagePriority Priority = MessagePriority::NORMAL;
+        DeliveryMode DeliveryMode = DeliveryMode::FIRE_AND_FORGET;
         Common::ServerId SenderId = Common::InvalidServerId;
         Common::ServerId ReceiverId = Common::InvalidServerId;
         TopicId TopicId = InvalidTopicId;
@@ -144,7 +145,7 @@ namespace Helianthus::Message
 
     // Callback function types
     using MessageCallback = std::function<void(MessagePtr Message)>;
-    using MessageResultCallback = std::function<void(MessageId MessageId, MESSAGE_RESULT Result)>;
+    using MessageResultCallback = std::function<void(MessageId MessageId, MessageResult Result)>;
     using TopicCallback = std::function<void(TopicId TopicId, MessagePtr Message)>;
 
 } // namespace Helianthus::Message

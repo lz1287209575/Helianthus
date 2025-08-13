@@ -34,16 +34,16 @@ namespace Helianthus::Discovery
 
         // Load balancing selection
         virtual ServiceInstancePtr SelectInstance(const std::string& ServiceName) = 0;
-        virtual ServiceInstancePtr SelectInstanceWithStrategy(const std::string& ServiceName, LOAD_BALANCE_STRATEGY Strategy) = 0;
+        virtual ServiceInstancePtr SelectInstanceWithStrategy(const std::string& ServiceName, LoadBalanceStrategy Strategy) = 0;
         virtual ServiceInstancePtr SelectInstanceWithContext(const std::string& ServiceName, const std::string& Context) = 0;
         virtual ServiceInstancePtr SelectInstanceWithWeight(const std::string& ServiceName, LoadWeight MinWeight = 0) = 0;
         virtual ServiceInstancePtr SelectHealthiestInstance(const std::string& ServiceName) = 0;
 
         // Strategy configuration
-        virtual void SetLoadBalanceStrategy(const std::string& ServiceName, LOAD_BALANCE_STRATEGY Strategy) = 0;
-        virtual LOAD_BALANCE_STRATEGY GetLoadBalanceStrategy(const std::string& ServiceName) const = 0;
-        virtual void SetDefaultStrategy(LOAD_BALANCE_STRATEGY Strategy) = 0;
-        virtual LOAD_BALANCE_STRATEGY GetDefaultStrategy() const = 0;
+        virtual void SetLoadBalanceStrategy(const std::string& ServiceName, LoadBalanceStrategy Strategy) = 0;
+        virtual LoadBalanceStrategy GetLoadBalanceStrategy(const std::string& ServiceName) const = 0;
+        virtual void SetDefaultStrategy(LoadBalanceStrategy Strategy) = 0;
+        virtual LoadBalanceStrategy GetDefaultStrategy() const = 0;
 
         // Weight management
         virtual DiscoveryResult SetInstanceWeight(ServiceInstanceId InstanceId, LoadWeight Weight) = 0;

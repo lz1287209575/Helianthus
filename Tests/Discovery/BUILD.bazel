@@ -1,0 +1,8 @@
+cc_test(
+    name = "service_registry_test",
+    srcs = ["ServiceRegistryTest.cpp"],
+    deps = [
+        "//Shared/Discovery:discovery",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

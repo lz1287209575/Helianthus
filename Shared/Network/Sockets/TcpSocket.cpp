@@ -226,7 +226,7 @@ namespace Helianthus::Network::Sockets
 		}
 		SockImpl->StopAsync.store(false);
 		SockImpl->RecvThread = std::thread([this]() {
-			std::vector<uint8_t> Buffer( SockImpl->Config.BufferSize > 0 ? SockImpl->Config.BufferSize : HELIANTHUS_DEFAULT_BUFFER_SIZE );
+			std::vector<uint8_t> Buffer( SockImpl->Config.BufferSizeBytes > 0 ? SockImpl->Config.BufferSizeBytes : HELIANTHUS_DEFAULT_BUFFER_SIZE );
 			while (!SockImpl->StopAsync.load())
 			{
 				ssize_t N = ::recv(SockImpl->Fd, Buffer.data(), Buffer.size(), 0);

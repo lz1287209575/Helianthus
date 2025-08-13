@@ -1,13 +1,20 @@
 cc_library(
     name = "message",
+    srcs = [
+        "Message.cpp",
+        "MessageQueue.cpp",
+    ],
     hdrs = [
         "Message.h",
         "MessageTypes.h",
+        "IMessageQueue.h",
+        "MessageQueue.h",
     ],
+    strip_include_prefix = ".",
+    include_prefix = "Message",
     deps = [
         "//:helianthus_config",
         "//Shared/Common:common",
-        "//Shared/Network:network",
     ],
     visibility = ["//visibility:public"],
 )

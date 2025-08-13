@@ -1,0 +1,17 @@
+cc_test(
+    name = "message_test",
+    srcs = ["MessageTest.cpp"],
+    deps = [
+        "//Shared/Message:message",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "message_queue_test", 
+    srcs = ["MessageQueueTest.cpp"],
+    deps = [
+        "//Shared/Message:message",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

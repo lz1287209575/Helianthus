@@ -1,12 +1,18 @@
 cc_library(
     name = "discovery",
+    srcs = [
+        "ServiceRegistry.cpp",
+    ],
     hdrs = [
         "IServiceRegistry.h",
         "IServiceDiscovery.h",
         "ILoadBalancer.h",
         "IHealthChecker.h",
+        "ServiceRegistry.h",
         "DiscoveryTypes.h",
     ],
+    strip_include_prefix = ".",
+    include_prefix = "Discovery",
     deps = [
         "//:helianthus_config",
         "//Shared/Common:common",

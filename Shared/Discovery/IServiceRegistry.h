@@ -43,7 +43,7 @@ namespace Helianthus::Discovery
             const std::unordered_map<std::string, std::string>& Tags = {},
             const std::string& Region = "",
             const std::string& Zone = "",
-            SERVICE_STATE MinState = SERVICE_STATE::HEALTHY
+            ServiceState MinState = ServiceState::HEALTHY
         ) const = 0;
 
         virtual std::vector<ServiceInstancePtr> FindServicesByTag(
@@ -55,10 +55,10 @@ namespace Helianthus::Discovery
         virtual std::vector<ServiceInstancePtr> FindServicesByZone(const std::string& Zone) const = 0;
 
         // Service state management
-        virtual DiscoveryResult UpdateServiceState(ServiceInstanceId InstanceId, SERVICE_STATE State) = 0;
+        virtual DiscoveryResult UpdateServiceState(ServiceInstanceId InstanceId, ServiceState State) = 0;
         virtual DiscoveryResult UpdateServiceHealth(ServiceInstanceId InstanceId, HealthScore Score) = 0;
         virtual DiscoveryResult UpdateServiceLoad(ServiceInstanceId InstanceId, uint32_t ActiveConnections) = 0;
-        virtual SERVICE_STATE GetServiceState(ServiceInstanceId InstanceId) const = 0;
+        virtual ServiceState GetServiceState(ServiceInstanceId InstanceId) const = 0;
 
         // Heartbeat and TTL management
         virtual DiscoveryResult SendHeartbeat(ServiceInstanceId InstanceId) = 0;

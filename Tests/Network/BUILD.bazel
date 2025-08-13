@@ -7,3 +7,13 @@ cc_binary(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_test(
+    name = "network_manager_test",
+    srcs = ["NetworkManagerTest.cpp"],
+    deps = [
+        "//Shared/Network:network",
+        "//Shared/Message:message",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

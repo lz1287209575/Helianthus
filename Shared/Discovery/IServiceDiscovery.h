@@ -56,9 +56,9 @@ namespace Helianthus::Discovery
         virtual bool IsFailoverEnabled(const std::string& ServiceName) const = 0;
 
         // Load balancing integration
-        virtual ServiceInstancePtr SelectServiceInstance(const std::string& ServiceName, LOAD_BALANCE_STRATEGY Strategy = LOAD_BALANCE_STRATEGY::ROUND_ROBIN) = 0;
-        virtual ServiceInstancePtr SelectServiceInstanceWithContext(const std::string& ServiceName, const std::string& Context, LOAD_BALANCE_STRATEGY Strategy = LOAD_BALANCE_STRATEGY::ROUND_ROBIN) = 0;
-        virtual void UpdateLoadBalanceStrategy(const std::string& ServiceName, LOAD_BALANCE_STRATEGY Strategy) = 0;
+        virtual ServiceInstancePtr SelectServiceInstance(const std::string& ServiceName, LoadBalanceStrategy Strategy = LoadBalanceStrategy::ROUND_ROBIN) = 0;
+        virtual ServiceInstancePtr SelectServiceInstanceWithContext(const std::string& ServiceName, const std::string& Context, LoadBalanceStrategy Strategy = LoadBalanceStrategy::ROUND_ROBIN) = 0;
+        virtual void UpdateLoadBalanceStrategy(const std::string& ServiceName, LoadBalanceStrategy Strategy) = 0;
 
         // Caching and performance
         virtual void EnableCaching(bool Enable = true) = 0;
