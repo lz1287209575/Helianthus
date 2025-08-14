@@ -1,0 +1,8 @@
+cc_test(
+    name = "common_test",
+    srcs = ["CommonTest.cpp"],
+    deps = [
+        "//Shared/Common:common",
+        "@googletest//:gtest_main",
+    ],
+)

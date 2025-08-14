@@ -159,7 +159,7 @@ namespace Helianthus::Discovery
         ServiceGroupId GroupId = InvalidServiceGroupId;
         std::string ServiceName;
         std::vector<ServiceInstanceId> InstanceIds;
-        LoadBalanceConfig LoadBalanceConfig;
+        LoadBalanceConfig Config;
         uint32_t TotalWeight = 0;
         uint32_t TotalActiveConnections = 0;
         Common::TimestampMs LastUpdate = 0;

@@ -3,7 +3,7 @@ cc_test(
     srcs = ["MessageTest.cpp"],
     deps = [
         "//Shared/Message:message",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -12,6 +12,15 @@ cc_test(
     srcs = ["MessageQueueTest.cpp"],
     deps = [
         "//Shared/Message:message",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "message_comprehensive_test",
+    srcs = ["MessageComprehensiveTest.cpp"],
+    deps = [
+        "//Shared/Message:message",
+        "@googletest//:gtest_main",
     ],
 )
