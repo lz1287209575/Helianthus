@@ -88,13 +88,13 @@ namespace Helianthus::Message
     // Message header structure
     struct MessageHeader
     {
-        MessageId MessageId = InvalidMessageId;
-        MessageType MessageType = MessageType::CUSTOM_MESSAGE_START;
+        MessageId MsgId = InvalidMessageId;
+        MessageType MsgType = MessageType::CUSTOM_MESSAGE_START;
         MessagePriority Priority = MessagePriority::NORMAL;
-        DeliveryMode DeliveryMode = DeliveryMode::FIRE_AND_FORGET;
+        DeliveryMode PostMode = DeliveryMode::FIRE_AND_FORGET;
         Common::ServerId SenderId = Common::InvalidServerId;
         Common::ServerId ReceiverId = Common::InvalidServerId;
-        TopicId TopicId = InvalidTopicId;
+        TopicId ThemId = InvalidTopicId;
         Common::TimestampMs Timestamp = 0;
         uint32_t PayloadSize = 0;
         uint32_t Checksum = 0;
@@ -145,7 +145,7 @@ namespace Helianthus::Message
 
     // Callback function types
     using MessageCallback = std::function<void(MessagePtr Message)>;
-    using MessageResultCallback = std::function<void(MessageId MessageId, MessageResult Result)>;
-    using TopicCallback = std::function<void(TopicId TopicId, MessagePtr Message)>;
+    using MessageResultCallback = std::function<void(MessageId MsgId, MessageResult Result)>;
+    using TopicCallback = std::function<void(TopicId ThemId, MessagePtr Message)>;
 
 } // namespace Helianthus::Message

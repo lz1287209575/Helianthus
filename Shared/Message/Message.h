@@ -18,9 +18,9 @@ namespace Helianthus::Message
     public:
         // Constructors
         Message();
-        explicit Message(MessageType MessageType);
-        Message(MessageType MessageType, const std::vector<uint8_t>& Payload);
-        Message(MessageType MessageType, const std::string& JsonPayload);
+        explicit Message(MessageType MsgType);
+        Message(MessageType MsgType, const std::vector<uint8_t>& Payload);
+        Message(MessageType MsgType, const std::string& JsonPayload);
         
         // Copy and move constructors
         Message(const Message& Other);
@@ -51,17 +51,17 @@ namespace Helianthus::Message
         bool SetJsonPayload(const std::string& Json);
         
         // Message properties
-        MessageId GetMessageId() const { return Header.MessageId; }
-        void SetMessageId(MessageId Id) { Header.MessageId = Id; }
+        MessageId GetMessageId() const { return Header.MsgId; }
+        void SetMessageId(MessageId Id) { Header.MsgId = Id; }
         
-        MessageType GetMessageType() const { return Header.MessageType; }
-        void SetMessageType(MessageType Type) { Header.MessageType = Type; }
+        MessageType GetMessageType() const { return Header.MsgType; }
+        void SetMessageType(MessageType Type) { Header.MsgType = Type; }
         
         MessagePriority GetPriority() const { return Header.Priority; }
         void SetPriority(MessagePriority Priority) { Header.Priority = Priority; }
         
-        DeliveryMode GetDeliveryMode() const { return Header.DeliveryMode; }
-        void SetDeliveryMode(DeliveryMode Mode) { Header.DeliveryMode = Mode; }
+        DeliveryMode GetDeliveryMode() const { return Header.PostMode; }
+        void SetDeliveryMode(DeliveryMode Mode) { Header.PostMode = Mode; }
         
         Common::ServerId GetSenderId() const { return Header.SenderId; }
         void SetSenderId(Common::ServerId Id) { Header.SenderId = Id; }
@@ -69,8 +69,8 @@ namespace Helianthus::Message
         Common::ServerId GetReceiverId() const { return Header.ReceiverId; }
         void SetReceiverId(Common::ServerId Id) { Header.ReceiverId = Id; }
         
-        TopicId GetTopicId() const { return Header.TopicId; }
-        void SetTopicId(TopicId Id) { Header.TopicId = Id; }
+        TopicId GetTopicId() const { return Header.ThemId; }
+        void SetTopicId(TopicId Id) { Header.ThemId = Id; }
         
         Common::TimestampMs GetTimestamp() const { return Header.Timestamp; }
         void SetTimestamp(Common::TimestampMs Timestamp) { Header.Timestamp = Timestamp; }
@@ -109,9 +109,9 @@ namespace Helianthus::Message
         bool IsEncrypted() const { return IsEncryptedFlag; }
 
         // Static factory methods
-        static MessagePtr Create(MessageType MessageType);
-        static MessagePtr Create(MessageType MessageType, const std::vector<uint8_t>& Payload);
-        static MessagePtr Create(MessageType MessageType, const std::string& JsonPayload);
+        static MessagePtr Create(MessageType MsgType);
+        static MessagePtr Create(MessageType MsgType, const std::vector<uint8_t>& Payload);
+        static MessagePtr Create(MessageType MsgType, const std::string& JsonPayload);
         static MessagePtr CreateResponse(const Message& OriginalMessage, MessageType ResponseType);
 
     private:

@@ -40,7 +40,7 @@ namespace Helianthus::Message
         MessagePtr Peek() const override;
 
         MessagePtr DequeueByPriority(MessagePriority MinPriority) override;
-        std::vector<MessagePtr> DequeueByType(MessageType MessageType, uint32_t MaxCount = 10) override;
+        std::vector<MessagePtr> DequeueByType(MessageType MsgType, uint32_t MaxCount = 10) override;
         std::vector<MessagePtr> DequeueBatch(uint32_t MaxCount = 10) override;
 
         size_t GetSize() const override;
@@ -54,13 +54,13 @@ namespace Helianthus::Message
             std::function<bool(const MessagePtr&)> Predicate,
             uint32_t MaxCount = 10
         ) const override;
-        MessagePtr FindFirstMessage(MessageType MessageType) const override;
-        size_t CountMessagesByType(MessageType MessageType) const override;
+        MessagePtr FindFirstMessage(MessageType MsgType) const override;
+        size_t CountMessagesByType(MessageType MsgType) const override;
 
         void Clear() override;
         void ClearByPriority(MessagePriority Priority) override;
-        void ClearByType(MessageType MessageType) override;
-        MessageResult RemoveMessage(MessageId MessageId) override;
+        void ClearByType(MessageType MsgType) override;
+        MessageResult RemoveMessage(MessageId MsgId) override;
 
         MessageStats GetStats() const override;
         void ResetStats() override;
@@ -80,7 +80,7 @@ namespace Helianthus::Message
         void EnableThreadSafety(bool Enable = true) override;
         bool IsThreadSafe() const override;
 
-        MessageResult WaitForMessage(MessageType MessageType, uint32_t TimeoutMs) override;
+        MessageResult WaitForMessage(MessageType MsgType, uint32_t TimeoutMs) override;
         void EnableAutoDequeue(bool Enable, uint32_t IntervalMs = 100) override;
         bool IsAutoDequeueEnabled() const override;
 

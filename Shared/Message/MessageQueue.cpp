@@ -207,7 +207,7 @@ namespace Helianthus::Message
         return nullptr;
     }
 
-    std::vector<MessagePtr> MessageQueue::DequeueByType(MessageType MessageType, uint32_t MaxCount)
+    std::vector<MessagePtr> MessageQueue::DequeueByType(MessageType MsgType, uint32_t MaxCount)
     {
         std::vector<MessagePtr> Result;
         std::vector<MessagePtr> TempMessages;
@@ -223,7 +223,7 @@ namespace Helianthus::Message
             auto Message = Queue.top();
             Queue.pop();
             
-            if (Message->GetMessageType() == MessageType)
+            if (Message->GetMessageType() == MsgType)
             {
                 Result.push_back(Message);
                 UpdateStatsOnDequeue(Message);
@@ -344,11 +344,11 @@ namespace Helianthus::Message
         return Result;
     }
 
-    MessagePtr MessageQueue::FindFirstMessage(MessageType MessageType) const
+    MessagePtr MessageQueue::FindFirstMessage(MessageType MsgType) const
     {
         auto Messages = FindMessages(
-            [MessageType](const MessagePtr& Message) {
-                return Message->GetMessageType() == MessageType;
+            [MsgType](const MessagePtr& Message) {
+                return Message->GetMessageType() == MsgType;
             },
             1
         );
@@ -356,7 +356,7 @@ namespace Helianthus::Message
         return Messages.empty() ? nullptr : Messages[0];
     }
 
-    size_t MessageQueue::CountMessagesByType(MessageType MessageType) const
+    size_t MessageQueue::CountMessagesByType(MessageType MsgType) const
     {
         if (IsThreadSafeEnabled)
         {
@@ -368,7 +368,7 @@ namespace Helianthus::Message
         
         while (!TempQueue.empty())
         {
-            if (TempQueue.top()->GetMessageType() == MessageType)
+            if (TempQueue.top()->GetMessageType() == MsgType)
             {
                 Count++;
             }
@@ -422,7 +422,7 @@ namespace Helianthus::Message
         }
     }
 
-    void MessageQueue::ClearByType(MessageType MessageType)
+    void MessageQueue::ClearByType(MessageType MsgType)
     {
         std::vector<MessagePtr> TempMessages;
         
@@ -437,7 +437,7 @@ namespace Helianthus::Message
             auto Message = Queue.top();
             Queue.pop();
             
-            if (Message->GetMessageType() != MessageType)
+            if (Message->GetMessageType() != MsgType)
             {
                 TempMessages.push_back(Message);
             }
@@ -450,7 +450,7 @@ namespace Helianthus::Message
         }
     }
 
-    MessageResult MessageQueue::RemoveMessage(MessageId MessageId)
+    MessageResult MessageQueue::RemoveMessage(MessageId MsgId)
     {
         std::vector<MessagePtr> TempMessages;
         bool Found = false;
@@ -466,7 +466,7 @@ namespace Helianthus::Message
             auto Message = Queue.top();
             Queue.pop();
             
-            if (Message->GetMessageId() == MessageId)
+            if (Message->GetMessageId() == MsgId)
             {
                 Found = true;
                 // Don't add back to temp messages
@@ -562,7 +562,7 @@ namespace Helianthus::Message
         return IsThreadSafeEnabled;
     }
 
-    MessageResult MessageQueue::WaitForMessage(MessageType MessageType, uint32_t TimeoutMs)
+    MessageResult MessageQueue::WaitForMessage(MessageType MsgType, uint32_t TimeoutMs)
     {
         if (!IsThreadSafeEnabled)
         {
@@ -574,8 +574,8 @@ namespace Helianthus::Message
         auto WaitResult = QueueCondition.wait_for(
             Lock,
             std::chrono::milliseconds(TimeoutMs),
-            [this, MessageType] {
-                return FindFirstMessage(MessageType) != nullptr || ShuttingDownFlag;
+            [this, MsgType] {
+                return FindFirstMessage(MsgType) != nullptr || ShuttingDownFlag;
             }
         );
         

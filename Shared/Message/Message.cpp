@@ -59,22 +59,22 @@ namespace Helianthus::Message
     // Constructors
     Message::Message()
     {
-        Header.MessageId = GenerateMessageId();
+        Header.MsgId = GenerateMessageId();
         Header.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
     }
 
-    Message::Message(MessageType MessageType) : Message()
+    Message::Message(MessageType MsgType) : Message()
     {
-        Header.MessageType = MessageType;
+        Header.MsgType = MsgType;
     }
 
-    Message::Message(MessageType MessageType, const std::vector<uint8_t>& Payload) : Message(MessageType)
+    Message::Message(MessageType MsgType, const std::vector<uint8_t>& Payload) : Message(MsgType)
     {
         SetPayload(Payload);
     }
 
-    Message::Message(MessageType MessageType, const std::string& JsonPayload) : Message(MessageType)
+    Message::Message(MessageType MsgType, const std::string& JsonPayload) : Message(MsgType)
     {
         SetPayload(JsonPayload);
     }
@@ -260,7 +260,7 @@ namespace Helianthus::Message
     bool Message::IsValid() const
     {
         // Check basic header fields
-        if (Header.MessageId == InvalidMessageId)
+        if (Header.MsgId == InvalidMessageId)
         {
             return false;
         }
@@ -283,8 +283,8 @@ namespace Helianthus::Message
         uint32_t Checksum = 0;
         
         // Include header fields (excluding checksum field itself)
-        Checksum = CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.MessageId), sizeof(Header.MessageId));
-        Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.MessageType), sizeof(Header.MessageType));
+        Checksum = CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.MsgId), sizeof(Header.MsgId));
+        Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.MsgType), sizeof(Header.MsgType));
         Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.SenderId), sizeof(Header.SenderId));
         Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.ReceiverId), sizeof(Header.ReceiverId));
         Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.PayloadSize), sizeof(Header.PayloadSize));
@@ -318,7 +318,7 @@ namespace Helianthus::Message
     void Message::Reset()
     {
         Header = MessageHeader{};
-        Header.MessageId = GenerateMessageId();
+        Header.MsgId = GenerateMessageId();
         Header.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         Payload.clear();
@@ -336,8 +336,8 @@ namespace Helianthus::Message
     {
         std::ostringstream Oss;
         Oss << "Message{";
-        Oss << "Id=" << Header.MessageId;
-        Oss << ", Type=" << static_cast<int>(Header.MessageType);
+        Oss << "Id=" << Header.MsgId;
+        Oss << ", Type=" << static_cast<int>(Header.MsgType);
         Oss << ", Sender=" << Header.SenderId;
         Oss << ", Receiver=" << Header.ReceiverId;
         Oss << ", PayloadSize=" << Header.PayloadSize;
@@ -353,13 +353,13 @@ namespace Helianthus::Message
     {
         std::ostringstream Oss;
         Oss << "MessageHeader{";
-        Oss << "MessageId=" << Header.MessageId;
-        Oss << ", MessageType=" << static_cast<int>(Header.MessageType);
+        Oss << "MessageId=" << Header.MsgId;
+        Oss << ", MessageType=" << static_cast<int>(Header.MsgType);
         Oss << ", Priority=" << static_cast<int>(Header.Priority);
-        Oss << ", DeliveryMode=" << static_cast<int>(Header.DeliveryMode);
+        Oss << ", DeliveryMode=" << static_cast<int>(Header.PostMode);
         Oss << ", SenderId=" << Header.SenderId;
         Oss << ", ReceiverId=" << Header.ReceiverId;
-        Oss << ", TopicId=" << Header.TopicId;
+        Oss << ", TopicId=" << Header.ThemId;
         Oss << ", Timestamp=" << Header.Timestamp;
         Oss << ", PayloadSize=" << Header.PayloadSize;
         Oss << ", Checksum=0x" << std::hex << Header.Checksum;
@@ -406,19 +406,19 @@ namespace Helianthus::Message
     }
 
     // Static factory methods
-    MessagePtr Message::Create(MessageType MessageType)
+    MessagePtr Message::Create(MessageType MsgType)
     {
-        return std::make_shared<Message>(MessageType);
+        return std::make_shared<Message>(MsgType);
     }
 
-    MessagePtr Message::Create(MessageType MessageType, const std::vector<uint8_t>& Payload)
+    MessagePtr Message::Create(MessageType MsgType, const std::vector<uint8_t>& Payload)
     {
-        return std::make_shared<Message>(MessageType, Payload);
+        return std::make_shared<Message>(MsgType, Payload);
     }
 
-    MessagePtr Message::Create(MessageType MessageType, const std::string& JsonPayload)
+    MessagePtr Message::Create(MessageType MsgType, const std::string& JsonPayload)
     {
-        return std::make_shared<Message>(MessageType, JsonPayload);
+        return std::make_shared<Message>(MsgType, JsonPayload);
     }
 
     MessagePtr Message::CreateResponse(const Message& OriginalMessage, MessageType ResponseType)

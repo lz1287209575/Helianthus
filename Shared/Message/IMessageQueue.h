@@ -32,7 +32,7 @@ namespace Helianthus::Message
 
         // Priority-based operations
         virtual MessagePtr DequeueByPriority(MessagePriority MinPriority) = 0;
-        virtual std::vector<MessagePtr> DequeueByType(MessageType MessageType, uint32_t MaxCount = 10) = 0;
+        virtual std::vector<MessagePtr> DequeueByType(MessageType MsgType, uint32_t MaxCount = 10) = 0;
         virtual std::vector<MessagePtr> DequeueBatch(uint32_t MaxCount = 10) = 0;
 
         // Queue information
@@ -48,14 +48,14 @@ namespace Helianthus::Message
             std::function<bool(const MessagePtr&)> Predicate,
             uint32_t MaxCount = 10
         ) const = 0;
-        virtual MessagePtr FindFirstMessage(MessageType MessageType) const = 0;
-        virtual size_t CountMessagesByType(MessageType MessageType) const = 0;
+        virtual MessagePtr FindFirstMessage(MessageType MsgType) const = 0;
+        virtual size_t CountMessagesByType(MessageType MsgType) const = 0;
 
         // Queue management
         virtual void Clear() = 0;
         virtual void ClearByPriority(MessagePriority Priority) = 0;
-        virtual void ClearByType(MessageType MessageType) = 0;
-        virtual MessageResult RemoveMessage(MessageId MessageId) = 0;
+        virtual void ClearByType(MessageType MsgType) = 0;
+        virtual MessageResult RemoveMessage(MessageId MsgId) = 0;
 
         // Statistics and monitoring
         virtual MessageStats GetStats() const = 0;
@@ -81,7 +81,7 @@ namespace Helianthus::Message
         virtual bool IsThreadSafe() const = 0;
 
         // Advanced operations
-        virtual MessageResult WaitForMessage(MessageType MessageType, uint32_t TimeoutMs) = 0;
+        virtual MessageResult WaitForMessage(MessageType MsgType, uint32_t TimeoutMs) = 0;
         virtual void EnableAutoDequeue(bool Enable, uint32_t IntervalMs = 100) = 0;
         virtual bool IsAutoDequeueEnabled() const = 0;
     };
