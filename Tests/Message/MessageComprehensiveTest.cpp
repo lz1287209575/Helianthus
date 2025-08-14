@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "Message/Message.h"
 #include "Message/MessageTypes.h"
+#include "Common/Types.h"
 #include <vector>
 #include <string>
 
@@ -379,7 +380,7 @@ TEST_F(MessageComprehensiveTest, LargePayload)
     Message Deserialized;
     bool Result = Deserialized.Deserialize(SerializedData);
     EXPECT_TRUE(Result);
-    EXPECT_EQ(Deserialized.GetPayload(), LargePayload);
+    EXPECT_EQ(Deserialized.GetJsonPayload(), LargePayload);
 }
 
 TEST_F(MessageComprehensiveTest, EmptyPayload)

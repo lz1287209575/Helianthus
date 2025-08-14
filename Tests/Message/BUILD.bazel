@@ -21,6 +21,7 @@ cc_test(
     srcs = ["MessageComprehensiveTest.cpp"],
     deps = [
         "//Shared/Message:message",
+        "//Shared/Common:common",
         "@googletest//:gtest_main",
     ],
 )
