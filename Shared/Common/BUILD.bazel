@@ -4,6 +4,8 @@ cc_library(
         "Logger.h",
         "Types.h",
     ],
+    strip_include_prefix = ".",
+    include_prefix = "Common",
     deps = [
         "//:helianthus_config",
     ],

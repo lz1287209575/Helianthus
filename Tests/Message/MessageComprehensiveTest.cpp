@@ -29,8 +29,8 @@ TEST_F(MessageComprehensiveTest, DefaultConstructor)
     EXPECT_EQ(Msg.GetMessageType(), MessageType::CUSTOM_MESSAGE_START);
     EXPECT_EQ(Msg.GetPriority(), MessagePriority::NORMAL);
     EXPECT_EQ(Msg.GetDeliveryMode(), DeliveryMode::FIRE_AND_FORGET);
-    EXPECT_EQ(Msg.GetSenderId(), Common::InvalidServerId);
-    EXPECT_EQ(Msg.GetReceiverId(), Common::InvalidServerId);
+    EXPECT_EQ(Msg.GetSenderId(), Helianthus::Common::InvalidServerId);
+    EXPECT_EQ(Msg.GetReceiverId(), Helianthus::Common::InvalidServerId);
     EXPECT_EQ(Msg.GetTopicId(), InvalidTopicId);
     EXPECT_EQ(Msg.GetTimestamp(), 0);
     EXPECT_EQ(Msg.GetSequenceNumber(), 0);
@@ -314,8 +314,8 @@ TEST_F(MessageComprehensiveTest, Reset)
     EXPECT_EQ(Msg.GetMessageType(), MessageType::CUSTOM_MESSAGE_START);
     EXPECT_EQ(Msg.GetPayloadSize(), 0);
     EXPECT_FALSE(Msg.HasPayload());
-    EXPECT_EQ(Msg.GetSenderId(), Common::InvalidServerId);
-    EXPECT_EQ(Msg.GetReceiverId(), Common::InvalidServerId);
+    EXPECT_EQ(Msg.GetSenderId(), Helianthus::Common::InvalidServerId);
+    EXPECT_EQ(Msg.GetReceiverId(), Helianthus::Common::InvalidServerId);
 }
 
 TEST_F(MessageComprehensiveTest, Clone)
