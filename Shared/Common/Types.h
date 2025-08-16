@@ -22,7 +22,7 @@ namespace Helianthus::Common
     static constexpr ServerId InvalidServerId = 0;
 
     // Result codes
-    enum class ReusltCode : int32_t
+    enum class ResultCode : int32_t
     {
         SUCCESS = 0,
         FAILED = -1,

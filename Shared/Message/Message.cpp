@@ -171,7 +171,7 @@ namespace Helianthus::Message
         
         // Calculate total size
         size_t HeaderSize = sizeof(MessageHeader);
-        size_t TotalSize = HeaderSize + Payload.size();
+        size_t TotalSize = sizeof(uint32_t) + HeaderSize + Payload.size(); // Magic + Header + Payload
         
         // Create buffer
         std::vector<uint8_t> Buffer(TotalSize);
@@ -183,8 +183,8 @@ namespace Helianthus::Message
         size_t Offset = 0;
         std::memcpy(Buffer.data() + Offset, &Magic, sizeof(Magic));
         Offset += sizeof(Magic);
-        std::memcpy(Buffer.data() + Offset, &SerializationHeader, HeaderSize - sizeof(Magic));
-        Offset += HeaderSize - sizeof(Magic);
+        std::memcpy(Buffer.data() + Offset, &SerializationHeader, HeaderSize);
+        Offset += HeaderSize;
         
         // Copy payload
         if (!Payload.empty())
@@ -220,7 +220,7 @@ namespace Helianthus::Message
         }
         
         // Copy header
-        size_t HeaderSize = sizeof(MessageHeader) - sizeof(Magic);
+        size_t HeaderSize = sizeof(MessageHeader);
         if (Size < sizeof(uint32_t) + HeaderSize)
         {
             return false;
@@ -229,13 +229,7 @@ namespace Helianthus::Message
         std::memcpy(&Header, Data + Offset, HeaderSize);
         Offset += HeaderSize;
         
-        // Validate header
-        if (!IsValid())
-        {
-            return false;
-        }
-        
-        // Copy payload
+        // Copy payload first
         size_t PayloadSize = Size - Offset;
         if (PayloadSize != Header.PayloadSize)
         {
@@ -250,6 +244,12 @@ namespace Helianthus::Message
         else
         {
             Payload.clear();
+        }
+        
+        // Validate header after payload is set
+        if (!IsValid())
+        {
+            return false;
         }
         
         // Validate checksum

@@ -2,6 +2,9 @@ cc_library(
     name = "discovery",
     srcs = [
         "ServiceRegistry.cpp",
+        "HealthChecker.cpp",
+        "LoadBalancer.cpp",
+        "ServiceDiscovery.cpp",
     ],
     hdrs = [
         "IServiceRegistry.h",
@@ -9,6 +12,9 @@ cc_library(
         "ILoadBalancer.h",
         "IHealthChecker.h",
         "ServiceRegistry.h",
+        "HealthChecker.h",
+        "LoadBalancer.h",
+        "ServiceDiscovery.h",
         "DiscoveryTypes.h",
     ],
     strip_include_prefix = ".",
@@ -18,6 +24,7 @@ cc_library(
         "//Shared/Common:common",
         "//Shared/Network:network",
         "//Shared/Message:message",
+        "//Shared/RPC:rpc",
     ],
     visibility = ["//visibility:public"],
 )

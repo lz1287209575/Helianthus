@@ -1,6 +1,8 @@
-#include "Discovery/ServiceRegistry.h"
+#include "ServiceRegistry.h"
 #include <algorithm>
 #include <sstream>
+#include <iostream>
+#include <chrono>
 
 namespace Helianthus::Discovery
 {
@@ -8,6 +10,7 @@ namespace Helianthus::Discovery
     {
         Config = RegistryConfig{};
         Stats = DiscoveryStats{};
+        std::cout << "[ServiceRegistry] 创建服务注册中心" << std::endl;
     }
 
     ServiceRegistry::~ServiceRegistry()

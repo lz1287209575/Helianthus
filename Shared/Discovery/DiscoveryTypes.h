@@ -98,20 +98,27 @@ namespace Helianthus::Discovery
         uint32_t MaxRetries = 3;
         uint32_t UnhealthyThreshold = 3;    // Consecutive failures to mark unhealthy
         uint32_t HealthyThreshold = 2;      // Consecutive successes to mark healthy
+        bool Enabled = true;
         std::string HealthCheckPath = "/health";
         std::string ExpectedResponse = "OK";
+        std::string CustomCheckEndpoint = "";
         std::unordered_map<std::string, std::string> CustomHeaders;
+        std::unordered_map<std::string, std::string> CustomParameters;
     };
 
     // Load balancing configuration
     struct LoadBalanceConfig
     {
-        LoadBalanceStrategy Strategy = LoadBalanceStrategy::ROUND_ROBIN;
-        LoadWeight DefaultWeight = DefaultWeight;
+        LoadBalanceStrategy DefaultStrategy = LoadBalanceStrategy::ROUND_ROBIN;
+        LoadWeight DefaultWeight = 100;
+        HealthScore MinHealthScore = 50;
         uint32_t MaxConnections = 1000;
         uint32_t ConnectionTimeoutMs = 5000;
         bool EnableStickySession = false;
+        bool EnableConsistentHashing = false;
+        bool EnableHealthAware = true;
         std::string StickySessionKey = "session_id";
+        uint32_t HashVirtualNodes = 150;
         uint32_t HashSeed = 12345;
     };
 
@@ -198,6 +205,7 @@ namespace Helianthus::Discovery
         bool EnableReplication = false;
         std::vector<Network::NetworkAddress> ReplicaNodes;
     };
+
 
     // Forward declarations
     class IServiceRegistry;

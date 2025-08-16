@@ -15,7 +15,7 @@ protected:
         Config_.DefaultTtlMs = 30000; // 30 seconds
         Config_.CleanupIntervalMs = 1000; // 1 second
         Config_.EnablePersistence = false;
-        Config_.ReplicationEnabled = false;
+        Config_.EnableReplication = false;
         
         Registry_ = std::make_unique<ServiceRegistry>();
     }
@@ -32,12 +32,12 @@ protected:
     {
         ServiceInstance Instance;
         Instance.BaseInfo.ServiceName = ServiceName;
-        Instance.BaseInfo.Version = "1.0.0";
-        Instance.BaseInfo.Host = Host;
+        Instance.BaseInfo.ServiceVersion = "1.0.0";
+        Instance.BaseInfo.HostAddress = Host;
         Instance.BaseInfo.Port = Port;
-        Instance.State = SERVICE_STATE::HEALTHY;
+        Instance.State = ServiceState::HEALTHY;
         Instance.CurrentHealthScore = 100;
-        Instance.MaxHealthScore = 100;
+        
         Instance.ActiveConnections = 0;
         Instance.MaxConnections = 1000;
         Instance.Region = "us-west-1";
@@ -133,10 +133,10 @@ TEST_F(ServiceRegistryTest, HealthyServiceFilteringWorksCorrectly)
     
     // Register services with different health states
     auto HealthyService = CreateTestService("WebService", "host1", 8080);
-    HealthyService.State = SERVICE_STATE::HEALTHY;
+    HealthyService.State = ServiceState::HEALTHY;
     
     auto UnhealthyService = CreateTestService("WebService", "host2", 8081);
-    UnhealthyService.State = SERVICE_STATE::UNHEALTHY;
+    UnhealthyService.State = ServiceState::UNHEALTHY;
     
     ServiceInstanceId Id1, Id2;
     Registry_->RegisterService(HealthyService, Id1);
@@ -185,12 +185,12 @@ TEST_F(ServiceRegistryTest, ServiceStateUpdateWorksCorrectly)
     Registry_->RegisterService(TestService, InstanceId);
     
     // Update service state
-    auto Result = Registry_->UpdateServiceState(InstanceId, SERVICE_STATE::MAINTENANCE);
+    auto Result = Registry_->UpdateServiceState(InstanceId, ServiceState::MAINTENANCE);
     EXPECT_EQ(Result, DiscoveryResult::SUCCESS);
     
     // Verify state change
     auto State = Registry_->GetServiceState(InstanceId);
-    EXPECT_EQ(State, SERVICE_STATE::MAINTENANCE);
+    EXPECT_EQ(State, ServiceState::MAINTENANCE);
 }
 
 TEST_F(ServiceRegistryTest, HeartbeatWorksCorrectly)
