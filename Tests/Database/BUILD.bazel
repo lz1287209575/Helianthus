@@ -1,0 +1,68 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+cc_test(
+    name = "database_test",
+    size = "medium",
+    srcs = ["DatabaseTest.cpp"],
+    deps = [
+        "//Shared/Database:database",
+        "//Shared/Database:mysql_database",
+        "//Shared/Database:connection_pool",
+        "//Shared/Database:database_config",
+        "//Shared/Common:common",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+    # Test data files
+    data = [
+        "test_config.json",
+    ],
+    # Environment variables for testing
+    env = {
+        "TEST_MYSQL_HOST": "localhost",
+        "TEST_MYSQL_PORT": "3306",
+        "TEST_MYSQL_DATABASE": "helianthus_test",
+        "TEST_MYSQL_USERNAME": "test",
+        "TEST_MYSQL_PASSWORD": "test",
+        "TEST_REDIS_HOST": "localhost",
+        "TEST_REDIS_PORT": "6379",
+        "TEST_REDIS_DATABASE": "1",
+    },
+    visibility = ["//visibility:public"],
+)
+
+# TODO: Add individual component tests when files are created
+# cc_test(
+#     name = "mysql_connection_test",
+#     size = "small",
+#     srcs = ["MySqlConnectionTest.cpp"],
+#     deps = [
+#         "//Shared/Database:mysql_database",
+#         "//Shared/Common:common",
+#         "@googletest//:gtest",
+#         "@googletest//:gtest_main",
+#     ],
+#     tags = ["requires-mysql"],
+#     visibility = ["//visibility:public"],
+# )
+
+# Test suite for all database tests
+test_suite(
+    name = "all_tests",
+    tests = [
+        ":database_test",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# TODO: Add integration test suite when files are created
+# test_suite(
+#     name = "integration_tests", 
+#     tests = [
+#         ":mysql_connection_test",
+#         ":redis_connection_test",
+#         ":integration_test",
+#     ],
+#     tags = ["integration"],
+#     visibility = ["//visibility:public"],
+# )

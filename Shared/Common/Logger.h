@@ -20,16 +20,27 @@ namespace Helianthus::Common
     public:
         struct LoggerConfig
         {
-            LogLevel Level = static_cast<LogLevel>(HELIANTHUS_DEFAULT_LOG_LEVEL);
-            bool EnableConsole = true;
-            bool EnableFile = true;
-            std::string FilePath = "logs/helianthus.log";
-            size_t MaxFileSize = 50 * 1024 * 1024; // 50MB
-            size_t MaxFiles = 5;
-            std::string Pattern = "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v";
+            LogLevel Level;
+            bool EnableConsole;
+            bool EnableFile;
+            std::string FilePath;
+            size_t MaxFileSize;
+            size_t MaxFiles;
+            std::string Pattern;
+            
+            LoggerConfig() 
+                : Level(static_cast<LogLevel>(HELIANTHUS_DEFAULT_LOG_LEVEL))
+                , EnableConsole(true)
+                , EnableFile(true)
+                , FilePath("logs/helianthus.log")
+                , MaxFileSize(50 * 1024 * 1024) // 50MB
+                , MaxFiles(5)
+                , Pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v")
+            {
+            }
         };
 
-        static void Initialize(const LoggerConfig& Config = LoggerConfig{});
+        static void Initialize(const LoggerConfig& Config = LoggerConfig());
         static void Shutdown();
         static bool IsInitialized();
 

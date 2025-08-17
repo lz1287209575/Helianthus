@@ -20,3 +20,40 @@ bazel_dep(name = "googletest", version = "1.14.0.bcr.1")
 
 # nlohmann/json for RPC serialization
 bazel_dep(name = "nlohmann_json", version = "3.11.2")
+
+# Non-module dependencies using extension
+deps = use_extension("@bazel_tools//tools/build_defs/repo:non_module_dependencies.bzl", "non_module_dependencies")
+
+# Import http_archive function
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# spdlog dependency
+http_archive(
+    name = "spdlog", 
+    build_file = "//ThirdParty:spdlog.BUILD",
+    sha256 = "697f91700237dbae2326b90469be32b876b2b44888302afbc7aceb68bcfe8224",
+    strip_prefix = "spdlog-1.10.0",
+    urls = ["https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz"],
+)
+
+# Use libmariadb-dev as MySQL client alternative
+http_archive(
+    name = "mysql_connector_cpp",
+    build_file = "//ThirdParty:mysql_connector_cpp.BUILD",
+    sha256 = "be0c15661d5984afdce313dd760cd725806c59f7e9891e344e4871c1805395e9",
+    strip_prefix = "mariadb-connector-c-3.3.1",
+    urls = [
+        "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v3.3.1.tar.gz",
+    ],
+)
+
+# hiredis for Redis
+http_archive(
+    name = "hiredis",
+    build_file = "//ThirdParty:hiredis.BUILD",
+    sha256 = "82ad632d31ee05da13b537c124f819eb88e18851d9cb0c30ae0552084811588c", 
+    strip_prefix = "hiredis-1.2.0",
+    urls = [
+        "https://github.com/redis/hiredis/archive/v1.2.0.tar.gz",
+    ],
+)

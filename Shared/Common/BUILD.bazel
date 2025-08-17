@@ -8,6 +8,7 @@ cc_library(
     include_prefix = "Common",
     deps = [
         "//:helianthus_config",
+        "@spdlog//:spdlog",
     ],
     visibility = ["//visibility:public"],
 )

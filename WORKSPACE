@@ -43,5 +43,6 @@ http_archive(
     urls = ["https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz"],
 )
 
+
 # Add more dependencies as needed for different script engines
 # Lua, Python, V8, .NET etc will be added later
