@@ -36,7 +36,7 @@ namespace Helianthus::RPC
         void DisconnectClient(Network::ConnectionId ClientId);
 
         // Data operations
-        Network::NetworkError SendToClient(Network::ConnectionId ClientId, const uint8_t* Data, size_t Size);
+        Network::NetworkError SendToClient(Network::ConnectionId ClientId, const char* Data, size_t Size);
 
         // Event processing
         void ProcessNetworkEvents();
@@ -44,14 +44,14 @@ namespace Helianthus::RPC
         // Event callbacks
         void SetOnClientConnectedCallback(std::function<void(Network::ConnectionId)> Callback);
         void SetOnClientDisconnectedCallback(std::function<void(Network::ConnectionId, Network::NetworkError)> Callback);
-        void SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const uint8_t*, size_t)> Callback);
+        void SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const char*, size_t)> Callback);
 
     private:
         // Message structure for internal communication
         struct InternalMessage
         {
             Network::ConnectionId ConnectionId;
-            std::vector<uint8_t> Data;
+            std::vector<char> Data;
             std::chrono::steady_clock::time_point Timestamp;
         };
 
@@ -89,7 +89,7 @@ namespace Helianthus::RPC
         // Event callbacks
         std::function<void(Network::ConnectionId)> ClientConnectedCallback;
         std::function<void(Network::ConnectionId, Network::NetworkError)> ClientDisconnectedCallback;
-        std::function<void(Network::ConnectionId, const uint8_t*, size_t)> DataReceivedCallback;
+        std::function<void(Network::ConnectionId, const char*, size_t)> DataReceivedCallback;
 
         // Internal methods
         void StartMessageProcessingThread();

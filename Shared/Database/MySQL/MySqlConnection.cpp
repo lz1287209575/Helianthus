@@ -69,15 +69,15 @@ namespace Helianthus::Database::MySQL
         if (!Result)
         {
             ErrorCount++;
-            HELIANTHUS_LOG_ERROR("Failed to connect to MySQL: {}", GetMySqlError());
+            HELIANTHUS_LOG_ERROR("Failed to connect to MySQL: " + GetMySqlError());
             return Common::ResultCode::FAILED;
         }
 
         IsConnectedFlag = true;
         UpdateLastActiveTime();
         
-        HELIANTHUS_LOG_INFO("Successfully connected to MySQL database: {}:{}/{}", 
-                           Config.Host, Config.Port, Config.Database);
+        HELIANTHUS_LOG_INFO("Successfully connected to MySQL database: " + Config.Host + ":" + 
+                           std::to_string(Config.Port) + "/" + Config.Database);
         
         return Common::ResultCode::SUCCESS;
     }
@@ -249,7 +249,7 @@ namespace Helianthus::Database::MySQL
                 {
                     ValueString = "'" + EscapeString(V) + "'";
                 }
-                else if constexpr (std::is_same_v<T, std::vector<uint8_t>>)
+                else if constexpr (std::is_same_v<T, std::vector<char>>)
                 {
                     // Handle BLOB data
                     ValueString = "'"; // TODO: Implement proper BLOB handling
@@ -335,7 +335,7 @@ namespace Helianthus::Database::MySQL
             case MYSQL_TYPE_MEDIUM_BLOB:
             case MYSQL_TYPE_LONG_BLOB:
                 // TODO: Implement proper BLOB handling
-                return std::vector<uint8_t>(Value, Value + strlen(Value));
+                return std::vector<char>(Value, Value + strlen(Value));
 
             default:
                 return std::string(Value);

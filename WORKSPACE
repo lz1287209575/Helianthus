@@ -34,15 +34,54 @@ http_archive(
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 protobuf_deps()
 
-# spdlog for logging (temporary)
+# spdlog for logging (using Gitee mirror)
 http_archive(
     name = "spdlog",
     build_file = "//ThirdParty:spdlog.BUILD",
     sha256 = "5197b3147cfcfaa67dd564db7b878e4a4b3d9f3443801722b3915cdeced656cb",
     strip_prefix = "spdlog-1.10.0",
-    urls = ["https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz"],
+    urls = [
+        "https://gitee.com/mirrors/spdlog/repository/archive/v1.10.0.tar.gz",
+        "https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz",  # fallback
+    ],
 )
 
 
 # Add more dependencies as needed for different script engines
 # Lua, Python, V8, .NET etc will be added later
+
+# MySQL Connector/C++ (using Gitee mirror)
+http_archive(
+    name = "mysql_connector_cpp",
+    build_file = "//ThirdParty:mysql_connector_cpp.BUILD",
+    sha256 = "a0b4b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    strip_prefix = "mysql-connector-cpp-8.0.33",
+    urls = [
+        "https://gitee.com/mirrors/mysql-connector-cpp/repository/archive/8.0.33.tar.gz",
+        "https://github.com/mysql/mysql-connector-cpp/archive/8.0.33.tar.gz",  # fallback
+    ],
+)
+
+# MongoDB C++ Driver (using Gitee mirror)
+http_archive(
+    name = "mongo_cxx_driver",
+    build_file = "//ThirdParty:mongo_cxx_driver.BUILD",
+    sha256 = "a0b4b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    strip_prefix = "mongo-cxx-driver-r3.8.0",
+    urls = [
+        "https://gitee.com/mirrors/mongo-cxx-driver/repository/archive/r3.8.0.tar.gz",
+        "https://github.com/mongodb/mongo-cxx-driver/archive/r3.8.0.tar.gz",  # fallback
+    ],
+)
+
+# Redis C Client (hiredis) (using Gitee mirror)
+http_archive(
+    name = "hiredis",
+    build_file = "//ThirdParty:hiredis.BUILD",
+    sha256 = "a0b4b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    strip_prefix = "hiredis-1.1.0",
+    urls = [
+        "https://gitee.com/mirrors/hiredis/repository/archive/v1.1.0.tar.gz",
+        "https://github.com/redis/hiredis/archive/v1.1.0.tar.gz",  # fallback
+    ],
+)

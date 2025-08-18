@@ -24,36 +24,37 @@ bazel_dep(name = "nlohmann_json", version = "3.11.2")
 # Non-module dependencies using extension
 deps = use_extension("@bazel_tools//tools/build_defs/repo:non_module_dependencies.bzl", "non_module_dependencies")
 
-# Import http_archive function
+# Import http_archive and new_local_repository functions
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
-# spdlog dependency
+# spdlog dependency (using Gitee mirror)
 http_archive(
-    name = "spdlog", 
+    name = "spdlog",
     build_file = "//ThirdParty:spdlog.BUILD",
     sha256 = "697f91700237dbae2326b90469be32b876b2b44888302afbc7aceb68bcfe8224",
     strip_prefix = "spdlog-1.10.0",
-    urls = ["https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz"],
+    urls = [
+        #        "https://gitee.com/mirrors/spdlog/repository/archive/v1.10.0.tar.gz",
+        "https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz",  # fallback
+    ],
 )
 
-# Use libmariadb-dev as MySQL client alternative
-http_archive(
+# Use git submodules for local dependencies
+new_local_repository(
     name = "mysql_connector_cpp",
+    path = "ThirdParty/mariadb-connector-c",
     build_file = "//ThirdParty:mysql_connector_cpp.BUILD",
-    sha256 = "be0c15661d5984afdce313dd760cd725806c59f7e9891e344e4871c1805395e9",
-    strip_prefix = "mariadb-connector-c-3.3.1",
-    urls = [
-        "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v3.3.1.tar.gz",
-    ],
 )
 
-# hiredis for Redis
-http_archive(
+new_local_repository(
+    name = "mongo_cxx_driver",
+    path = "ThirdParty/mongo-cxx-driver",
+    build_file = "//ThirdParty:mongo_cxx_driver.BUILD",
+)
+
+new_local_repository(
     name = "hiredis",
+    path = "ThirdParty/hiredis",
     build_file = "//ThirdParty:hiredis.BUILD",
-    sha256 = "82ad632d31ee05da13b537c124f819eb88e18851d9cb0c30ae0552084811588c", 
-    strip_prefix = "hiredis-1.2.0",
-    urls = [
-        "https://github.com/redis/hiredis/archive/v1.2.0.tar.gz",
-    ],
 )

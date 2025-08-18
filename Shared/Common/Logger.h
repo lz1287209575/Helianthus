@@ -52,31 +52,31 @@ namespace Helianthus::Common
 
         // Template logging with formatting
         template<typename... Args>
-        static void Debug(const std::string& Format, Args&&... Arguments)
+        static void Debug(const std::string& Format, const Args&... Arguments)
         {
             if (LoggerInstance)
-                LoggerInstance->debug(Format, std::forward<Args>(Arguments)...);
+                LoggerInstance->debug(Format, Arguments...);
         }
 
         template<typename... Args>
-        static void Info(const std::string& Format, Args&&... Arguments)
+        static void Info(const std::string& Format, const Args&... Arguments)
         {
             if (LoggerInstance)
-                LoggerInstance->info(Format, std::forward<Args>(Arguments)...);
+                LoggerInstance->info(Format, Arguments...);
         }
 
         template<typename... Args>
-        static void Warn(const std::string& Format, Args&&... Arguments)
+        static void Warn(const std::string& Format, const Args&... Arguments)
         {
             if (LoggerInstance)
-                LoggerInstance->warn(Format, std::forward<Args>(Arguments)...);
+                LoggerInstance->warn(Format, Arguments...);
         }
 
         template<typename... Args>
-        static void Error(const std::string& Format, Args&&... Arguments)
+        static void Error(const std::string& Format, const Args&... Arguments)
         {
             if (LoggerInstance)
-                LoggerInstance->error(Format, std::forward<Args>(Arguments)...);
+                LoggerInstance->error(Format, Arguments...);
         }
 
         // Configuration

@@ -110,7 +110,7 @@ namespace Helianthus::Network
         // Helper methods
         ConnectionId GenerateConnectionId();
         void CleanupConnection(ConnectionId Id);
-        void ProcessIncomingData(ConnectionId Id, const std::vector<uint8_t>& Data);
+        void ProcessIncomingData(ConnectionId Id, const std::vector<char>& Data);
         void HandleConnectionStateChange(ConnectionId Id, ConnectionState NewState);
         void UpdateConnectionActivity(ConnectionId Id);
         void NotifyMessageReceived(const Message::Message& Msg);

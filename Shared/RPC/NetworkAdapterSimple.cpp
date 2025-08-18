@@ -22,7 +22,7 @@ namespace Helianthus::RPC
         }
 
         IsInitialized = true;
-        std::cout << "[NetworkAdapterSimple] 初始化成功" << std::endl;
+        std::cout << "[NetworkAdapterSimple] Initialized successfully" << std::endl;
         return Network::NetworkError::SUCCESS;
     }
 
@@ -42,7 +42,7 @@ namespace Helianthus::RPC
         }
 
         IsInitialized = false;
-        std::cout << "[NetworkAdapterSimple] 已关闭" << std::endl;
+        std::cout << "[NetworkAdapterSimple] Shutdown completed" << std::endl;
     }
 
     Network::NetworkError NetworkAdapterSimple::StartServer(const Network::NetworkAddress& Address, Network::ProtocolType Protocol)
@@ -61,7 +61,7 @@ namespace Helianthus::RPC
         IsServerRunning = true;
         
         // Register with message router
-        auto Callback = [this](Network::ConnectionId ConnId, const uint8_t* Data, size_t Size) {
+        auto Callback = [this](Network::ConnectionId ConnId, const char* Data, size_t Size) {
             HandleIncomingMessage(ConnId, Data, Size);
         };
         
@@ -96,7 +96,7 @@ namespace Helianthus::RPC
         ClientConnectionId = MessageRouter::GetInstance().CreateServerConnection(Address.ToString());
         
         // Register client callback
-        auto Callback = [this](Network::ConnectionId ConnId, const uint8_t* Data, size_t Size) {
+        auto Callback = [this](Network::ConnectionId ConnId, const char* Data, size_t Size) {
             HandleIncomingMessage(ConnId, Data, Size);
         };
         
@@ -135,7 +135,7 @@ namespace Helianthus::RPC
         }
     }
 
-    Network::NetworkError NetworkAdapterSimple::SendToClient(Network::ConnectionId ClientId, const uint8_t* Data, size_t Size)
+    Network::NetworkError NetworkAdapterSimple::SendToClient(Network::ConnectionId ClientId, const char* Data, size_t Size)
     {
         if (!IsInitialized || ClientId == Network::InvalidConnectionId || !Data || Size == 0)
         {
@@ -177,12 +177,12 @@ namespace Helianthus::RPC
         ClientDisconnectedCallback = Callback;
     }
 
-    void NetworkAdapterSimple::SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const uint8_t*, size_t)> Callback)
+    void NetworkAdapterSimple::SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const char*, size_t)> Callback)
     {
         DataReceivedCallback = Callback;
     }
 
-    void NetworkAdapterSimple::HandleIncomingMessage(Network::ConnectionId ConnId, const uint8_t* Data, size_t Size)
+    void NetworkAdapterSimple::HandleIncomingMessage(Network::ConnectionId ConnId, const char* Data, size_t Size)
     {
         if (DataReceivedCallback)
         {

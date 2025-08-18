@@ -122,7 +122,7 @@ namespace Helianthus::RPC
             }
         });
         
-        ImplPtr->NetworkManager->SetOnDataReceivedCallback([this](Network::ConnectionId ConnId, const uint8_t* Data, size_t Size) {
+        ImplPtr->NetworkManager->SetOnDataReceivedCallback([this](Network::ConnectionId ConnId, const char* Data, size_t Size) {
             std::string ClientId;
             
             {
@@ -442,7 +442,7 @@ namespace Helianthus::RPC
         
         ImplPtr->NetworkManager->SendToClient(
             ConnId,
-            reinterpret_cast<const uint8_t*>(Payload.data()),
+            reinterpret_cast<const char*>(Payload.data()),
             Payload.size()
         );
     }

@@ -28,7 +28,7 @@ namespace Helianthus::Database
         float,
         double,
         std::string,
-        std::vector<uint8_t>  // BLOB data
+        std::vector<char>  // BLOB data
     >;
 
     // Parameter map for queries

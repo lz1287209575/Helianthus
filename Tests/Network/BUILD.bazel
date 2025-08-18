@@ -5,6 +5,7 @@ cc_binary(
         "//Shared/Network:network",
         "//Shared/Common:common",
     ],
+    # linkopts = ["-lws2_32"],
     visibility = ["//visibility:public"],
 )
 

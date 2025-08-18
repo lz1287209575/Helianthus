@@ -4,6 +4,7 @@ cc_library(
         "Logger.h",
         "Types.h",
     ],
+    copts = ["/std:c++20"],
     strip_include_prefix = ".",
     include_prefix = "Common",
     deps = [

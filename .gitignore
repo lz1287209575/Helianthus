@@ -94,6 +94,8 @@ node_modules/
 ThirdParty/*/
 !ThirdParty/*.BUILD
 !ThirdParty/BUILD.bazel
+!ThirdParty/*/.git
+!ThirdParty/*/.gitmodules
 
 # Optional npm cache directory
 .npm

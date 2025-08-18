@@ -9,7 +9,7 @@ namespace Helianthus::Network
     // Callback function types
     using OnConnectedCallback = std::function<void(ConnectionId)>;
     using OnDisconnectedCallback = std::function<void(ConnectionId, NetworkError)>;
-    using OnDataReceivedCallback = std::function<void(ConnectionId, const uint8_t* Data, size_t Size)>;
+    using OnDataReceivedCallback = std::function<void(ConnectionId, const char* Data, size_t Size)>;
     using OnErrorCallback = std::function<void(ConnectionId, NetworkError, const std::string& Message)>;
 
     /**
@@ -31,8 +31,8 @@ namespace Helianthus::Network
         virtual void Disconnect() = 0;
 
         // Data transmission
-        virtual NetworkError Send(const uint8_t* Data, size_t Size, size_t& BytesSent) = 0;
-        virtual NetworkError Receive(uint8_t* Buffer, size_t BufferSize, size_t& BytesReceived) = 0;
+        virtual NetworkError Send(const char* Data, size_t Size, size_t& BytesSent) = 0;
+        virtual NetworkError Receive(char* Buffer, size_t BufferSize, size_t& BytesReceived) = 0;
         
         // Asynchronous operations
         virtual void StartAsyncReceive() = 0;

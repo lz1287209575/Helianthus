@@ -28,3 +28,12 @@
 #     path = ThirdParty/V8
 #     url = https://github.com/v8/v8.git
 #     branch = main
+[submodule "ThirdParty/hiredis"]
+	path = ThirdParty/hiredis
+	url = https://gitee.com/mirrors/hiredis.git
+[submodule "ThirdParty/mariadb-connector-c"]
+	path = ThirdParty/mariadb-connector-c
+	url = https://gitee.com/mirrors/mariadb-connector-c.git
+[submodule "ThirdParty/mongo-cxx-driver"]
+	path = ThirdParty/mongo-cxx-driver
+	url = https://gitee.com/mirrors/mongo-cxx-driver.git

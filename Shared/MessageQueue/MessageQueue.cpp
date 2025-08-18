@@ -128,7 +128,7 @@ namespace Helianthus::MessageQueue
         }
 
         Initialized = true;
-        std::cout << "[MessageQueue] 初始化完成" << std::endl;
+        std::cout << "[MessageQueue] Initialize successfully" << std::endl;
 
         return QueueResult::SUCCESS;
     }
@@ -140,7 +140,7 @@ namespace Helianthus::MessageQueue
             return;
         }
 
-        std::cout << "[MessageQueue] 开始关闭" << std::endl;
+        std::cout << "[MessageQueue] Start Shutdown" << std::endl;
 
         ShuttingDown = true;
         StopConsumerThreads = true;
@@ -709,7 +709,7 @@ namespace Helianthus::MessageQueue
                     // 处理周期性消息
                     if (It->IsRecurring && (It->RemainingCount == 0 || It->RemainingCount > 1))
                     {
-                        It->ExecuteTime = Now + It->IntervalMs;
+                        It->ExecuteTime = static_cast<Helianthus::MessageQueue::MessageTimestamp>(Now + It->IntervalMs);
                         if (It->RemainingCount > 1)
                         {
                             It->RemainingCount--;
@@ -728,7 +728,7 @@ namespace Helianthus::MessageQueue
             }
         }
 
-        std::cout << "[MessageQueue] 消息调度线程已停止" << std::endl;
+        std::cout << "[MessageQueue] Stopped" << std::endl;
     }
 
     // 实现剩余的必要方法的简化版本

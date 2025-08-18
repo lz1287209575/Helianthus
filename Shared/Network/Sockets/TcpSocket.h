@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Shared/Network/NetworkTypes.h"
+
 #include "Network/INetworkSocket.h"
 #include "Network/NetworkTypes.h"
 
@@ -42,8 +44,8 @@ public:
     NetworkError Listen(uint32_t Backlog = 128) override;
     NetworkError Accept() override;
     void Disconnect() override;
-    NetworkError Send(const uint8_t* Data, size_t Size, size_t& BytesSent) override;
-    NetworkError Receive(uint8_t* Buffer, size_t BufferSize, size_t& BytesReceived) override;
+    NetworkError Send(const char* Data, size_t Size, size_t& BytesSent) override;
+    NetworkError Receive(char* Buffer, size_t BufferSize, size_t& BytesReceived) override;
     void StartAsyncReceive() override;
     void StopAsyncReceive() override;
 

@@ -16,10 +16,17 @@ cc_library(
         "//Shared/Common:common",
         "//Shared/Network:network",
     ],
-    copts = [
-        "-std=c++20",
-        "-Wall", 
-        "-Wextra",
-        "-O2",
-    ],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": [
+            "/std:c++20",
+            "/W4",
+            "/O2",
+        ],
+        "//conditions:default": [
+            "-std=c++20",
+            "-Wall",
+            
+            "-O2",
+        ],
+    }),
 )

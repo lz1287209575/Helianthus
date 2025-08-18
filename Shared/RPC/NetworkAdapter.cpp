@@ -1,4 +1,5 @@
 #include "NetworkAdapter.h"
+#include "../Network/NetworkTypes.h"
 #include <iostream>
 
 namespace Helianthus::RPC
@@ -120,7 +121,7 @@ namespace Helianthus::RPC
         }
     }
 
-    Network::NetworkError NetworkAdapter::SendToClient(Network::ConnectionId ClientId, const uint8_t* Data, size_t Size)
+    Network::NetworkError NetworkAdapter::SendToClient(Network::ConnectionId ClientId, const char* Data, size_t Size)
     {
         if (!IsInitialized)
         {
@@ -155,7 +156,7 @@ namespace Helianthus::RPC
                     // we would need to properly track which connection sent which message
                     Network::ConnectionId SenderId = 1; // Placeholder
                     DataReceivedCallback(SenderId, 
-                                       reinterpret_cast<const uint8_t*>(Payload.data()), 
+                                       reinterpret_cast<const char*>(Payload.data()),
                                        Payload.size());
                 }
             }
@@ -172,7 +173,7 @@ namespace Helianthus::RPC
         ClientDisconnectedCallback = Callback;
     }
 
-    void NetworkAdapter::SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const uint8_t*, size_t)> Callback)
+    void NetworkAdapter::SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const char*, size_t)> Callback)
     {
         DataReceivedCallback = Callback;
     }

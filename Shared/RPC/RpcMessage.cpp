@@ -68,19 +68,19 @@ namespace Helianthus::RPC
         }
     }
 
-    std::vector<uint8_t> RpcMessagePayload::ToBinary() const
+    std::vector<char> RpcMessagePayload::ToBinary() const
     {
-        std::vector<uint8_t> Buffer;
+        std::vector<char> Buffer;
         
         // Write context
-        Buffer.insert(Buffer.end(), reinterpret_cast<const uint8_t*>(&Context.CallId), 
-                     reinterpret_cast<const uint8_t*>(&Context.CallId) + sizeof(Context.CallId));
+        Buffer.insert(Buffer.end(), reinterpret_cast<const char*>(&Context.CallId),
+                     reinterpret_cast<const char*>(&Context.CallId) + sizeof(Context.CallId));
         
         // Write strings with length prefix
         auto WriteString = [&Buffer](const std::string& Str) {
             uint32_t Length = static_cast<uint32_t>(Str.length());
-            Buffer.insert(Buffer.end(), reinterpret_cast<const uint8_t*>(&Length), 
-                         reinterpret_cast<const uint8_t*>(&Length) + sizeof(Length));
+            Buffer.insert(Buffer.end(), reinterpret_cast<const char*>(&Length),
+                         reinterpret_cast<const char*>(&Length) + sizeof(Length));
             Buffer.insert(Buffer.end(), Str.begin(), Str.end());
         };
         
@@ -91,18 +91,18 @@ namespace Helianthus::RPC
         WriteString(ErrorMessage);
         
         // Write other fields
-        Buffer.insert(Buffer.end(), reinterpret_cast<const uint8_t*>(&ErrorCode), 
-                     reinterpret_cast<const uint8_t*>(&ErrorCode) + sizeof(ErrorCode));
+        Buffer.insert(Buffer.end(), reinterpret_cast<const char*>(&ErrorCode),
+                     reinterpret_cast<const char*>(&ErrorCode) + sizeof(ErrorCode));
         
         return Buffer;
     }
 
-    bool RpcMessagePayload::FromBinary(const std::vector<uint8_t>& Data)
+    bool RpcMessagePayload::FromBinary(const std::vector<char>& Data)
     {
         if (Data.size() < sizeof(RpcId))
             return false;
             
-        const uint8_t* Ptr = Data.data();
+        const char* Ptr = Data.data();
         size_t Remaining = Data.size();
         
         // Read context
@@ -222,7 +222,7 @@ namespace Helianthus::RPC
         }
         
         // Try binary format
-        std::vector<uint8_t> BinaryData(PayloadStr.begin(), PayloadStr.end());
+        std::vector<char> BinaryData(PayloadStr.begin(), PayloadStr.end());
         if (Payload.FromBinary(BinaryData))
         {
             Payload.Context.Format = SerializationFormat::BINARY;
@@ -287,7 +287,7 @@ namespace Helianthus::RPC
 
     bool BinaryRpcSerializer::Deserialize(const std::string& Data, RpcMessagePayload& Payload)
     {
-        std::vector<uint8_t> BinaryData(Data.begin(), Data.end());
+        std::vector<char> BinaryData(Data.begin(), Data.end());
         return Payload.FromBinary(BinaryData);
     }
 

@@ -8,6 +8,10 @@
 #include <cstring>
 #include <thread>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -16,7 +20,18 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#endif
 #include <vector>
+
+#ifdef _WIN32
+#define fcntl ioctlsocket
+#define ssize_t int
+#pragma comment (lib, "Ws2_32.lib")
+#endif
+
+#ifndef _WIN32
+#define closesocket close
+#endif
 
 namespace Helianthus::Network::Sockets
 {
@@ -83,7 +98,7 @@ namespace Helianthus::Network::Sockets
 		if (::connect(Fd, reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) < 0)
 		{
 			int Err = errno;
-			::close(Fd);
+		    closesocket(Fd);
 			return Err == ETIMEDOUT ? NetworkError::TIMEOUT : NetworkError::CONNECTION_FAILED;
 		}
 
@@ -108,8 +123,13 @@ namespace Helianthus::Network::Sockets
 			{
 				return NetworkError::SOCKET_CREATE_FAILED;
 			}
-			int Opt = 1;
-			::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, &Opt, sizeof(Opt));
+#ifdef _WIN32
+            const char* WinOpt = "1";
+            ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, WinOpt, sizeof(int));
+#else
+            int Opt = 1;
+            ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, &Opt, sizeof(Opt));
+#endif
 		}
 
 		sockaddr_in Addr = MakeSockaddr(Address);
@@ -152,7 +172,7 @@ namespace Helianthus::Network::Sockets
 			return NetworkError::ACCEPT_FAILED;
 		}
 		// Minimal: immediately close accepted client. A higher-level manager should own client sockets.
-		::close(ClientFd);
+        closesocket(ClientFd);
 		return NetworkError::NONE;
 	}
 
@@ -166,7 +186,7 @@ namespace Helianthus::Network::Sockets
 		}
 		if (SockImpl->Fd >= 0)
 		{
-			::close(SockImpl->Fd);
+		    closesocket(SockImpl->Fd);
 			SockImpl->Fd = -1;
 		}
 		if (SockImpl->State == ConnectionState::CONNECTED)
@@ -179,7 +199,7 @@ namespace Helianthus::Network::Sockets
 		}
 	}
 
-	NetworkError TcpSocket::Send(const uint8_t* Data, size_t Size, size_t& BytesSent)
+	NetworkError TcpSocket::Send(const char* Data, size_t Size, size_t& BytesSent)
 	{
 		BytesSent = 0;
 		std::lock_guard<std::mutex> Lock(Mutex);
@@ -198,7 +218,7 @@ namespace Helianthus::Network::Sockets
 		return NetworkError::NONE;
 	}
 
-	NetworkError TcpSocket::Receive(uint8_t* Buffer, size_t BufferSize, size_t& BytesReceived)
+	NetworkError TcpSocket::Receive(char* Buffer, size_t BufferSize, size_t& BytesReceived)
 	{
 		BytesReceived = 0;
 		std::lock_guard<std::mutex> Lock(Mutex);
@@ -206,7 +226,7 @@ namespace Helianthus::Network::Sockets
 		{
 			return NetworkError::RECEIVE_FAILED;
 		}
-		ssize_t N = ::recv(SockImpl->Fd, Buffer, BufferSize, 0);
+		int N = ::recv(SockImpl->Fd, (Buffer), BufferSize, 0);
 		if (N < 0)
 		{
 			return ConvertErrnoToNetworkError(errno);
@@ -226,10 +246,10 @@ namespace Helianthus::Network::Sockets
 		}
 		SockImpl->StopAsync.store(false);
 		SockImpl->RecvThread = std::thread([this]() {
-			std::vector<uint8_t> Buffer( SockImpl->Config.BufferSizeBytes > 0 ? SockImpl->Config.BufferSizeBytes : HELIANTHUS_DEFAULT_BUFFER_SIZE );
+			std::vector<char> Buffer( SockImpl->Config.BufferSizeBytes > 0 ? SockImpl->Config.BufferSizeBytes : HELIANTHUS_DEFAULT_BUFFER_SIZE );
 			while (!SockImpl->StopAsync.load())
 			{
-				ssize_t N = ::recv(SockImpl->Fd, Buffer.data(), Buffer.size(), 0);
+				int N = ::recv(SockImpl->Fd, Buffer.data(), Buffer.size(), 0);
 				if (N > 0)
 				{
 					SockImpl->Stats.BytesReceived += static_cast<uint64_t>(N);
@@ -313,13 +333,52 @@ namespace Helianthus::Network::Sockets
 		SockImpl->Config = Config;
 		if (SockImpl->Fd >= 0)
 		{
-			int Flag = SockImpl->Config.EnableKeepalive ? 1 : 0;
-			::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_KEEPALIVE, &Flag, sizeof(Flag));
-			// Nagle
-			int TcpNoDelay = SockImpl->Config.EnableNagle ? 0 : 1;
-			::setsockopt(SockImpl->Fd, IPPROTO_TCP, TCP_NODELAY, &TcpNoDelay, sizeof(TcpNoDelay));
+			// 设置 SO_REUSEADDR 选项（跨平台）
+			int reuseAddr = Config.ReuseAddr ? 1 : 0;
+			if (setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, 
+						  reinterpret_cast<const char*>(&reuseAddr), sizeof(reuseAddr)) < 0)
+			{
+				// 处理错误
+			}
+
+#ifdef _WIN32
+			// Windows 特有选项（如 TCP_NODELAY）
+			int noDelay = Config.NoDelay ? 1 : 0;
+			if (setsockopt(SockImpl->Fd, IPPROTO_TCP, TCP_NODELAY, 
+						  reinterpret_cast<const char*>(&noDelay), sizeof(noDelay)) < 0)
+			{
+				// 处理错误
+			}
+#else
+			// Unix 特有选项（如 SO_KEEPALIVE）
+			int keepAlive = Config.KeepAlive ? 1 : 0;
+			if (setsockopt(SockImpl->Fd, SOL_SOCKET, SO_KEEPALIVE, 
+						  reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive)) < 0)
+			{
+				// 处理错误
+			}
+#endif
 		}
+
+#ifdef _WIN32
+			// Windows 特有选项（如 TCP_NODELAY）
+			int noDelay = Config.NoDelay ? 1 : 0;
+			if (setsockopt(SockImpl->Fd, IPPROTO_TCP, TCP_NODELAY, 
+						  reinterpret_cast<const char*>(&noDelay), sizeof(noDelay)) < 0)
+			{
+				// 处理错误
+			}
+#else
+			// Unix 特有选项（如 SO_KEEPALIVE）
+			int keepAlive = Config.KeepAlive ? 1 : 0;
+			if (setsockopt(SockImpl->Fd, SOL_SOCKET, SO_KEEPALIVE, 
+						  reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive)) < 0)
+			{
+				// 处理错误
+			}
+#endif
 	}
+	
 
 	NetworkConfig TcpSocket::GetSocketOptions() const
 	{
@@ -362,14 +421,18 @@ namespace Helianthus::Network::Sockets
 		SockImpl->IsBlocking = Blocking;
 		if (SockImpl->Fd >= 0)
 		{
-			int Flags = ::fcntl(SockImpl->Fd, F_GETFL, 0);
-			if (Flags >= 0)
-			{
-				if (!Blocking)
-					::fcntl(SockImpl->Fd, F_SETFL, Flags | O_NONBLOCK);
-				else
-					::fcntl(SockImpl->Fd, F_SETFL, Flags & ~O_NONBLOCK);
+#ifdef _WIN32
+			u_long mode = Blocking ? 0 : 1;
+			ioctlsocket(SockImpl->Fd, FIONBIO, &mode);
+#else
+			int flags = fcntl(SockImpl->Fd, F_GETFL, 0);
+			if (Blocking) {
+				flags &= ~O_NONBLOCK;
+			} else {
+				flags |= O_NONBLOCK;
 			}
+			fcntl(SockImpl->Fd, F_SETFL, flags);
+#endif
 		}
 	}
 

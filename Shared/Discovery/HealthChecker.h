@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Discovery/DiscoveryTypes.h"
 #include "IHealthChecker.h"
 #include <unordered_map>
 #include <mutex>

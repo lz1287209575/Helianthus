@@ -41,9 +41,9 @@ namespace Helianthus::Network
         virtual std::vector<ConnectionId> GetActiveConnections() const = 0;
 
         // Data broadcasting
-        virtual NetworkError BroadcastData(const uint8_t* Data, size_t Size, ProtocolType Protocol = ProtocolType::TCP) = 0;
-        virtual NetworkError SendToClient(ConnectionId ClientId, const uint8_t* Data, size_t Size) = 0;
-        virtual NetworkError SendToClients(const std::vector<ConnectionId>& ClientIds, const uint8_t* Data, size_t Size) = 0;
+        virtual NetworkError BroadcastData(const char* Data, size_t Size, ProtocolType Protocol = ProtocolType::TCP) = 0;
+        virtual NetworkError SendToClient(ConnectionId ClientId, const char* Data, size_t Size) = 0;
+        virtual NetworkError SendToClients(const std::vector<ConnectionId>& ClientIds, const char* Data, size_t Size) = 0;
 
         // Connection pool management
         virtual void SetMaxConnections(uint32_t MaxConnections) = 0;
@@ -67,7 +67,7 @@ namespace Helianthus::Network
         // Callback registration for manager-level events
         virtual void SetOnClientConnectedCallback(std::function<void(ConnectionId)> Callback) = 0;
         virtual void SetOnClientDisconnectedCallback(std::function<void(ConnectionId, NetworkError)> Callback) = 0;
-        virtual void SetOnDataReceivedCallback(std::function<void(ConnectionId, const uint8_t*, size_t)> Callback) = 0;
+        virtual void SetOnDataReceivedCallback(std::function<void(ConnectionId, const char*, size_t)> Callback) = 0;
         virtual void SetOnServerErrorCallback(std::function<void(NetworkError, const std::string&)> Callback) = 0;
 
         // Advanced features

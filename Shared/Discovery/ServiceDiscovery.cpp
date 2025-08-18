@@ -1,4 +1,6 @@
 #include "ServiceDiscovery.h"
+#include "IServiceRegistry.h"
+#include "ServiceRegistry.h"
 #include <iostream>
 #include <sstream>
 #include <chrono>
@@ -10,7 +12,7 @@ namespace Helianthus::Discovery
         , HealthCheck(std::make_unique<HealthChecker>())
         , LoadBalance(std::make_unique<LoadBalancer>())
     {
-        std::cout << "[ServiceDiscovery] 创建服务发现控制器" << std::endl;
+        std::cout << "[ServiceDiscovery] Create Service Discovery Controller" << std::endl;
     }
 
     ServiceDiscovery::~ServiceDiscovery()
@@ -76,13 +78,13 @@ namespace Helianthus::Discovery
             return DiscoveryResult::INTERNAL_ERROR;
         }
 
-        std::cout << "[ServiceDiscovery] 开始初始化" << std::endl;
+        std::cout << "[ServiceDiscovery] Start Initialize" << std::endl;
 
         // 初始化服务注册中心
         auto RegistryResult = Registry->Initialize(RegistryConfig);
         if (RegistryResult != DiscoveryResult::SUCCESS)
         {
-            std::cout << "[ServiceDiscovery] 服务注册中心初始化失败" << std::endl;
+            std::cout << "[ServiceDiscovery] Service Registry Central Initialize Failed" << std::endl;
             return RegistryResult;
         }
 
@@ -90,7 +92,7 @@ namespace Helianthus::Discovery
         auto HealthResult = HealthCheck->Initialize(HealthConfig);
         if (HealthResult != DiscoveryResult::SUCCESS)
         {
-            std::cout << "[ServiceDiscovery] 健康检查器初始化失败" << std::endl;
+            std::cout << "[ServiceDiscovery] Health Checker Initialize Failed" << std::endl;
             Registry->Shutdown();
             return HealthResult;
         }
@@ -99,7 +101,7 @@ namespace Helianthus::Discovery
         auto LoadBalanceResult = LoadBalance->Initialize(LoadBalanceConfig);
         if (LoadBalanceResult != DiscoveryResult::SUCCESS)
         {
-            std::cout << "[ServiceDiscovery] 负载均衡器初始化失败" << std::endl;
+            std::cout << "[ServiceDiscovery] LoadBalance Initialize Failed" << std::endl;
             HealthCheck->Shutdown();
             Registry->Shutdown();
             return LoadBalanceResult;
@@ -142,7 +144,7 @@ namespace Helianthus::Discovery
         InitializedFlag = true;
         ShuttingDownFlag = false;
 
-        std::cout << "[ServiceDiscovery] 初始化完成" << std::endl;
+        std::cout << "[ServiceDiscovery] Initialized Finish" << std::endl;
         return DiscoveryResult::SUCCESS;
     }
 
@@ -153,7 +155,7 @@ namespace Helianthus::Discovery
             return;
         }
 
-        std::cout << "[ServiceDiscovery] 开始关闭" << std::endl;
+        std::cout << "[ServiceDiscovery] Start Shutdown" << std::endl;
 
         ShuttingDownFlag = true;
         StopPeriodicSync();
@@ -404,8 +406,8 @@ namespace Helianthus::Discovery
         
         if (InitializedFlag)
         {
-            auto ServiceNames = Registry->GetServiceNames();
-            for (const auto& Name : ServiceNames)
+            std::vector<std::string> ServiceNames = Registry->GetServiceNames();
+            for (const std::string& Name : ServiceNames)
             {
                 Stats[Name] = LoadBalance->GetServiceInstanceCount(Name);
             }
@@ -442,8 +444,8 @@ namespace Helianthus::Discovery
             return;
         }
 
-        auto AllServices = Registry->GetAllServices();
-        for (const auto& Service : AllServices)
+        std::vector<ServiceInstancePtr> AllServices = Registry->GetAllServices();
+        for (const ServiceInstancePtr& Service : AllServices)
         {
             // 确保服务在负载均衡器中
             auto Instances = LoadBalance->GetServiceInstances(Service->BaseInfo.ServiceName);
@@ -511,7 +513,7 @@ namespace Helianthus::Discovery
     void ServiceDiscovery::OnServiceStateChanged(ServiceInstanceId InstanceId, ServiceState OldState, ServiceState NewState)
     {
         // 更新负载均衡器中的实例状态
-        auto Instance = Registry->GetService(InstanceId);
+        ServiceInstancePtr Instance = Registry->GetService(InstanceId);
         if (Instance)
         {
             LoadBalance->UpdateServiceInstance(Instance);

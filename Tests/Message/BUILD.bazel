@@ -1,6 +1,7 @@
 cc_test(
     name = "message_test",
     srcs = ["MessageTest.cpp"],
+    copts = ["/std:c++20"],
     deps = [
         "//Shared/Message:message",
         "@googletest//:gtest_main",

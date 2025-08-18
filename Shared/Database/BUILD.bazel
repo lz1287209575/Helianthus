@@ -35,31 +35,31 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-# MySQL implementation
-cc_library(
-    name = "mysql_connection",
-    srcs = ["MySQL/MySqlConnection.cpp"],
-    hdrs = ["MySQL/MySqlConnection.h"],
-    deps = [
-        ":database_interfaces",
-        ":database_types",
-        "//Shared/Common:common",
-        "@mysql_connector_cpp//:mysql_client",
-    ],
-    visibility = ["//visibility:public"],
-)
+# MySQL implementation (temporarily disabled)
+# cc_library(
+#     name = "mysql_connection",
+#     srcs = ["MySQL/MySqlConnection.cpp"],
+#     hdrs = ["MySQL/MySqlConnection.h"],
+#     deps = [
+#         ":database_interfaces",
+#         ":database_types",
+#         "//Shared/Common:common",
+#         "@mysql_connector_cpp//:mysql_client",
+#     ],
+#     visibility = ["//visibility:public"],
+# )
 
-cc_library(
-    name = "mysql_database", 
-    hdrs = ["MySQL/MySqlDatabase.h"],
-    deps = [
-        ":mysql_connection",
-        ":database_interfaces",
-        ":database_types",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
+# cc_library(
+#     name = "mysql_database",
+#     hdrs = ["MySQL/MySqlDatabase.h"],
+#     deps = [
+#         ":mysql_connection",
+#         ":database_interfaces",
+#         ":database_types",
+#         "//Shared/Common:common",
+#     ],
+#     visibility = ["//visibility:public"],
+# )
 
 # Redis implementation
 cc_library(
@@ -68,7 +68,7 @@ cc_library(
     hdrs = ["Redis/RedisConnection.h"],
     deps = [
         ":database_interfaces",
-        ":database_types", 
+        ":database_types",
         "//Shared/Common:common",
         "@hiredis//:hiredis",
     ],
@@ -87,19 +87,32 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-# MongoDB implementation (headers only for now)
-cc_library(
-    name = "mongo_connection",
-    hdrs = ["MongoDB/MongoConnection.h"], 
-    deps = [
-        ":database_interfaces",
-        ":database_types",
-        "//Shared/Common:common",
-    ],
-    # For system MongoDB driver, uncomment this when available:
-    # linkopts = ["-lmongocxx", "-lbsoncxx"],
-    visibility = ["//visibility:public"],
-)
+# MongoDB implementation (temporarily disabled)
+# cc_library(
+#     name = "mongo_connection",
+#     srcs = ["MongoDB/MongoConnection.cpp"],
+#     hdrs = ["MongoDB/MongoConnection.h"], 
+#     deps = [
+#         ":database_interfaces",
+#         ":database_types",
+#         "//Shared/Common:common",
+#         "@mongo_cxx_driver//:mongocxx",
+#         "@mongo_cxx_driver//:bsoncxx",
+#     ],
+#     visibility = ["//visibility:public"],
+# )
+
+# cc_library(
+#     name = "mongo_database",
+#     hdrs = ["MongoDB/MongoDatabase.h"],
+#     deps = [
+#         ":mongo_connection",
+#         ":database_interfaces",
+#         ":database_types",
+#         "//Shared/Common:common",
+#     ],
+#     visibility = ["//visibility:public"],
+# )
 
 # Connection pool implementation
 cc_library(
@@ -129,23 +142,25 @@ cc_library(
     name = "database_factory",
     hdrs = ["DatabaseFactory.h"],
     deps = [
-        ":mysql_database",
+        # ":mysql_database",
+        ":redis_database",
+        # ":mongo_database",
         ":database_interfaces",
         ":database_config",
     ],
     visibility = ["//visibility:public"],
 )
 
-# All database components (excluding Redis for now due to hiredis compilation issues)
+# All database components
 cc_library(
     name = "database",
     deps = [
         ":database_types",
         ":database_interfaces", 
         ":orm",
-        ":mysql_database",
-        # ":redis_database",  # Temporarily disabled due to hiredis compilation issues
-        ":mongo_connection",
+        # ":mysql_database",
+        ":redis_database",
+        # ":mongo_database",
         ":connection_pool",
         ":database_config",
         ":database_factory",

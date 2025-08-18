@@ -31,7 +31,7 @@ namespace Helianthus::RPC
         
         StartMessageProcessingThread();
         
-        std::cout << "[NetworkAdapter] 初始化成功" << std::endl;
+        std::cout << "[NetworkAdapter] Initialized successfully" << std::endl;
         return Network::NetworkError::SUCCESS;
     }
 
@@ -65,7 +65,7 @@ namespace Helianthus::RPC
         }
 
         IsInitialized = false;
-        std::cout << "[NetworkAdapter] 已关闭" << std::endl;
+        std::cout << "[NetworkAdapter] Shutdown completed" << std::endl;
     }
 
     Network::NetworkError NetworkAdapterFixed::StartServer(const Network::NetworkAddress& Address, Network::ProtocolType Protocol)
@@ -187,7 +187,7 @@ namespace Helianthus::RPC
         }
     }
 
-    Network::NetworkError NetworkAdapterFixed::SendToClient(Network::ConnectionId ClientId, const uint8_t* Data, size_t Size)
+    Network::NetworkError NetworkAdapterFixed::SendToClient(Network::ConnectionId ClientId, const char* Data, size_t Size)
     {
         if (!IsInitialized || ClientId == Network::InvalidConnectionId || !Data || Size == 0)
         {
@@ -270,7 +270,7 @@ namespace Helianthus::RPC
         ClientDisconnectedCallback = Callback;
     }
 
-    void NetworkAdapterFixed::SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const uint8_t*, size_t)> Callback)
+    void NetworkAdapterFixed::SetOnDataReceivedCallback(std::function<void(Network::ConnectionId, const char*, size_t)> Callback)
     {
         DataReceivedCallback = Callback;
     }

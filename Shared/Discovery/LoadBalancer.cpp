@@ -9,7 +9,7 @@ namespace Helianthus::Discovery
     LoadBalancer::LoadBalancer()
         : RandomGenerator(RandomDevice())
     {
-        std::cout << "[LoadBalancer] 创建负载均衡器" << std::endl;
+        std::cout << "[LoadBalancer] Load balancer created" << std::endl;
     }
 
     LoadBalancer::~LoadBalancer()
@@ -87,7 +87,7 @@ namespace Helianthus::Discovery
             return;
         }
 
-        std::cout << "[LoadBalancer] 开始关闭" << std::endl;
+        std::cout << "[LoadBalancer] Starting shutdown" << std::endl;
         
         ShuttingDownFlag = true;
         

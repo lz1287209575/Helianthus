@@ -24,11 +24,11 @@ namespace Helianthus::RPC
             Network::ConnectionId FromConnection;
             Network::ConnectionId ToConnection;
             std::string ServerAddress;
-            std::vector<uint8_t> Data;
+            std::vector<char> Data;
             std::chrono::steady_clock::time_point Timestamp;
         };
 
-        using MessageCallback = std::function<void(Network::ConnectionId, const uint8_t*, size_t)>;
+        using MessageCallback = std::function<void(Network::ConnectionId, const char*, size_t)>;
 
         static MessageRouter& GetInstance();
         
@@ -43,8 +43,8 @@ namespace Helianthus::RPC
         
         // Send messages
         void SendToServer(const std::string& ServerAddress, Network::ConnectionId ClientId, 
-                         const uint8_t* Data, size_t Size);
-        void SendToClient(Network::ConnectionId ClientId, const uint8_t* Data, size_t Size);
+                         const char* Data, size_t Size);
+        void SendToClient(Network::ConnectionId ClientId, const char* Data, size_t Size);
         
         // Connection simulation
         Network::ConnectionId CreateServerConnection(const std::string& ServerAddress);

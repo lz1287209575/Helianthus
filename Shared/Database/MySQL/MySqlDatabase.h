@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../IDatabase.h"
-#include "../IConnectionPool.h"
+#include "IDatabase.h"
+#include "IConnectionPool.h"
 #include "MySqlConnection.h"
 #include <thread>
 #include <atomic>

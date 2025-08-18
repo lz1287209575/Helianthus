@@ -1,6 +1,7 @@
 #pragma once
 
-#include "Discovery/IServiceRegistry.h"
+#include "DiscoveryTypes.h"
+#include "IServiceRegistry.h"
 #include <unordered_map>
 #include <mutex>
 #include <thread>

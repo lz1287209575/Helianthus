@@ -92,7 +92,7 @@ namespace Helianthus::RPC
         }
         
         // Set up message handler
-        ImplPtr->NetworkManager->SetOnDataReceivedCallback([this](Network::ConnectionId ConnId, const uint8_t* Data, size_t Size) {
+        ImplPtr->NetworkManager->SetOnDataReceivedCallback([this](Network::ConnectionId ConnId, const char* Data, size_t Size) {
             if (ConnId == ImplPtr->ConnectionId)
             {
                 // Parse received data as RPC message
@@ -405,7 +405,7 @@ namespace Helianthus::RPC
         
         Network::NetworkError SendResult = ImplPtr->NetworkManager->SendToClient(
             ImplPtr->ConnectionId,
-            reinterpret_cast<const uint8_t*>(Payload.data()), 
+            reinterpret_cast<const char*>(Payload.data()),
             Payload.size()
         );
         

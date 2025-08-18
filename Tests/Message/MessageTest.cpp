@@ -125,7 +125,7 @@ TEST_F(MessageTest, StaticFactoryMethodsWork)
     EXPECT_NE(Msg1, nullptr);
     EXPECT_EQ(Msg1->GetMessageType(), MessageType::SERVICE_REGISTER);
     
-    std::vector<uint8_t> TestData = {1, 2, 3, 4, 5};
+    std::vector<char> TestData = {1, 2, 3, 4, 5};
     auto Msg2 = Message::Create(MessageType::CUSTOM_MESSAGE_START, TestData);
     EXPECT_NE(Msg2, nullptr);
     EXPECT_EQ(Msg2->GetMessageType(), MessageType::CUSTOM_MESSAGE_START);

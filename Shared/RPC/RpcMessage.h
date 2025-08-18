@@ -24,8 +24,8 @@ namespace Helianthus::RPC
         std::string ToJson() const;
         bool FromJson(const std::string& Json);
         
-        std::vector<uint8_t> ToBinary() const;
-        bool FromBinary(const std::vector<uint8_t>& Data);
+        std::vector<char> ToBinary() const;
+        bool FromBinary(const std::vector<char>& Data);
     };
 
     /**
@@ -113,8 +113,8 @@ namespace Helianthus::RPC
         SerializationFormat GetFormat() const override { return SerializationFormat::BINARY; }
 
     private:
-        void WriteString(std::vector<uint8_t>& Buffer, const std::string& Str) const;
-        std::string ReadString(const uint8_t*& Data, size_t& Remaining) const;
+        void WriteString(std::vector<char>& Buffer, const std::string& Str) const;
+        std::string ReadString(const char*& Data, size_t& Remaining) const;
     };
 
     /**

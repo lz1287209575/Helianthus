@@ -40,10 +40,17 @@ cc_library(
         ":enable_dotnet_scripting": ["HELIANTHUS_ENABLE_DOTNET=1"],
         "//conditions:default": ["HELIANTHUS_ENABLE_DOTNET=0"],
     }),
-    copts = [
-        "-std=c++17",
-        "-Wall",
-        "-Wextra",
-        "-O2",
-    ],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": [
+            "/std:c++17",
+            "/W4",
+            "/O2",
+        ],
+        "//conditions:default": [
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-O2",
+        ],
+    }),
 )

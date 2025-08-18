@@ -19,7 +19,7 @@ namespace Helianthus::Message
         // Constructors
         Message();
         explicit Message(MessageType MsgType);
-        Message(MessageType MsgType, const std::vector<uint8_t>& Payload);
+        Message(MessageType MsgType, const std::vector<char>& Payload);
         Message(MessageType MsgType, const std::string& JsonPayload);
         
         // Copy and move constructors
@@ -36,12 +36,12 @@ namespace Helianthus::Message
         void SetHeader(const MessageHeader& Header) { this->Header = Header; }
 
         // Payload management
-        void SetPayload(const std::vector<uint8_t>& Payload);
+        void SetPayload(const std::vector<char>& Payload);
         void SetPayload(const std::string& JsonPayload);
-        void SetPayload(const uint8_t* Data, size_t Size);
+        void SetPayload(const char* Data, size_t Size);
         
-        const std::vector<uint8_t>& GetPayload() const { return Payload; }
-        std::vector<uint8_t>& GetPayload() { return Payload; }
+        const std::vector<char>& GetPayload() const { return Payload; }
+        std::vector<char>& GetPayload() { return Payload; }
         
         size_t GetPayloadSize() const { return Payload.size(); }
         bool HasPayload() const { return !Payload.empty(); }
@@ -79,9 +79,9 @@ namespace Helianthus::Message
         void SetSequenceNumber(uint32_t SequenceNumber) { Header.SequenceNumber = SequenceNumber; }
 
         // Serialization
-        std::vector<uint8_t> Serialize() const;
-        bool Deserialize(const std::vector<uint8_t>& Data);
-        bool Deserialize(const uint8_t* Data, size_t Size);
+        std::vector<char> Serialize() const;
+        bool Deserialize(const std::vector<char>& Data);
+        bool Deserialize(const char* Data, size_t Size);
         
         // Validation
         bool IsValid() const;
@@ -110,18 +110,18 @@ namespace Helianthus::Message
 
         // Static factory methods
         static MessagePtr Create(MessageType MsgType);
-        static MessagePtr Create(MessageType MsgType, const std::vector<uint8_t>& Payload);
+        static MessagePtr Create(MessageType MsgType, const std::vector<char>& Payload);
         static MessagePtr Create(MessageType MsgType, const std::string& JsonPayload);
         static MessagePtr CreateResponse(const Message& OriginalMessage, MessageType ResponseType);
 
     private:
         MessageHeader Header;
-        std::vector<uint8_t> Payload;
+        std::vector<char> Payload;
         bool IsCompressedFlag = false;
         bool IsEncryptedFlag = false;
         
         void UpdateHeaderFromPayload();
-        uint32_t CalculateCRC32(const uint8_t* Data, size_t Size) const;
+        uint32_t CalculateCRC32(const char* Data, size_t Size) const;
     };
 
 } // namespace Helianthus::Message

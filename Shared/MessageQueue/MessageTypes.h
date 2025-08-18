@@ -144,7 +144,7 @@ namespace Helianthus::MessageQueue
     // 消息内容
     struct MessagePayload
     {
-        std::vector<uint8_t> Data;
+        std::vector<char> Data;
         MessageSize Size = 0;
         std::string ContentType = "application/octet-stream";
         std::string Encoding = "binary";
@@ -161,7 +161,7 @@ namespace Helianthus::MessageQueue
         
         // 从二进制数据构造
         MessagePayload(const void* Data, size_t Size)
-            : Data(static_cast<const uint8_t*>(Data), static_cast<const uint8_t*>(Data) + Size)
+            : Data(static_cast<const char*>(Data), static_cast<const char*>(Data) + Size)
             , Size(static_cast<MessageSize>(Size))
         {}
         
@@ -172,7 +172,7 @@ namespace Helianthus::MessageQueue
         }
         
         // 获取二进制数据
-        const uint8_t* GetData() const { return Data.data(); }
+        const char* GetData() const { return Data.data(); }
         const void* GetVoidData() const { return static_cast<const void*>(Data.data()); }
         
         bool IsEmpty() const { return Data.empty(); }

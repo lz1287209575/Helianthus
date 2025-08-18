@@ -3,6 +3,11 @@
 #include <sstream>
 #include <algorithm>
 #include <cstdarg>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <sys/time.h>
+#endif
 
 namespace Helianthus::Database::Redis
 {
@@ -39,7 +44,7 @@ namespace Helianthus::Database::Redis
         {
             ErrorCount++;
             std::string ErrorMsg = RedisContext ? RedisContext->errstr : "Failed to allocate redis context";
-            HELIANTHUS_LOG_ERROR("Failed to connect to Redis: {}", ErrorMsg);
+            HELIANTHUS_LOG_ERROR("Failed to connect to Redis: " + ErrorMsg);
             CleanupConnection();
             return Common::ResultCode::FAILED;
         }
@@ -52,7 +57,7 @@ namespace Helianthus::Database::Redis
             {
                 ErrorCount++;
                 std::string ErrorMsg = Reply ? Reply->str : "Authentication failed";
-                HELIANTHUS_LOG_ERROR("Redis authentication failed: {}", ErrorMsg);
+                HELIANTHUS_LOG_ERROR("Redis authentication failed: " + ErrorMsg);
                 if (Reply) freeReplyObject(Reply);
                 CleanupConnection();
                 return Common::ResultCode::PERMISSION_DENIED;
@@ -68,7 +73,7 @@ namespace Helianthus::Database::Redis
             {
                 ErrorCount++;
                 std::string ErrorMsg = Reply ? Reply->str : "Database selection failed";
-                HELIANTHUS_LOG_ERROR("Redis database selection failed: {}", ErrorMsg);
+                HELIANTHUS_LOG_ERROR("Redis database selection failed: " + ErrorMsg);
                 if (Reply) freeReplyObject(Reply);
                 CleanupConnection();
                 return Common::ResultCode::FAILED;
@@ -79,8 +84,8 @@ namespace Helianthus::Database::Redis
         IsConnectedFlag = true;
         UpdateLastActiveTime();
         
-        HELIANTHUS_LOG_INFO("Successfully connected to Redis: {}:{}/{}", 
-                           Config.Host, Config.Port, Config.Database);
+        HELIANTHUS_LOG_INFO("Successfully connected to Redis: " + Config.Host + ":" + 
+                           std::to_string(Config.Port) + "/" + std::to_string(Config.Database));
         
         return Common::ResultCode::SUCCESS;
     }
@@ -131,13 +136,29 @@ namespace Helianthus::Database::Redis
             Script += ", ";
             std::visit([&Script](const auto& V) {
                 using T = std::decay_t<decltype(V)>;
-                if constexpr (std::is_same_v<T, std::string>)
+                if constexpr (std::is_same_v<T, std::nullptr_t>)
+                {
+                    Script += "null";
+                }
+                else if constexpr (std::is_same_v<T, std::string>)
                 {
                     Script += "'" + V + "'";
                 }
-                else
+                else if constexpr (std::is_same_v<T, bool>)
+                {
+                    Script += V ? "true" : "false";
+                }
+                else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>)
                 {
                     Script += std::to_string(V);
+                }
+                else if constexpr (std::is_integral_v<T>)
+                {
+                    Script += std::to_string(V);
+                }
+                else
+                {
+                    Script += "null";
                 }
             }, Value);
         }
@@ -565,6 +586,43 @@ namespace Helianthus::Database::Redis
         return Ss.str();
     }
 
+    // Public command execution methods for internal use
+    RedisResult RedisConnection::ExecuteCommandInternal(const std::string& Command)
+    {
+        return ExecuteCommand(Command.c_str());
+    }
+
+    RedisResult RedisConnection::ExecuteCommandInternal(const char* Format, ...)
+    {
+        RedisResult Result;
+        
+        if (!IsConnected())
+        {
+            Result.Code = Common::ResultCode::NOT_INITIALIZED;
+            Result.ErrorMessage = "Not connected to Redis";
+            return Result;
+        }
+
+        std::lock_guard<std::mutex> Lock(ConnectionMutex);
+
+        va_list Args;
+        va_start(Args, Format);
+        redisReply* Reply = static_cast<redisReply*>(redisvCommand(RedisContext, Format, Args));
+        va_end(Args);
+
+        if (!Reply)
+        {
+            ErrorCount++;
+            Result.Code = Common::ResultCode::FAILED;
+            Result.ErrorMessage = GetRedisError();
+            return Result;
+        }
+
+        Result = ProcessReply(Reply);
+        freeReplyObject(Reply);
+        return Result;
+    }
+
     // RedisTransaction implementation
     RedisTransaction::RedisTransaction(std::shared_ptr<RedisConnection> Connection)
         : Connection(Connection)
@@ -589,7 +647,7 @@ namespace Helianthus::Database::Redis
             return Common::ResultCode::ALREADY_INITIALIZED;
         }
 
-        RedisResult Result = Connection->ExecuteCommand("MULTI");
+        RedisResult Result = Connection->ExecuteCommandInternal("MULTI");
         if (Result.IsSuccess())
         {
             IsActiveFlag = true;
@@ -608,7 +666,7 @@ namespace Helianthus::Database::Redis
             return Common::ResultCode::INVALID_STATE;
         }
 
-        RedisResult Result = Connection->ExecuteCommand("EXEC");
+        RedisResult Result = Connection->ExecuteCommandInternal("EXEC");
         IsActiveFlag = false;
         QueuedCommands.clear();
         return Result.Code;
@@ -623,7 +681,7 @@ namespace Helianthus::Database::Redis
             return Common::ResultCode::INVALID_STATE;
         }
 
-        RedisResult Result = Connection->ExecuteCommand("DISCARD");
+        RedisResult Result = Connection->ExecuteCommandInternal("DISCARD");
         IsActiveFlag = false;
         QueuedCommands.clear();
         return Result.Code;
@@ -670,19 +728,19 @@ namespace Helianthus::Database::Redis
         }
 
         QueuedCommands.push_back(Command);
-        RedisResult Result = Connection->ExecuteCommand(Command);
+        RedisResult Result = Connection->ExecuteCommandInternal(Command);
         return Result.Code;
     }
 
     Common::ResultCode RedisTransaction::Watch(const std::string& Key)
     {
-        RedisResult Result = Connection->ExecuteCommand("WATCH %s", Key.c_str());
+        RedisResult Result = Connection->ExecuteCommandInternal("WATCH %s", Key.c_str());
         return Result.Code;
     }
 
     Common::ResultCode RedisTransaction::Unwatch()
     {
-        RedisResult Result = Connection->ExecuteCommand("UNWATCH");
+        RedisResult Result = Connection->ExecuteCommandInternal("UNWATCH");
         return Result.Code;
     }
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef HELIANTHUS_COMMON_TYPES_H
+#define HELIANTHUS_COMMON_TYPES_H
+
 #include "HelianthusConfig.h"
 #include <cstdint>
 #include <string>
@@ -82,3 +85,5 @@ namespace Helianthus::Common
     };
 
 } // namespace Helianthus::Common
+
+#endif

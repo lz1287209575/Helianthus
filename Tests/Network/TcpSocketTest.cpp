@@ -52,7 +52,7 @@ int main()
         std::string TestMessage = "Hello, Server!";
         size_t BytesSent = 0;
         NetworkError SendResult = ClientSocket.Send(
-            reinterpret_cast<const uint8_t*>(TestMessage.data()), 
+            reinterpret_cast<const char*>(TestMessage.data()),
             TestMessage.size(), 
             BytesSent
         );

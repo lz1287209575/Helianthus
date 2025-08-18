@@ -1,4 +1,5 @@
 #include "HealthChecker.h"
+#include "Discovery/DiscoveryTypes.h"
 #include <iostream>
 #include <sstream>
 #include <random>
@@ -9,7 +10,7 @@ namespace Helianthus::Discovery
     HealthChecker::HealthChecker()
     {
         DefaultConfig = HealthCheckConfig{};
-        std::cout << "[HealthChecker] 创建健康检查器" << std::endl;
+        std::cout << "[HealthChecker] Health checker initialized" << std::endl;
     }
 
     HealthChecker::~HealthChecker()
@@ -33,7 +34,7 @@ namespace Helianthus::Discovery
         
         StartHealthCheckThread();
         
-        std::cout << "[HealthChecker] 初始化完成，全局检查间隔: " 
+        std::cout << "[HealthChecker] Init Finish, Global Check Tick Time: "
                   << GlobalInterval.load() << "ms" << std::endl;
         
         return DiscoveryResult::SUCCESS;
@@ -46,7 +47,7 @@ namespace Helianthus::Discovery
             return;
         }
 
-        std::cout << "[HealthChecker] 开始关闭" << std::endl;
+        std::cout << "[HealthChecker] Start Shutdown" << std::endl;
         
         ShuttingDown = true;
         StopHealthCheckThread();
@@ -62,7 +63,7 @@ namespace Helianthus::Discovery
         }
         
         IsInitializedFlag = false;
-        std::cout << "[HealthChecker] 关闭完成" << std::endl;
+        std::cout << "[HealthChecker] Shutdown Finish" << std::endl;
     }
 
     bool HealthChecker::IsInitialized() const
@@ -94,9 +95,9 @@ namespace Helianthus::Discovery
 
         HealthChecks[InstanceId] = Entry;
         
-        std::cout << "[HealthChecker] 注册服务健康检查: " << InstanceId 
-                  << ", 类型: " << static_cast<int>(Config.Type) 
-                  << ", 间隔: " << Config.IntervalMs << "ms" << std::endl;
+        std::cout << "[HealthChecker] Register Service Health Check: " << InstanceId
+                  << ", Type: " << static_cast<int>(Config.Type)
+                  << ", Tick Time: " << Config.IntervalMs << "ms" << std::endl;
 
         return DiscoveryResult::SUCCESS;
     }
@@ -112,7 +113,7 @@ namespace Helianthus::Discovery
         }
 
         It->second.Config = Config;
-        std::cout << "[HealthChecker] 更新服务健康检查配置: " << InstanceId << std::endl;
+        std::cout << "[HealthChecker] Update Service Health Check Configuration: " << InstanceId << std::endl;
 
         return DiscoveryResult::SUCCESS;
     }
@@ -128,7 +129,7 @@ namespace Helianthus::Discovery
         }
 
         HealthChecks.erase(It);
-        std::cout << "[HealthChecker] 注销服务健康检查: " << InstanceId << std::endl;
+        std::cout << "[HealthChecker] Cancel Service Health Check: " << InstanceId << std::endl;
 
         return DiscoveryResult::SUCCESS;
     }
@@ -161,7 +162,7 @@ namespace Helianthus::Discovery
         {
             It->second.IsRunning = true;
             It->second.IsPaused = false;
-            std::cout << "[HealthChecker] 启动健康检查: " << InstanceId << std::endl;
+            std::cout << "[HealthChecker] Start Healthy Check: " << InstanceId << std::endl;
         }
     }
 
@@ -173,7 +174,7 @@ namespace Helianthus::Discovery
         if (It != HealthChecks.end())
         {
             It->second.IsRunning = false;
-            std::cout << "[HealthChecker] 停止健康检查: " << InstanceId << std::endl;
+            std::cout << "[HealthChecker] Stop Healthy Check: " << InstanceId << std::endl;
         }
     }
 
@@ -187,7 +188,7 @@ namespace Helianthus::Discovery
             Entry.IsPaused = false;
         }
         
-        std::cout << "[HealthChecker] 启动所有健康检查" << std::endl;
+        std::cout << "[HealthChecker] Start All Healthy Check" << std::endl;
     }
 
     void HealthChecker::StopAllHealthChecks()
@@ -199,7 +200,7 @@ namespace Helianthus::Discovery
             Entry.IsRunning = false;
         }
         
-        std::cout << "[HealthChecker] 停止所有健康检查" << std::endl;
+        std::cout << "[HealthChecker] Stop All Healthy Check" << std::endl;
     }
 
     bool HealthChecker::IsHealthCheckRunning(ServiceInstanceId InstanceId) const
@@ -326,7 +327,7 @@ namespace Helianthus::Discovery
         }
         catch (const std::exception& e)
         {
-            AddHealthLog(InstanceId, "自定义健康检查异常: " + std::string(e.what()));
+            AddHealthLog(InstanceId, "Custom Health Check Exception: " + std::string(e.what()));
         }
         
         auto EndTime = std::chrono::steady_clock::now();
@@ -370,7 +371,7 @@ namespace Helianthus::Discovery
     {
         StopThread = false;
         HealthCheckThread = std::thread(&HealthChecker::HealthCheckLoop, this);
-        std::cout << "[HealthChecker] 健康检查线程启动" << std::endl;
+        std::cout << "[HealthChecker] Health Check Thread Start" << std::endl;
     }
 
     void HealthChecker::StopHealthCheckThread()
@@ -382,7 +383,7 @@ namespace Helianthus::Discovery
             HealthCheckThread.join();
         }
         
-        std::cout << "[HealthChecker] 健康检查线程停止" << std::endl;
+        std::cout << "[HealthChecker] Health Check Thread Stop" << std::endl;
     }
 
     void HealthChecker::HealthCheckLoop()
@@ -420,8 +421,8 @@ namespace Helianthus::Discovery
                 if (LoggingEnabled)
                 {
                     std::stringstream LogMsg;
-                    LogMsg << "健康检查完成 - 实例: " << InstanceId 
-                           << ", 分数: " << Score << ", 状态: " << static_cast<int>(Entry.CurrentState);
+                    LogMsg << "Health Check Finish - InstanceId: " << InstanceId
+                           << ", Score: " << Score << ", CurrentState: " << static_cast<int>(Entry.CurrentState);
                     AddHealthLog(InstanceId, LogMsg.str());
                 }
             }

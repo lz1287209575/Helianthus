@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef HELIANTHUS_DISCOVERY_TYPES_H
+#define HELIANTHUS_DISCOVERY_TYPES_H
+
 #include "Shared/Common/Types.h"
 #include "Shared/Network/NetworkTypes.h"
 #include <string>
@@ -229,3 +232,5 @@ namespace Helianthus::Discovery
     using LoadBalanceCallback = std::function<void(ServiceInstanceId SelectedInstanceId, const std::string& Reason)>;
 
 } // namespace Helianthus::Discovery
+
+#endif

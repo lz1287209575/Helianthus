@@ -64,7 +64,7 @@ TEST_F(MessageComprehensiveTest, ConstructorWithPayload)
 
 TEST_F(MessageComprehensiveTest, ConstructorWithBinaryPayload)
 {
-    std::vector<uint8_t> BinaryPayload = {0x01, 0x02, 0x03, 0x04, 0x05};
+    std::vector<char> BinaryPayload = {0x01, 0x02, 0x03, 0x04, 0x05};
     Message Msg(MessageType::NETWORK_DATA_RECEIVED, BinaryPayload);
     
     EXPECT_EQ(Msg.GetMessageType(), MessageType::NETWORK_DATA_RECEIVED);
@@ -144,13 +144,18 @@ TEST_F(MessageComprehensiveTest, SetAndGetPayload)
     EXPECT_EQ(Msg.GetJsonPayload(), StringPayload);
     
     // Test binary payload
-    std::vector<uint8_t> BinaryPayload = {0xAA, 0xBB, 0xCC, 0xDD};
+    std::vector<char> BinaryPayload = {
+        static_cast<char>(0xAA),
+        static_cast<char>(0xBB),
+        static_cast<char>(0xCC),
+        static_cast<char>(0xDD)
+    };
     Msg.SetPayload(BinaryPayload);
     EXPECT_EQ(Msg.GetPayloadSize(), BinaryPayload.size());
     EXPECT_EQ(Msg.GetPayload(), BinaryPayload);
     
     // Test raw data payload
-    uint8_t RawData[] = {0x11, 0x22, 0x33, 0x44, 0x55};
+    char RawData[] = {0x11, 0x22, 0x33, 0x44, 0x55};
     Msg.SetPayload(RawData, sizeof(RawData));
     EXPECT_EQ(Msg.GetPayloadSize(), sizeof(RawData));
 }
@@ -409,7 +414,7 @@ TEST_F(MessageComprehensiveTest, BinaryPayloadWithNullBytes)
     Message Msg(MessageType::NETWORK_DATA_RECEIVED);
     
     // Create payload with null bytes
-    std::vector<uint8_t> BinaryPayload = {0x00, 0x01, 0x00, 0x02, 0x00, 0x03};
+    std::vector<char> BinaryPayload = {0x00, 0x01, 0x00, 0x02, 0x00, 0x03};
     Msg.SetPayload(BinaryPayload);
     
     EXPECT_EQ(Msg.GetPayloadSize(), BinaryPayload.size());

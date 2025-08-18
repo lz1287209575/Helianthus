@@ -44,7 +44,7 @@ namespace Helianthus::Message
             CRC32TableInitialized = true;
         }
         
-        uint32_t CalculateCRC32(const uint8_t* Data, size_t Length)
+        uint32_t CalculateCRC32(const char* Data, size_t Length)
         {
             InitializeCRC32Table();
             uint32_t CRC = 0xFFFFFFFF;
@@ -69,7 +69,7 @@ namespace Helianthus::Message
         Header.MsgType = MsgType;
     }
 
-    Message::Message(MessageType MsgType, const std::vector<uint8_t>& Payload) : Message(MsgType)
+    Message::Message(MessageType MsgType, const std::vector<char>& Payload) : Message(MsgType)
     {
         SetPayload(Payload);
     }
@@ -126,7 +126,7 @@ namespace Helianthus::Message
     }
 
     // Payload management
-    void Message::SetPayload(const std::vector<uint8_t>& Payload)
+    void Message::SetPayload(const std::vector<char>& Payload)
     {
         this->Payload = Payload;
         UpdateHeaderFromPayload();
@@ -138,7 +138,7 @@ namespace Helianthus::Message
         UpdateHeaderFromPayload();
     }
 
-    void Message::SetPayload(const uint8_t* Data, size_t Size)
+    void Message::SetPayload(const char* Data, size_t Size)
     {
         this->Payload.assign(Data, Data + Size);
         UpdateHeaderFromPayload();
@@ -164,7 +164,7 @@ namespace Helianthus::Message
     }
 
     // Serialization
-    std::vector<uint8_t> Message::Serialize() const
+    std::vector<char> Message::Serialize() const
     {
         // Update checksum before serialization
         const_cast<Message*>(this)->UpdateChecksum();
@@ -174,7 +174,7 @@ namespace Helianthus::Message
         size_t TotalSize = sizeof(uint32_t) + HeaderSize + Payload.size(); // Magic + Header + Payload
         
         // Create buffer
-        std::vector<uint8_t> Buffer(TotalSize);
+        std::vector<char> Buffer(TotalSize);
         
         // Copy header with magic number
         MessageHeader SerializationHeader = Header;
@@ -195,12 +195,12 @@ namespace Helianthus::Message
         return Buffer;
     }
 
-    bool Message::Deserialize(const std::vector<uint8_t>& Data)
+    bool Message::Deserialize(const std::vector<char>& Data)
     {
         return Deserialize(Data.data(), Data.size());
     }
 
-    bool Message::Deserialize(const uint8_t* Data, size_t Size)
+    bool Message::Deserialize(const char* Data, size_t Size)
     {
         if (!Data || Size < sizeof(MessageHeader))
         {
@@ -283,11 +283,11 @@ namespace Helianthus::Message
         uint32_t Checksum = 0;
         
         // Include header fields (excluding checksum field itself)
-        Checksum = CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.MsgId), sizeof(Header.MsgId));
-        Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.MsgType), sizeof(Header.MsgType));
-        Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.SenderId), sizeof(Header.SenderId));
-        Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.ReceiverId), sizeof(Header.ReceiverId));
-        Checksum ^= CalculateCRC32(reinterpret_cast<const uint8_t*>(&Header.PayloadSize), sizeof(Header.PayloadSize));
+        Checksum = CalculateCRC32(reinterpret_cast<const char*>(&Header.MsgId), sizeof(Header.MsgId));
+        Checksum ^= CalculateCRC32(reinterpret_cast<const char*>(&Header.MsgType), sizeof(Header.MsgType));
+        Checksum ^= CalculateCRC32(reinterpret_cast<const char*>(&Header.SenderId), sizeof(Header.SenderId));
+        Checksum ^= CalculateCRC32(reinterpret_cast<const char*>(&Header.ReceiverId), sizeof(Header.ReceiverId));
+        Checksum ^= CalculateCRC32(reinterpret_cast<const char*>(&Header.PayloadSize), sizeof(Header.PayloadSize));
         
         // Include payload
         if (!Payload.empty())
@@ -411,7 +411,7 @@ namespace Helianthus::Message
         return std::make_shared<Message>(MsgType);
     }
 
-    MessagePtr Message::Create(MessageType MsgType, const std::vector<uint8_t>& Payload)
+    MessagePtr Message::Create(MessageType MsgType, const std::vector<char>& Payload)
     {
         return std::make_shared<Message>(MsgType, Payload);
     }
@@ -436,7 +436,7 @@ namespace Helianthus::Message
         Header.PayloadSize = static_cast<uint32_t>(Payload.size());
     }
 
-    uint32_t Message::CalculateCRC32(const uint8_t* Data, size_t Size) const
+    uint32_t Message::CalculateCRC32(const char* Data, size_t Size) const
     {
         return ::Helianthus::Message::CalculateCRC32(Data, Size);
     }

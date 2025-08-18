@@ -3,7 +3,7 @@
 #include "../IDatabase.h"
 #include "../DatabaseTypes.h"
 #include "../../Common/Logger.h"
-#include <hiredis/hiredis.h>
+#include "hiredis.h"
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -38,7 +38,7 @@ namespace Helianthus::Database::Redis
     };
 
     // Redis connection implementation
-    class RedisConnection : public IConnection
+    class RedisConnection : public IConnection, public std::enable_shared_from_this<RedisConnection>
     {
     public:
         explicit RedisConnection(const RedisConfig& Config);
@@ -126,6 +126,11 @@ namespace Helianthus::Database::Redis
         std::string GetRedisError() const;
         void CleanupConnection();
         std::string BuildConnectionString() const;
+
+    public:
+        // Public command execution for internal use
+        RedisResult ExecuteCommandInternal(const std::string& Command);
+        RedisResult ExecuteCommandInternal(const char* Format, ...);
     };
 
     // Redis transaction implementation (multi/exec)

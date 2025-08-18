@@ -21,7 +21,7 @@ namespace Helianthus::RPC
         ProcessingThread = std::thread(&MessageRouter::ProcessMessages, this);
         IsInitialized = true;
         
-        std::cout << "[MessageRouter] 全局消息路由器启动" << std::endl;
+        std::cout << "[MessageRouter] Initialized" << std::endl;
     }
 
     void MessageRouter::Shutdown()
@@ -50,14 +50,14 @@ namespace Helianthus::RPC
         }
         
         IsInitialized = false;
-        std::cout << "[MessageRouter] 全局消息路由器关闭" << std::endl;
+        std::cout << "[MessageRouter] Global message router shutdown" << std::endl;
     }
 
     void MessageRouter::RegisterServer(const std::string& Address, MessageCallback Callback)
     {
         std::lock_guard<std::mutex> Lock(ServerMutex);
         ServerCallbacks[Address] = Callback;
-        std::cout << "[MessageRouter] 注册服务器: " << Address << std::endl;
+        std::cout << "[MessageRouter] Register server: " << Address << std::endl;
     }
 
     void MessageRouter::UnregisterServer(const std::string& Address)
@@ -82,7 +82,7 @@ namespace Helianthus::RPC
     }
 
     void MessageRouter::SendToServer(const std::string& ServerAddress, Network::ConnectionId ClientId,
-                                   const uint8_t* Data, size_t Size)
+                                   const char* Data, size_t Size)
     {
         if (!IsInitialized || !Data || Size == 0)
         {
@@ -106,7 +106,7 @@ namespace Helianthus::RPC
                   << ServerAddress << ", 大小: " << Size << " 字节" << std::endl;
     }
 
-    void MessageRouter::SendToClient(Network::ConnectionId ClientId, const uint8_t* Data, size_t Size)
+    void MessageRouter::SendToClient(Network::ConnectionId ClientId, const char* Data, size_t Size)
     {
         if (!IsInitialized || ClientId == Network::InvalidConnectionId || !Data || Size == 0)
         {
@@ -126,8 +126,8 @@ namespace Helianthus::RPC
         }
         MessageCondition.notify_one();
 
-        std::cout << "[MessageRouter] 服务器发送响应到客户端 " << ClientId 
-                  << ", 大小: " << Size << " 字节" << std::endl;
+        std::cout << "[MessageRouter] Server Send Response To Client " << ClientId
+                  << ", Size: " << Size << " Bytes" << std::endl;
     }
 
     Network::ConnectionId MessageRouter::CreateServerConnection(const std::string& ServerAddress)
@@ -136,15 +136,15 @@ namespace Helianthus::RPC
         static std::atomic<Network::ConnectionId> NextConnId{1000};
         Network::ConnectionId ConnId = NextConnId.fetch_add(1);
         
-        std::cout << "[MessageRouter] 为服务器 " << ServerAddress 
-                  << " 创建连接 ID: " << ConnId << std::endl;
+        std::cout << "[MessageRouter] Server: " << ServerAddress
+                  << " Create Connection ID: " << ConnId << std::endl;
         
         return ConnId;
     }
 
     void MessageRouter::ProcessMessages()
     {
-        std::cout << "[MessageRouter] 消息处理线程启动" << std::endl;
+        std::cout << "[MessageRouter] Message Dispatcher Thread Start" << std::endl;
         
         while (!ShouldStop)
         {
@@ -183,7 +183,7 @@ namespace Helianthus::RPC
                     }
                     else
                     {
-                        std::cout << "[MessageRouter] 服务器 " << Msg.ServerAddress << " 未找到" << std::endl;
+                        std::cout << "[MessageRouter] Server " << Msg.ServerAddress << " not found" << std::endl;
                     }
                 }
                 else if (Msg.ToConnection != Network::InvalidConnectionId)
@@ -193,12 +193,12 @@ namespace Helianthus::RPC
                     auto It = ClientCallbacks.find(Msg.ToConnection);
                     if (It != ClientCallbacks.end())
                     {
-                        std::cout << "[MessageRouter] 路由消息到客户端 " << Msg.ToConnection << std::endl;
+                        std::cout << "[MessageRouter] Routing message to client " << Msg.ToConnection << std::endl;
                         It->second(Msg.ToConnection, Msg.Data.data(), Msg.Data.size());
                     }
                     else
                     {
-                        std::cout << "[MessageRouter] 客户端 " << Msg.ToConnection << " 未找到" << std::endl;
+                        std::cout << "[MessageRouter] Client " << Msg.ToConnection << " Not Found " << std::endl;
                     }
                 }
                 
@@ -206,7 +206,7 @@ namespace Helianthus::RPC
             }
         }
         
-        std::cout << "[MessageRouter] 消息处理线程停止" << std::endl;
+        std::cout << "[MessageRouter] Message Dispatcher Thread Stop" << std::endl;
     }
 
 } // namespace Helianthus::RPC

@@ -1,4 +1,6 @@
 #pragma once
+#ifndef HELIANTHUS_NETWORK_NETWORKTYPES_H
+#define HELIANTHUS_NETWORK_NETWORKTYPES_H
 
 #include "HelianthusConfig.h"
 #include <cstdint>
@@ -8,7 +10,7 @@
 namespace Helianthus::Network
 {
     // Network connection state enumeration
-    enum class ConnectionState : uint8_t
+    enum class ConnectionState
     {
         DISCONNECTED = 0,
         CONNECTING = 1,
@@ -18,7 +20,7 @@ namespace Helianthus::Network
     };
 
     // Network protocol types
-    enum class ProtocolType : uint8_t
+    enum class ProtocolType
     {
         TCP = 0,
         UDP = 1,
@@ -26,7 +28,7 @@ namespace Helianthus::Network
     };
 
     // Network error codes
-    enum class NetworkError : int32_t
+    enum class NetworkError
     {
         SUCCESS = 0,
         NONE = 0,
@@ -101,6 +103,9 @@ namespace Helianthus::Network
     {
         uint32_t MaxConnections = HELIANTHUS_MAX_CONNECTIONS;
         uint32_t BufferSizeBytes = HELIANTHUS_DEFAULT_BUFFER_SIZE;
+        bool NoDelay = false; // 禁用 Nagle 算法
+        bool ReuseAddr = false; // 允许地址复用
+        bool KeepAlive = false; // 启用 TCP 保活机制
         uint32_t ConnectionTimeoutMs = HELIANTHUS_NETWORK_TIMEOUT_MS;
         uint32_t KeepAliveIntervalMs = 30000;
         uint32_t ThreadPoolSize = HELIANTHUS_DEFAULT_THREAD_POOL_SIZE;
@@ -125,3 +130,5 @@ namespace Helianthus::Network
     static constexpr ConnectionId InvalidConnectionId = 0;
 
 } // namespace Helianthus::Network
+
+#endif // HELIANTHUS_NETWORK_NETWORKTYPES_H
