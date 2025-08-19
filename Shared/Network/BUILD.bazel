@@ -2,6 +2,7 @@ cc_library(
     name = "network",
     srcs = [
         "Sockets/TcpSocket.cpp",
+        "Sockets/UdpSocket.cpp",
         "NetworkManager.cpp",
     ],
     hdrs = [
@@ -9,6 +10,7 @@ cc_library(
         "INetworkManager.h",
         "NetworkTypes.h",
         "Sockets/TcpSocket.h",
+        "Sockets/UdpSocket.h",
         "NetworkManager.h",
     ],
     strip_include_prefix = ".",

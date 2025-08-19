@@ -35,7 +35,7 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-# MySQL implementation (temporarily disabled)
+# MySQL implementation (temporarily disabled - waiting for prebuilt libraries)
 # cc_library(
 #     name = "mysql_connection",
 #     srcs = ["MySQL/MySqlConnection.cpp"],
@@ -44,7 +44,7 @@ cc_library(
 #         ":database_interfaces",
 #         ":database_types",
 #         "//Shared/Common:common",
-#         "@mysql_connector_cpp//:mysql_client",
+#         "@mysql_prebuilt//:mysql_client",
 #     ],
 #     visibility = ["//visibility:public"],
 # )
@@ -87,7 +87,7 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-# MongoDB implementation (temporarily disabled)
+# MongoDB implementation (temporarily disabled - waiting for prebuilt libraries)
 # cc_library(
 #     name = "mongo_connection",
 #     srcs = ["MongoDB/MongoConnection.cpp"],
@@ -96,8 +96,8 @@ cc_library(
 #         ":database_interfaces",
 #         ":database_types",
 #         "//Shared/Common:common",
-#         "@mongo_cxx_driver//:mongocxx",
-#         "@mongo_cxx_driver//:bsoncxx",
+#         "@mongo_prebuilt//:mongocxx",
+#         "@mongo_prebuilt//:bsoncxx",
 #     ],
 #     visibility = ["//visibility:public"],
 # )
@@ -158,9 +158,9 @@ cc_library(
         ":database_types",
         ":database_interfaces", 
         ":orm",
-        # ":mysql_database",
+        # ":mysql_database",  # temporarily disabled
         ":redis_database",
-        # ":mongo_database",
+        # ":mongo_database",  # temporarily disabled
         ":connection_pool",
         ":database_config",
         ":database_factory",

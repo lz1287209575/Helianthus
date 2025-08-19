@@ -40,17 +40,19 @@ http_archive(
     ],
 )
 
-# Use git submodules for local dependencies
+########################################
+# Prebuilt libraries via local repos   #
+########################################
 new_local_repository(
-    name = "mysql_connector_cpp",
-    path = "ThirdParty/mariadb-connector-c",
-    build_file = "//ThirdParty:mysql_connector_cpp.BUILD",
+    name = "mysql_prebuilt",
+    path = "ThirdParty/mariadb_prebuilt",  # You will create/copy this folder
+    build_file = "//ThirdParty:mariadb_prebuilt.BUILD",
 )
 
 new_local_repository(
-    name = "mongo_cxx_driver",
-    path = "ThirdParty/mongo-cxx-driver",
-    build_file = "//ThirdParty:mongo_cxx_driver.BUILD",
+    name = "mongo_prebuilt",
+    path = "ThirdParty/mongo_prebuilt",    # You will create/copy this folder
+    build_file = "//ThirdParty:mongo_prebuilt.BUILD",
 )
 
 new_local_repository(
