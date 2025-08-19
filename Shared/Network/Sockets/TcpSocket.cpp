@@ -457,6 +457,11 @@ namespace Helianthus::Network::Sockets
 		SockImpl->Stats = {};
 	}
 
+	TcpSocket::NativeHandle TcpSocket::GetNativeHandle() const
+	{
+		return static_cast<NativeHandle>(SockImpl->Fd);
+	}
+
 } // namespace Helianthus::Network::Sockets
 
 

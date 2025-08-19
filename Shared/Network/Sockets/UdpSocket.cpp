@@ -17,18 +17,37 @@
     #include <errno.h>
 #endif
 
+// Platform-safe last socket error
+static inline int LastSocketErrorCode()
+{
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
 namespace Helianthus::Network::Sockets
 {
     UdpSocket::UdpSocket()
         : SocketHandle(InvalidSocket)
+        , LocalAddress()
+        , RemoteAddress()
         , State(ConnectionState::DISCONNECTED)
-        , ConnectionId(0)
-        , IsBlocking(true)
+        , ConnectionIdValue(0)
+        , IsBlockingFlag(true)
+        , Config()
+        , PacketQueueMutex()
+        , IncomingPackets()
         , MaxPacketQueueSize(1000)
+        , StatsMutex()
+        , Stats()
         , PingMs(0)
+        , OnConnectedHandler()
+        , OnDisconnectedHandler()
+        , OnDataReceivedHandler()
+        , OnErrorHandler()
     {
-        Stats = ConnectionStats{};
-        Config = NetworkConfig{};
     }
 
     UdpSocket::~UdpSocket()
@@ -38,20 +57,22 @@ namespace Helianthus::Network::Sockets
 
     UdpSocket::UdpSocket(UdpSocket&& Other) noexcept
         : SocketHandle(Other.SocketHandle)
-        , LocalAddress_(std::move(Other.LocalAddress_))
-        , RemoteAddress_(std::move(Other.RemoteAddress_))
+        , LocalAddress(std::move(Other.LocalAddress))
+        , RemoteAddress(std::move(Other.RemoteAddress))
         , State(Other.State)
-        , ConnectionId(Other.ConnectionId)
-        , IsBlocking(Other.IsBlocking.load())
+        , ConnectionIdValue(Other.ConnectionIdValue)
+        , IsBlockingFlag(Other.IsBlockingFlag.load())
         , Config(std::move(Other.Config))
-        , MaxPacketQueueSize(Other.MaxPacketQueueSize)
+        , PacketQueueMutex()
         , IncomingPackets(std::move(Other.IncomingPackets))
+        , MaxPacketQueueSize(Other.MaxPacketQueueSize)
         , Stats(Other.Stats)
+        , StatsMutex()
         , PingMs(Other.PingMs)
-        , OnConnectedCallback_(std::move(Other.OnConnectedCallback_))
-        , OnDisconnectedCallback_(std::move(Other.OnDisconnectedCallback_))
-        , OnDataReceivedCallback_(std::move(Other.OnDataReceivedCallback_))
-        , OnErrorCallback_(std::move(Other.OnErrorCallback_))
+        , OnConnectedHandler(std::move(Other.OnConnectedHandler))
+        , OnDisconnectedHandler(std::move(Other.OnDisconnectedHandler))
+        , OnDataReceivedHandler(std::move(Other.OnDataReceivedHandler))
+        , OnErrorHandler(std::move(Other.OnErrorHandler))
     {
         Other.SocketHandle = InvalidSocket;
         Other.State = ConnectionState::DISCONNECTED;
@@ -64,20 +85,20 @@ namespace Helianthus::Network::Sockets
             Disconnect();
             
             SocketHandle = Other.SocketHandle;
-            LocalAddress_ = std::move(Other.LocalAddress_);
-            RemoteAddress_ = std::move(Other.RemoteAddress_);
+            LocalAddress = std::move(Other.LocalAddress);
+            RemoteAddress = std::move(Other.RemoteAddress);
             State = Other.State;
-            ConnectionId = Other.ConnectionId;
-            IsBlocking = Other.IsBlocking.load();
+            ConnectionIdValue = Other.ConnectionIdValue;
+            IsBlockingFlag = Other.IsBlockingFlag.load();
             Config = std::move(Other.Config);
             MaxPacketQueueSize = Other.MaxPacketQueueSize;
             IncomingPackets = std::move(Other.IncomingPackets);
             Stats = Other.Stats;
             PingMs = Other.PingMs;
-            OnConnectedCallback_ = std::move(Other.OnConnectedCallback_);
-            OnDisconnectedCallback_ = std::move(Other.OnDisconnectedCallback_);
-            OnDataReceivedCallback_ = std::move(Other.OnDataReceivedCallback_);
-            OnErrorCallback_ = std::move(Other.OnErrorCallback_);
+            OnConnectedHandler = std::move(Other.OnConnectedHandler);
+            OnDisconnectedHandler = std::move(Other.OnDisconnectedHandler);
+            OnDataReceivedHandler = std::move(Other.OnDataReceivedHandler);
+            OnErrorHandler = std::move(Other.OnErrorHandler);
 
             Other.SocketHandle = InvalidSocket;
             Other.State = ConnectionState::DISCONNECTED;
@@ -113,16 +134,16 @@ namespace Helianthus::Network::Sockets
 
         if (connect(SocketHandle, reinterpret_cast<sockaddr*>(&SockAddr), sizeof(SockAddr)) != 0)
         {
-            HELIANTHUS_LOG_ERROR("UDP Socket connect failed: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("UDP Socket connect failed: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::CONNECTION_FAILED;
         }
 
-        RemoteAddress_ = Address;
+        RemoteAddress = Address;
         State = ConnectionState::CONNECTED;
         
-        if (OnConnectedCallback_)
+        if (OnConnectedHandler)
         {
-            OnConnectedCallback_(ConnectionId);
+            OnConnectedHandler(ConnectionIdValue);
         }
         
         HELIANTHUS_LOG_INFO("UDP Socket connected to: " + Address.ToString());
@@ -157,11 +178,11 @@ namespace Helianthus::Network::Sockets
 
         if (bind(SocketHandle, reinterpret_cast<sockaddr*>(&SockAddr), sizeof(SockAddr)) != 0)
         {
-            HELIANTHUS_LOG_ERROR("UDP Socket bind failed: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("UDP Socket bind failed: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::BIND_FAILED;
         }
 
-        LocalAddress_ = Address;
+        LocalAddress = Address;
         State = ConnectionState::CONNECTED;
         
         HELIANTHUS_LOG_INFO("UDP Socket bound to: " + Address.ToString());
@@ -193,9 +214,9 @@ namespace Helianthus::Network::Sockets
             SocketHandle = InvalidSocket;
             State = ConnectionState::DISCONNECTED;
             
-            if (OnDisconnectedCallback_)
+            if (OnDisconnectedHandler)
             {
-                OnDisconnectedCallback_(ConnectionId, NetworkError::SUCCESS);
+                OnDisconnectedHandler(ConnectionIdValue, NetworkError::SUCCESS);
             }
             
             HELIANTHUS_LOG_INFO("UDP Socket disconnected");
@@ -220,7 +241,7 @@ namespace Helianthus::Network::Sockets
         if (Result < 0)
         {
             BytesSent = 0;
-            HELIANTHUS_LOG_ERROR("UDP Socket send failed: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("UDP Socket send failed: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::SEND_FAILED;
         }
 
@@ -256,16 +277,16 @@ namespace Helianthus::Network::Sockets
             #endif
             
             BytesReceived = 0;
-            HELIANTHUS_LOG_ERROR("UDP Socket receive failed: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("UDP Socket receive failed: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::RECEIVE_FAILED;
         }
 
         BytesReceived = static_cast<size_t>(Result);
         UpdateStats(0, BytesReceived);
         
-        if (OnDataReceivedCallback_)
+        if (OnDataReceivedHandler)
         {
-            OnDataReceivedCallback_(ConnectionId, Buffer, BytesReceived);
+            OnDataReceivedHandler(ConnectionIdValue, Buffer, BytesReceived);
         }
         
         return NetworkError::SUCCESS;
@@ -289,17 +310,17 @@ namespace Helianthus::Network::Sockets
 
     NetworkAddress UdpSocket::GetLocalAddress() const
     {
-        return LocalAddress_;
+        return LocalAddress;
     }
 
     NetworkAddress UdpSocket::GetRemoteAddress() const
     {
-        return RemoteAddress_;
+        return RemoteAddress;
     }
 
     ConnectionId UdpSocket::GetConnectionId() const
     {
-        return ConnectionId;
+        return ConnectionIdValue;
     }
 
     ProtocolType UdpSocket::GetProtocolType() const
@@ -309,16 +330,21 @@ namespace Helianthus::Network::Sockets
 
     ConnectionStats UdpSocket::GetConnectionStats() const
     {
-        std::lock_guard<std::mutex> Lock(StatsMutex_);
+        std::lock_guard<std::mutex> Lock(StatsMutex);
         return Stats;
     }
 
-    void UdpSocket::SetSocketOptions(const NetworkConfig& Config)
+    UdpSocket::NativeHandle UdpSocket::GetNativeHandle() const
     {
-        Config = Config;
+        return static_cast<UdpSocket::NativeHandle>(SocketHandle);
+    }
+
+    void UdpSocket::SetSocketOptions(const NetworkConfig& ConfigIn)
+    {
+        Config = ConfigIn;
         if (IsValidSocket())
         {
-            SetSocketOptions();
+            ApplySocketOptions();
         }
     }
 
@@ -329,22 +355,22 @@ namespace Helianthus::Network::Sockets
 
     void UdpSocket::SetOnConnectedCallback(OnConnectedCallback Callback)
     {
-        OnConnectedCallback_ = std::move(Callback);
+        OnConnectedHandler = std::move(Callback);
     }
 
     void UdpSocket::SetOnDisconnectedCallback(OnDisconnectedCallback Callback)
     {
-        OnDisconnectedCallback_ = std::move(Callback);
+        OnDisconnectedHandler = std::move(Callback);
     }
 
     void UdpSocket::SetOnDataReceivedCallback(OnDataReceivedCallback Callback)
     {
-        OnDataReceivedCallback_ = std::move(Callback);
+        OnDataReceivedHandler = std::move(Callback);
     }
 
     void UdpSocket::SetOnErrorCallback(OnErrorCallback Callback)
     {
-        OnErrorCallback_ = std::move(Callback);
+        OnErrorHandler = std::move(Callback);
     }
 
     bool UdpSocket::IsConnected() const
@@ -380,12 +406,12 @@ namespace Helianthus::Network::Sockets
             }
         #endif
 
-        IsBlocking = Blocking;
+        IsBlockingFlag = Blocking;
     }
 
     bool UdpSocket::IsBlocking() const
     {
-        return IsBlocking.load();
+        return IsBlockingFlag.load();
     }
 
     void UdpSocket::UpdatePing()
@@ -401,7 +427,7 @@ namespace Helianthus::Network::Sockets
 
     void UdpSocket::ResetStats()
     {
-        std::lock_guard<std::mutex> Lock(StatsMutex_);
+        std::lock_guard<std::mutex> Lock(StatsMutex);
         Stats = ConnectionStats{};
     }
 
@@ -432,7 +458,7 @@ namespace Helianthus::Network::Sockets
                           reinterpret_cast<sockaddr*>(&SockAddr), sizeof(SockAddr));
         if (Result < 0)
         {
-            HELIANTHUS_LOG_ERROR("UDP Socket sendto failed: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("UDP Socket sendto failed: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::SEND_FAILED;
         }
 
@@ -471,7 +497,7 @@ namespace Helianthus::Network::Sockets
             #endif
             
             BytesReceived = 0;
-            HELIANTHUS_LOG_ERROR("UDP Socket recvfrom failed: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("UDP Socket recvfrom failed: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::RECEIVE_FAILED;
         }
 
@@ -578,27 +604,27 @@ namespace Helianthus::Network::Sockets
 
     bool UdpSocket::HasIncomingPackets() const
     {
-        std::lock_guard<std::mutex> Lock(PacketQueueMutex_);
+        std::lock_guard<std::mutex> Lock(PacketQueueMutex);
         return !IncomingPackets.empty();
     }
 
     UdpSocket::Packet UdpSocket::GetNextPacket()
     {
-        std::lock_guard<std::mutex> Lock(PacketQueueMutex_);
+        std::lock_guard<std::mutex> Lock(PacketQueueMutex);
         
         if (IncomingPackets.empty())
         {
             return Packet{};
         }
 
-        Packet Packet = std::move(IncomingPackets.front());
+        Packet PacketValue = std::move(IncomingPackets.front());
         IncomingPackets.pop();
-        return Packet;
+        return PacketValue;
     }
 
     std::vector<UdpSocket::Packet> UdpSocket::GetAllPackets()
     {
-        std::lock_guard<std::mutex> Lock(PacketQueueMutex_);
+        std::lock_guard<std::mutex> Lock(PacketQueueMutex);
         
         std::vector<Packet> Packets;
         Packets.reserve(IncomingPackets.size());
@@ -614,7 +640,7 @@ namespace Helianthus::Network::Sockets
 
     uint32_t UdpSocket::GetIncomingPacketCount() const
     {
-        std::lock_guard<std::mutex> Lock(PacketQueueMutex_);
+        std::lock_guard<std::mutex> Lock(PacketQueueMutex);
         return static_cast<uint32_t>(IncomingPackets.size());
     }
 
@@ -624,14 +650,14 @@ namespace Helianthus::Network::Sockets
         SocketHandle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (!IsValidSocket())
         {
-            HELIANTHUS_LOG_ERROR("Failed to create UDP socket: " + std::to_string(GetLastError()));
+            HELIANTHUS_LOG_ERROR("Failed to create UDP socket: " + std::to_string(LastSocketErrorCode()));
             return NetworkError::SOCKET_CREATE_FAILED;
         }
 
-        return SetSocketOptions();
+        return ApplySocketOptions();
     }
 
-    NetworkError UdpSocket::SetSocketOptions()
+    NetworkError UdpSocket::ApplySocketOptions()
     {
         if (!IsValidSocket())
         {
@@ -669,7 +695,7 @@ namespace Helianthus::Network::Sockets
 
     void UdpSocket::UpdateStats(uint64_t BytesSent, uint64_t BytesReceived)
     {
-        std::lock_guard<std::mutex> Lock(StatsMutex_);
+        std::lock_guard<std::mutex> Lock(StatsMutex);
         
         if (BytesSent > 0)
         {
@@ -686,7 +712,7 @@ namespace Helianthus::Network::Sockets
 
     void UdpSocket::AddIncomingPacket(const char* Data, size_t Size, const NetworkAddress& FromAddress)
     {
-        std::lock_guard<std::mutex> Lock(PacketQueueMutex_);
+        std::lock_guard<std::mutex> Lock(PacketQueueMutex);
         
         if (IncomingPackets.size() >= MaxPacketQueueSize)
         {
@@ -694,13 +720,13 @@ namespace Helianthus::Network::Sockets
             IncomingPackets.pop();
         }
         
-        Packet Packet;
-        Packet.Data.assign(Data, Data + Size);
-        Packet.FromAddress = FromAddress;
-        Packet.Timestamp = GetCurrentTimestampMs();
-        Packet.SequenceNumber = 0; // TODO: Implement sequence numbering
+        Packet PacketValue;
+        PacketValue.Data.assign(Data, Data + Size);
+        PacketValue.FromAddress = FromAddress;
+        PacketValue.Timestamp = GetCurrentTimestampMs();
+        PacketValue.SequenceNumber = 0; // TODO: Implement sequence numbering
         
-        IncomingPackets.push(std::move(Packet));
+        IncomingPackets.push(std::move(PacketValue));
     }
 
     bool UdpSocket::IsValidSocket() const

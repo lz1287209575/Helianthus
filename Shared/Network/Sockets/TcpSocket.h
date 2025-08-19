@@ -10,6 +10,7 @@
 #include <mutex>
 #include <thread>
 #include <functional>
+#include <cstdint>
 
 namespace Helianthus::Network::Sockets
 {
@@ -68,6 +69,10 @@ public:
     void UpdatePing() override;
     uint32_t GetPing() const override;
     void ResetStats() override;
+
+    // Native handle for reactor integration (cross-platform uintptr_t)
+    using NativeHandle = uintptr_t;
+    NativeHandle GetNativeHandle() const;
 
 protected:
     std::unique_ptr<TcpSocketImpl> SockImpl;

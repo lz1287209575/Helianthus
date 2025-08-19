@@ -8,6 +8,7 @@
 #include <atomic>
 #include <vector>
 #include <queue>
+#include <cstdint>
 
 namespace Helianthus::Network::Sockets
 {
@@ -69,6 +70,11 @@ namespace Helianthus::Network::Sockets
         uint32_t GetPing() const override;
         void ResetStats() override;
 
+        // Native handle access (for integration with reactor/event loop)
+        // 使用 uintptr_t 作为跨平台句柄表示（Windows SOCKET/Posix fd 都可安全转换）
+        using NativeHandle = uintptr_t;
+        NativeHandle GetNativeHandle() const;
+
         // UDP-specific methods
         NetworkError SendTo(const char* Data, size_t Size, const NetworkAddress& Address);
         NetworkError ReceiveFrom(char* Buffer, size_t BufferSize, size_t& BytesReceived, NetworkAddress& FromAddress);
@@ -97,40 +103,40 @@ namespace Helianthus::Network::Sockets
     private:
         // Platform-specific socket handle
         #ifdef _WIN32
-            using SocketHandle = SOCKET;
-            static constexpr SocketHandle InvalidSocket = INVALID_SOCKET;
+            using NativeSocketHandle = SOCKET;
+            static constexpr NativeSocketHandle InvalidSocket = INVALID_SOCKET;
         #else
-            using SocketHandle = int;
-            static constexpr SocketHandle InvalidSocket = -1;
+            using NativeSocketHandle = int;
+            static constexpr NativeSocketHandle InvalidSocket = -1;
         #endif
 
-        SocketHandle SocketHandle;
-        NetworkAddress LocalAddress_;
-        NetworkAddress RemoteAddress_;
+        NativeSocketHandle SocketHandle;
+        NetworkAddress LocalAddress;
+        NetworkAddress RemoteAddress;
         ConnectionState State;
-        ConnectionId ConnectionId;
-        std::atomic<bool> IsBlocking;
+        ConnectionId ConnectionIdValue;
+        std::atomic<bool> IsBlockingFlag;
         NetworkConfig Config;
         
         // Packet queue for incoming data
-        mutable std::mutex PacketQueueMutex_;
+        mutable std::mutex PacketQueueMutex;
         std::queue<Packet> IncomingPackets;
         uint32_t MaxPacketQueueSize;
 
         // Statistics
-        mutable std::mutex StatsMutex_;
+        mutable std::mutex StatsMutex;
         ConnectionStats Stats;
         uint32_t PingMs;
 
         // Callbacks
-        OnConnectedCallback OnConnectedCallback_;
-        OnDisconnectedCallback OnDisconnectedCallback_;
-        OnDataReceivedCallback OnDataReceivedCallback_;
-        OnErrorCallback OnErrorCallback_;
+        OnConnectedCallback OnConnectedHandler;
+        OnDisconnectedCallback OnDisconnectedHandler;
+        OnDataReceivedCallback OnDataReceivedHandler;
+        OnErrorCallback OnErrorHandler;
 
         // Helper methods
         NetworkError CreateSocket();
-        NetworkError SetSocketOptions();
+        NetworkError ApplySocketOptions();
         void UpdateStats(uint64_t BytesSent, uint64_t BytesReceived);
         void AddIncomingPacket(const char* Data, size_t Size, const NetworkAddress& FromAddress);
         bool IsValidSocket() const;
