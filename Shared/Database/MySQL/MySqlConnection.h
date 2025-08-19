@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../IDatabase.h"
-#include "../DatabaseTypes.h"
-#include "../../Common/Logger.h"
+#include "IDatabase.h"
+#include "DatabaseTypes.h"
+#include "Common/Logger.h"
 #include <mysql.h>
 #include <memory>
 #include <mutex>

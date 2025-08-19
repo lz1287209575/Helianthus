@@ -21,6 +21,7 @@ namespace Helianthus::Network::Asio
         Network::NetworkError Connect(const Network::NetworkAddress& Address);
         void AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandler Handler);
         void AsyncSend(const char* Data, size_t Size, SendHandler Handler);
+        void Close();
 
         Network::Sockets::TcpSocket& Native();
 
@@ -30,6 +31,7 @@ namespace Helianthus::Network::Asio
         std::shared_ptr<Proactor> ProactorPtr;
         Network::Sockets::TcpSocket Socket;
         ReceiveHandler PendingRecv;
+        bool ClosedFlag = false;
     };
 }
 

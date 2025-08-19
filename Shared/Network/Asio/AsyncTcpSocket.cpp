@@ -78,5 +78,20 @@ namespace Helianthus::Network::Asio
     {
         return Socket;
     }
+
+    void AsyncTcpSocket::Close()
+    {
+        if (ClosedFlag) 
+        {
+            return;
+        }
+        ClosedFlag = true;
+        const auto Handle = static_cast<Fd>(Socket.GetNativeHandle());
+        if (ProactorPtr)
+        {
+            ProactorPtr->Cancel(Handle);
+        }
+        Socket.Disconnect();
+    }
 } // namespace Helianthus::Network::Asio
 

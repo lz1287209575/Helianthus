@@ -4,6 +4,9 @@
 #include <atomic>
 #include <memory>
 #include <vector>
+#include <queue>
+#include <mutex>
+#include <chrono>
 #include "Shared/Network/Asio/Proactor.h"
 
 namespace Helianthus::Network::Asio
@@ -23,6 +26,8 @@ namespace Helianthus::Network::Asio
         void Stop();
         // Post a task to be executed in loop
         void Post(std::function<void()> Task);
+        // Post a delayed task executed after DelayMs
+        void PostDelayed(std::function<void()> Task, int DelayMs);
 
         std::shared_ptr<Reactor> GetReactor() const;
         std::shared_ptr<Proactor> GetProactor() const;
@@ -31,7 +36,15 @@ namespace Helianthus::Network::Asio
         std::atomic<bool> Running;
         std::shared_ptr<Reactor> ReactorPtr;
         std::shared_ptr<Proactor> ProactorPtr;
-        // simple pending tasks queue (single-producer scenario for now)
-        // 为简化，此处实现放在 cpp 内部
+        // Task queue and timers
+        std::mutex QueueMutex;
+        std::queue<std::function<void()>> TaskQueue;
+        struct ScheduledTask
+        {
+            std::chrono::steady_clock::time_point Due;
+            std::function<void()> Task;
+        };
+        std::mutex TimerMutex;
+        std::vector<ScheduledTask> Timers;
     };
 } // namespace Helianthus::Network::Asio

@@ -4,6 +4,17 @@
 
 namespace Helianthus::Network::Asio
 {
+    static Network::NetworkError ConvertWinSockError(int ErrorCode, bool IsWrite)
+    {
+        switch (ErrorCode)
+        {
+            case WSAETIMEDOUT: return Network::NetworkError::TIMEOUT;
+            case WSAECONNRESET: return Network::NetworkError::CONNECTION_CLOSED;
+            case WSAENETUNREACH: return Network::NetworkError::NETWORK_UNREACHABLE;
+            case WSAEACCES: return Network::NetworkError::PERMISSION_DENIED;
+            default: return IsWrite ? Network::NetworkError::SEND_FAILED : Network::NetworkError::RECEIVE_FAILED;
+        }
+    }
     ProactorIocp::ProactorIocp()
         : IocpHandle(CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0))
         , Associated()
@@ -56,7 +67,7 @@ namespace Helianthus::Network::Asio
                 auto Completion = std::move(op->Handler); delete op;
                 if (Completion) 
                 {
-                    Completion(Network::NetworkError::RECEIVE_FAILED, 0);
+                    Completion(ConvertWinSockError(ErrorCode, false), 0);
                 }
             }
         }
@@ -88,7 +99,7 @@ namespace Helianthus::Network::Asio
                 auto Completion = std::move(op->Handler); delete op;
                 if (Completion) 
                 {
-                    Completion(Network::NetworkError::SEND_FAILED, 0);
+                    Completion(ConvertWinSockError(ErrorCode, true), 0);
                 }
             }
         }
@@ -115,7 +126,8 @@ namespace Helianthus::Network::Asio
         bool done = true;
         if (!Ok)
         {
-            err = Operation->IsWrite ? Network::NetworkError::SEND_FAILED : Network::NetworkError::RECEIVE_FAILED;
+            int ErrorCode = GetLastError();
+            err = ConvertWinSockError(ErrorCode, Operation->IsWrite);
         }
         else if (!Operation->IsWrite && Bytes == 0)
         {
@@ -136,10 +148,27 @@ namespace Helianthus::Network::Asio
                 } else if (R == 0) {
                     done = false; // 将在下次完成回调汇总
                 } else if (R == SOCKET_ERROR) {
-                    err = Network::NetworkError::SEND_FAILED; done = true;
+                    err = ConvertWinSockError(WSAGetLastError(), true); done = true;
                 }
             }
-            // 对读：若业务需要固定长度可在此按需循环，这里默认一次回调
+            // 对读：未读满则继续提交，直至缓冲区填满或出错/对端关闭
+            if (!Operation->IsWrite && Operation->Transferred < Operation->BufferSize)
+            {
+                memset(&Operation->Ov, 0, sizeof(Operation->Ov));
+                WSABUF BufferDescriptor; 
+                BufferDescriptor.buf = Operation->Buffer + Operation->Transferred; 
+                BufferDescriptor.len = static_cast<ULONG>(Operation->BufferSize - Operation->Transferred);
+                DWORD Flags = 0; DWORD More = 0;
+                int R = WSARecv(Operation->Socket, &BufferDescriptor, 1, &More, &Flags, &Operation->Ov, nullptr);
+                if (R == SOCKET_ERROR && WSAGetLastError() == WSA_IO_PENDING) {
+                    done = false;
+                } else if (R == 0) {
+                    done = false;
+                } else if (R == SOCKET_ERROR) {
+                    err = ConvertWinSockError(WSAGetLastError(), false); done = true;
+                }
+                // 若继续提交，则本次不回调，等待下一次完成
+            }
         }
         if (done)
         {

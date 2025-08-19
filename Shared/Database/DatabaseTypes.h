@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Common/Types.h"
+#include "Common/Types.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -102,8 +102,14 @@ namespace Helianthus::Database
         uint64_t LastInsertId = 0;
         ResultSet Data;
 
-        bool IsSuccess() const { return Code == Common::ResultCode::SUCCESS; }
-        bool HasData() const { return !Data.empty(); }
+        bool IsSuccess() const 
+        { 
+            return Code == Common::ResultCode::SUCCESS; 
+        }
+        bool HasData() const 
+        { 
+            return !Data.empty(); 
+        }
     };
 
     // Connection information

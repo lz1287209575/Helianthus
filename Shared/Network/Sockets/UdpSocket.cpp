@@ -1,4 +1,5 @@
 #include "Network/Sockets/UdpSocket.h"
+#include "Shared/Network/WinSockInit.h"
 #include "Common/Logger.h"
 #include <cstring>
 #include <algorithm>
@@ -48,6 +49,8 @@ namespace Helianthus::Network::Sockets
         , OnDataReceivedHandler()
         , OnErrorHandler()
     {
+        // Initialize WinSock on Windows
+        EnsureWinSockInitialized();
     }
 
     UdpSocket::~UdpSocket()
@@ -117,7 +120,8 @@ namespace Helianthus::Network::Sockets
             }
         }
 
-        if (!Address.IsValid())
+        // 允许端口为 0（由系统分配临时端口），只校验 IP 非空
+        if (Address.Ip.empty())
         {
             return NetworkError::INVALID_ADDRESS;
         }

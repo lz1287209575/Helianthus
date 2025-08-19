@@ -10,28 +10,10 @@
 #endif
 #include <queue>
 #include <mutex>
+#include <algorithm>
 
 namespace Helianthus::Network::Asio
 {
-    namespace {
-        class TaskQueue {
-        public:
-            void Push(std::function<void()> fn) {
-                std::lock_guard<std::mutex> l(m);
-                q.push(std::move(fn));
-            }
-            bool Pop(std::function<void()>& fn) {
-                std::lock_guard<std::mutex> l(m);
-                if (q.empty()) return false;
-                fn = std::move(q.front());
-                q.pop();
-                return true;
-            }
-        private:
-            std::queue<std::function<void()>> q;
-            std::mutex m;
-        };
-    }
 
     IoContext::IoContext()
         : Running(false)
@@ -50,20 +32,62 @@ namespace Helianthus::Network::Asio
     void IoContext::Run()
     {
         Running = true;
-        static TaskQueue queue; // 简化：示例级别，可后续放成员
         while (Running)
         {
             // 先执行队列任务
-            std::function<void()> task;
-            while (queue.Pop(task)) {
-                task();
+            {
+                std::queue<std::function<void()>> Local;
+                {
+                    std::lock_guard<std::mutex> L(QueueMutex);
+                    std::swap(Local, TaskQueue);
+                }
+                while (!Local.empty()) 
+                {
+                    auto Task = std::move(Local.front()); 
+                    Local.pop(); 
+                    if (Task) 
+                    {
+                        Task();
+                    }
+                }
+            }
+
+            // 执行到期的定时任务
+            {
+                std::vector<ScheduledTask> DueList;
+                auto Now = std::chrono::steady_clock::now();
+                {
+                    std::lock_guard<std::mutex> L(TimerMutex);
+                    auto It = std::remove_if(Timers.begin(), Timers.end(), [&](const ScheduledTask& T){
+                        if (T.Due <= Now) 
+                        {
+                            DueList.push_back(T); 
+                            return true; 
+                        } 
+                        return false; 
+                    });
+                    if (It != Timers.end()) 
+                    {
+                        Timers.erase(It, Timers.end());
+                    }
+                }
+                for (auto& T : DueList) 
+                {
+                    if (T.Task) 
+                    {
+                        T.Task();
+                    }
+                }
             }
 
             // 再轮询 IO
-            if (ProactorPtr) {
+            if (ProactorPtr) 
+            {
                 ProactorPtr->ProcessCompletions(10);
             }
-            if (ReactorPtr) {
+
+            if (ReactorPtr) 
+            {
                 ReactorPtr->PollOnce(10);
             }
         }
@@ -76,9 +100,8 @@ namespace Helianthus::Network::Asio
 
     void IoContext::Post(std::function<void()> Task)
     {
-        // 简化：静态队列占位实现，后续可以替换成成员队列
-        static TaskQueue queue;
-        queue.Push(std::move(Task));
+        std::lock_guard<std::mutex> L(QueueMutex);
+        TaskQueue.push(std::move(Task));
     }
 
     std::shared_ptr<Reactor> IoContext::GetReactor() const
@@ -89,6 +112,15 @@ namespace Helianthus::Network::Asio
     std::shared_ptr<Proactor> IoContext::GetProactor() const
     {
         return ProactorPtr;
+    }
+
+    void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
+    {
+        ScheduledTask T;
+        T.Due = std::chrono::steady_clock::now() + std::chrono::milliseconds(DelayMs);
+        T.Task = std::move(Task);
+        std::lock_guard<std::mutex> L(TimerMutex);
+        Timers.push_back(T);
     }
 } // namespace Helianthus::Network::Asio
 

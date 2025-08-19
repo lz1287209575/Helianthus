@@ -184,6 +184,8 @@ namespace Helianthus::Network::Sockets
 		{
 			SockImpl->RecvThread.join();
 		}
+		// 通知可能存在的 Proactor 取消句柄上的所有挂起 IO（如果上层使用了 IOCP）
+		// 当前类不持有 Proactor 指针，取消由上层 Async* 封装或 Manager 负责调用
 		if (SockImpl->Fd >= 0)
 		{
 		    closesocket(SockImpl->Fd);

@@ -81,7 +81,9 @@ namespace Helianthus::Common
         
         ServiceInfo() = default;
         ServiceInfo(ServerId InServerId, const std::string& InServiceName, const std::string& InHostAddress, uint16_t InPort)
-            : ServerIdValue(InServerId), ServiceName(InServiceName), HostAddress(InHostAddress), Port(InPort) {}
+            : ServerIdValue(InServerId), ServiceName(InServiceName), HostAddress(InHostAddress), Port(InPort) 
+        {
+        }
     };
 
 } // namespace Helianthus::Common
