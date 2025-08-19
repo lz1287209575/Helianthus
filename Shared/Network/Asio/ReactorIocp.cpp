@@ -18,9 +18,11 @@ namespace Helianthus::Network::Asio
 
     bool ReactorIocp::Add(Fd Handle, EventMask Mask, IoCallback Callback)
     {
-        HANDLE h = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(Handle));
-        if (!CreateIoCompletionPort(h, IocpHandle, static_cast<ULONG_PTR>(Handle), 0))
+        HANDLE NativeHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(Handle));
+        if (!CreateIoCompletionPort(NativeHandle, IocpHandle, static_cast<ULONG_PTR>(Handle), 0))
+        {
             return false;
+        }
         Callbacks[Handle] = std::move(Callback);
         Masks[Handle] = Mask;
         return true;
@@ -41,19 +43,24 @@ namespace Helianthus::Network::Asio
 
     int ReactorIocp::PollOnce(int TimeoutMs)
     {
-        DWORD bytes = 0; ULONG_PTR key = 0; LPOVERLAPPED ov = nullptr;
-        BOOL ok = GetQueuedCompletionStatus(IocpHandle, &bytes, &key, &ov, TimeoutMs >= 0 ? static_cast<DWORD>(TimeoutMs) : INFINITE);
-        if (!ok && ov == nullptr) return 0; // timeout or failure without event
-        auto it = Callbacks.find(static_cast<int>(key));
-        if (it != Callbacks.end())
+        DWORD Bytes = 0; 
+        ULONG_PTR Key = 0; 
+        LPOVERLAPPED OverlappedPtr = nullptr;
+        bool Ok = GetQueuedCompletionStatus(IocpHandle, &Bytes, &Key, &OverlappedPtr, TimeoutMs >= 0 ? static_cast<DWORD>(TimeoutMs) : INFINITE);
+        if (!Ok && OverlappedPtr == nullptr) 
+        {
+            return 0; // timeout or failure without event
+        }
+        auto It = Callbacks.find(static_cast<Fd>(Key));
+        if (It != Callbacks.end())
         {
             // 简化：IOCP 模型下具体事件类型由上层确定，这里统一回调 Read|Write
-            it->second(EventMask::Read | EventMask::Write);
+            It->second(EventMask::Read | EventMask::Write);
             return 1;
         }
         return 0;
     }
-}
+} // namespace Helianthus::Network::Asio
 
 #endif // _WIN32
 

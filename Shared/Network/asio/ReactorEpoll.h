@@ -23,7 +23,7 @@ namespace Helianthus::Network::Asio
         int EpollFd;
         std::unordered_map<Fd, IoCallback> Callbacks;
     };
-}
+} // namespace Helianthus::Network::Asio
 
 #endif
 

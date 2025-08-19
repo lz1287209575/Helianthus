@@ -1,7 +1,12 @@
 #include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/Reactor.h"
+#include "Shared/Network/Asio/Proactor.h"
+#include "Shared/Network/Asio/ProactorReactorAdapter.h"
 #ifndef _WIN32
 #include "Shared/Network/Asio/ReactorEpoll.h"
+#else
+#include "Shared/Network/Asio/ReactorIocp.h"
+#include "Shared/Network/Asio/ProactorIocp.h"
 #endif
 #include <queue>
 #include <mutex>
@@ -33,8 +38,10 @@ namespace Helianthus::Network::Asio
     {
 #ifndef _WIN32
         ReactorPtr = std::make_shared<ReactorEpoll>();
+        ProactorPtr = std::make_shared<ProactorReactorAdapter>(ReactorPtr);
 #else
-        ReactorPtr = nullptr; // TODO: Windows IOCP 实现
+        ReactorPtr = std::make_shared<ReactorIocp>();
+        ProactorPtr = std::make_shared<ProactorIocp>();
 #endif
     }
 
@@ -53,6 +60,9 @@ namespace Helianthus::Network::Asio
             }
 
             // 再轮询 IO
+            if (ProactorPtr) {
+                ProactorPtr->ProcessCompletions(10);
+            }
             if (ReactorPtr) {
                 ReactorPtr->PollOnce(10);
             }
@@ -75,6 +85,10 @@ namespace Helianthus::Network::Asio
     {
         return ReactorPtr;
     }
-}
 
+    std::shared_ptr<Proactor> IoContext::GetProactor() const
+    {
+        return ProactorPtr;
+    }
+} // namespace Helianthus::Network::Asio
 

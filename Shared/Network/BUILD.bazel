@@ -24,6 +24,8 @@ cc_library(
         "Asio/IoContext.h",
         "Asio/Reactor.h",
         "Asio/ReactorEpoll.h",
+        "Asio/ReactorIocp.h",
+        "Asio/ReactorKqueue.h",
         "Asio/AsyncUdpSocket.h",
         "Asio/AsyncTcpSocket.h",
         "Asio/AsyncTcpAcceptor.h",

@@ -5,13 +5,22 @@
 
 namespace Helianthus::Network::Asio
 {
-    static uint32_t ToNative(EventMask m)
+    static uint32_t ToNative(EventMask Mask)
     {
-        uint32_t ev = 0;
-        if ((static_cast<uint32_t>(m) & static_cast<uint32_t>(EventMask::Read)) != 0) ev |= EPOLLIN;
-        if ((static_cast<uint32_t>(m) & static_cast<uint32_t>(EventMask::Write)) != 0) ev |= EPOLLOUT;
-        if ((static_cast<uint32_t>(m) & static_cast<uint32_t>(EventMask::Error)) != 0) ev |= EPOLLERR;
-        return ev;
+        uint32_t Native = 0;
+        if ((static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Read)) != 0) 
+        {   
+            Native |= EPOLLIN;
+        }
+        if ((static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Write)) != 0) 
+        {
+            Native |= EPOLLOUT;
+        }
+        if ((static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Error)) != 0) 
+        {
+            Native |= EPOLLERR;
+        }
+        return Native;
     }
 
     ReactorEpoll::ReactorEpoll()
@@ -22,25 +31,31 @@ namespace Helianthus::Network::Asio
 
     ReactorEpoll::~ReactorEpoll()
     {
-        if (EpollFd >= 0) close(EpollFd);
+        if (EpollFd >= 0) 
+        {
+            close(EpollFd);
+        }
     }
 
     bool ReactorEpoll::Add(Fd Handle, EventMask Mask, IoCallback Callback)
     {
-        epoll_event ev{};
-        ev.events = ToNative(Mask);
-        ev.data.fd = Handle;
-        if (epoll_ctl(EpollFd, EPOLL_CTL_ADD, Handle, &ev) != 0) return false;
+        epoll_event Event{};
+        Event.events = ToNative(Mask);
+        Event.data.fd = Handle;
+        if (epoll_ctl(EpollFd, EPOLL_CTL_ADD, Handle, &Event) != 0) 
+        {
+            return false;
+        }
         Callbacks[Handle] = std::move(Callback);
         return true;
     }
 
     bool ReactorEpoll::Mod(Fd Handle, EventMask Mask)
     {
-        epoll_event ev{};
-        ev.events = ToNative(Mask);
-        ev.data.fd = Handle;
-        return epoll_ctl(EpollFd, EPOLL_CTL_MOD, Handle, &ev) == 0;
+        epoll_event Event{};
+        Event.events = ToNative(Mask);
+        Event.data.fd = Handle;
+        return epoll_ctl(EpollFd, EPOLL_CTL_MOD, Handle, &Event) == 0;
     }
 
     bool ReactorEpoll::Del(Fd Handle)
@@ -52,24 +67,35 @@ namespace Helianthus::Network::Asio
     int ReactorEpoll::PollOnce(int TimeoutMs)
     {
         constexpr int MaxEvents = 64;
-        epoll_event events[MaxEvents];
-        int n = epoll_wait(EpollFd, events, MaxEvents, TimeoutMs);
-        if (n <= 0) return n;
-        for (int i = 0; i < n; ++i)
+        epoll_event Events[MaxEvents];
+        int Count = epoll_wait(EpollFd, Events, MaxEvents, TimeoutMs);
+        if (Count <= 0) return Count;
+        for (int I = 0; I < Count; ++I)
         {
-            auto fd = events[i].data.fd;
-            auto it = Callbacks.find(fd);
-            if (it == Callbacks.end()) continue;
+            auto Fd = Events[I].data.fd;
+            auto It = Callbacks.find(Fd);
+            if (It == Callbacks.end()) 
+            {
+                continue;
+            }
             EventMask mask = EventMask::None;
-            if (events[i].events & (EPOLLIN | EPOLLPRI)) mask = mask | EventMask::Read;
-            if (events[i].events & EPOLLOUT) mask = mask | EventMask::Write;
-            if (events[i].events & (EPOLLERR | EPOLLHUP)) mask = mask | EventMask::Error;
-            it->second(mask);
+            if (Events[I].events & (EPOLLIN | EPOLLPRI))
+            {
+                mask = mask | EventMask::Read;
+            }
+            if (Events[I].events & EPOLLOUT)
+            {
+                mask = mask | EventMask::Write;
+            }
+            if (Events[I].events & (EPOLLERR | EPOLLHUP))
+            { 
+                mask = mask | EventMask::Error;
+            }
+            It->second(mask);
         }
-        return n;
+        return Count;
     }
-}
 
-#endif
+} // namespace Helianthus::Network::Asio
 
-
+#endif // _WIN32

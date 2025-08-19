@@ -23,7 +23,7 @@ cc_library(
             "/O2",
         ],
         "//conditions:default": [
-            "-std=c++17",
+            "-std=c++20",
             "-Wall",
             
             "-O2",

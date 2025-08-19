@@ -4,6 +4,8 @@
 
 #include "Shared/Network/Asio/Reactor.h"
 #include <unordered_map>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 
 namespace Helianthus::Network::Asio
@@ -24,7 +26,7 @@ namespace Helianthus::Network::Asio
         std::unordered_map<Fd, IoCallback> Callbacks;
         std::unordered_map<Fd, EventMask> Masks;
     };
-}
+} // namespace Helianthus::Network::Asio
 
 #endif // _WIN32
 

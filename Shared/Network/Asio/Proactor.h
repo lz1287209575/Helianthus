@@ -21,7 +21,8 @@ namespace Helianthus::Network::Asio
         virtual void AsyncWrite(Fd Handle, const char* Data, size_t Size, CompletionHandler Handler) = 0;
         // 处理完成队列（Windows IOCP 使用；Reactor 适配为 no-op）
         virtual void ProcessCompletions(int TimeoutMs) {}
+        // 取消指定句柄上的所有挂起 I/O（Windows IOCP 使用）
+        virtual void Cancel(Fd /*Handle*/) {}
     };
-}
-
+} // namespace Helianthus::Network::Asio
 

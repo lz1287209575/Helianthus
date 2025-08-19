@@ -14,21 +14,38 @@ namespace Helianthus::Network::Asio
 
     Network::NetworkError AsyncTcpAcceptor::Bind(const Network::NetworkAddress& Address, uint32_t Backlog)
     {
-        auto err = Socket.Bind(Address);
-        if (err != Network::NetworkError::NONE) return err;
+        auto Err = Socket.Bind(Address);
+        if (Err != Network::NetworkError::NONE) 
+        {
+            return Err;
+        }
         return Socket.Listen(Backlog);
     }
 
     void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
     {
         PendingAccept = std::move(Handler);
-        if (!ReactorPtr) { if (PendingAccept) PendingAccept(Network::NetworkError::NOT_INITIALIZED); return; }
-        const int fd = static_cast<int>(Socket.GetNativeHandle());
-        ReactorPtr->Add(fd, EventMask::Read, [this](EventMask ev){
-            if ((static_cast<uint32_t>(ev) & static_cast<uint32_t>(EventMask::Read)) == 0) return;
-            auto res = Socket.Accept();
-            auto cb = PendingAccept; PendingAccept = nullptr;
-            if (cb) cb(res);
+        if (!ReactorPtr) 
+        {
+            if (PendingAccept) 
+            {
+                PendingAccept(Network::NetworkError::NOT_INITIALIZED);
+            }
+            return;
+        }
+        const int FdValue = static_cast<int>(Socket.GetNativeHandle());
+        ReactorPtr->Add(FdValue, EventMask::Read, [this](EventMask Event){
+            if ((static_cast<uint32_t>(Event) & static_cast<uint32_t>(EventMask::Read)) == 0) 
+            {
+                return;
+            }
+            auto Result = Socket.Accept();
+            auto Callback = PendingAccept; 
+            PendingAccept = nullptr;
+            if (Callback) 
+            {
+                Callback(Result);
+            }
         });
     }
 
@@ -37,5 +54,3 @@ namespace Helianthus::Network::Asio
         return Socket;
     }
 }
-
-

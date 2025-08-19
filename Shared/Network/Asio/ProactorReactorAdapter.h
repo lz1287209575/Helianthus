@@ -10,13 +10,13 @@ namespace Helianthus::Network::Asio
     class ProactorReactorAdapter : public Proactor
     {
     public:
-        explicit ProactorReactorAdapter(std::shared_ptr<Reactor> R);
+        explicit ProactorReactorAdapter(std::shared_ptr<Reactor> ReactorIn);
 
         void AsyncRead(Fd Handle, char* Buffer, size_t BufferSize, CompletionHandler Handler) override;
         void AsyncWrite(Fd Handle, const char* Data, size_t Size, CompletionHandler Handler) override;
 
     private:
-        std::shared_ptr<Reactor> R;
+        std::shared_ptr<Reactor> ReactorPtr;
     };
 }
 

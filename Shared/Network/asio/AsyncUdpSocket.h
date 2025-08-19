@@ -29,6 +29,5 @@ namespace Helianthus::Network::Asio
         Network::Sockets::UdpSocket Socket;
         ReceiveHandler PendingRecv;
     };
-}
-
+} // namespace Helianthus::Network::Asio
 
