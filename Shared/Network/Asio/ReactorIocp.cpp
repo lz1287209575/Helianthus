@@ -1,6 +1,7 @@
 #ifdef _WIN32
 
 #include "Shared/Network/Asio/ReactorIocp.h"
+#include "Shared/Network/Asio/ErrorMapping.h"
 
 namespace Helianthus::Network::Asio
 {
@@ -9,6 +10,11 @@ namespace Helianthus::Network::Asio
         , Callbacks()
         , Masks()
     {
+        if (!IocpHandle)
+        {
+            auto Error = ErrorMapping::FromWsaError(static_cast<int>(GetLastError()));
+            (void)Error; // TODO: 日志
+        }
     }
 
     ReactorIocp::~ReactorIocp()
@@ -21,6 +27,8 @@ namespace Helianthus::Network::Asio
         HANDLE NativeHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(Handle));
         if (!CreateIoCompletionPort(NativeHandle, IocpHandle, static_cast<ULONG_PTR>(Handle), 0))
         {
+            auto Error = ErrorMapping::FromWsaError(static_cast<int>(GetLastError()));
+            (void)Error; // TODO: 日志
             return false;
         }
         Callbacks[Handle] = std::move(Callback);
@@ -49,7 +57,14 @@ namespace Helianthus::Network::Asio
         bool Ok = GetQueuedCompletionStatus(IocpHandle, &Bytes, &Key, &OverlappedPtr, TimeoutMs >= 0 ? static_cast<DWORD>(TimeoutMs) : INFINITE);
         if (!Ok && OverlappedPtr == nullptr) 
         {
-            return 0; // timeout or failure without event
+            DWORD Err = GetLastError();
+            if (Err == WAIT_TIMEOUT)
+            {
+                return 0; // 超时
+            }
+            auto Error = ErrorMapping::FromWsaError(static_cast<int>(Err));
+            (void)Error; // TODO: 日志
+            return -1; // 真正的失败
         }
         auto It = Callbacks.find(static_cast<Fd>(Key));
         if (It != Callbacks.end())

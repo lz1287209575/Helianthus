@@ -1,6 +1,7 @@
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 
 #include "Shared/Network/Asio/ReactorKqueue.h"
+#include "Shared/Network/Asio/ErrorMapping.h"
 #include <unistd.h>
 
 namespace Helianthus::Network::Asio
@@ -16,6 +17,11 @@ namespace Helianthus::Network::Asio
         , Callbacks()
         , Masks()
     {
+        if (KqFd < 0)
+        {
+            auto Error = ErrorMapping::FromErrno(errno);
+            (void)Error; // TODO: 接入日志系统输出 ErrorMapping::GetErrorString(Error)
+        }
     }
 
     ReactorKqueue::~ReactorKqueue()
@@ -39,7 +45,14 @@ namespace Helianthus::Network::Asio
         {
             EV_SET(&Changes[n++], Handle, EVFILT_WRITE, EV_ADD, 0, 0, nullptr);
         }
-        return kevent(KqFd, Changes, n, nullptr, 0, nullptr) == 0;
+        int rc = kevent(KqFd, Changes, n, nullptr, 0, nullptr);
+        if (rc != 0)
+        {
+            auto Error = ErrorMapping::FromErrno(errno);
+            (void)Error; // TODO: 日志
+            return false;
+        }
+        return true;
     }
 
     bool ReactorKqueue::Mod(Fd Handle, EventMask Mask)
@@ -49,7 +62,14 @@ namespace Helianthus::Network::Asio
         struct kevent Changes[2]; int n = 0;
         EV_SET(&Changes[n++], Handle, EVFILT_READ,  ( (static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Read))  ? EV_ADD : EV_DELETE ), 0, 0, nullptr);
         EV_SET(&Changes[n++], Handle, EVFILT_WRITE, ( (static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Write)) ? EV_ADD : EV_DELETE ), 0, 0, nullptr);
-        return kevent(KqFd, Changes, n, nullptr, 0, &ts) == 0;
+        int rc = kevent(KqFd, Changes, n, nullptr, 0, &ts);
+        if (rc != 0)
+        {
+            auto Error = ErrorMapping::FromErrno(errno);
+            (void)Error; // TODO: 日志
+            return false;
+        }
+        return true;
     }
 
     bool ReactorKqueue::Del(Fd Handle)
@@ -60,7 +80,14 @@ namespace Helianthus::Network::Asio
         struct kevent Changes[2]; int n = 0;
         EV_SET(&Changes[n++], Handle, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
         EV_SET(&Changes[n++], Handle, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-        return kevent(KqFd, Changes, n, nullptr, 0, &ts) == 0;
+        int rc = kevent(KqFd, Changes, n, nullptr, 0, &ts);
+        if (rc != 0)
+        {
+            auto Error = ErrorMapping::FromErrno(errno);
+            (void)Error; // TODO: 日志
+            return false;
+        }
+        return true;
     }
 
     int ReactorKqueue::PollOnce(int TimeoutMs)
@@ -75,7 +102,18 @@ namespace Helianthus::Network::Asio
         int n = kevent(KqFd, nullptr, 0, EvList, 64, &ts);
         if (n <= 0) 
         {
-            return n;
+            if (n == 0)
+            {
+                return 0; // 超时
+            }
+            // n < 0
+            if (errno == EINTR)
+            {
+                return 0; // 被信号中断
+            }
+            auto Error = ErrorMapping::FromErrno(errno);
+            (void)Error; // TODO: 日志
+            return -1;
         }
         for (int i = 0; i < n; ++i)
         {
