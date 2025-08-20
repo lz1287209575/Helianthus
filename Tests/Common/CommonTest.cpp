@@ -131,7 +131,8 @@ TEST_F(CommonTest, ServiceInfoParameterizedConstructor)
 TEST_F(CommonTest, TimestampOperations)
 {
     auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                   std::chrono::system_clock::now().time_since_epoch())
+                   .count();
     EXPECT_GT(Now, 0);
 
     // Test timestamp comparison
@@ -215,7 +216,8 @@ TEST_F(CommonTest, ThreadSafety)
                 for (int j = 0; j < 100; ++j)
                 {
                     TimestampMs Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
+                                                std::chrono::system_clock::now().time_since_epoch())
+                                                .count();
                     PlayerId Player = static_cast<PlayerId>(j);
                     ServerId Server = static_cast<ServerId>(j);
 

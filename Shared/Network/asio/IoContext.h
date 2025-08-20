@@ -1,50 +1,65 @@
 #pragma once
 
-#include <functional>
 #include <atomic>
+#include <functional>
 #include <memory>
-#include <vector>
-#include <queue>
 #include <mutex>
-#include <chrono>
-#include "Shared/Network/Asio/Proactor.h"
+#include <queue>
+#include <vector>
 
 namespace Helianthus::Network::Asio
 {
-    class Reactor;
+class Reactor;
+class Proactor;
 
-    // Minimal io_context-like executor
-    class IoContext
+// Minimal io_context-like executor
+class IoContext
+{
+public:
+    IoContext();
+    ~IoContext();
+
+    // Run event loop until stopped
+    void Run();
+    // Stop loop
+    void Stop();
+    // Post a task to be executed in loop
+    void Post(std::function<void()> Task);
+    // Post a task with delay (milliseconds)
+    void PostDelayed(std::function<void()> Task, int DelayMs);
+
+    std::shared_ptr<Reactor> GetReactor() const;
+    std::shared_ptr<Proactor> GetProactor() const;
+
+private:
+    void InitializeWakeupFd();
+    void CleanupWakeupFd();
+    void ProcessTasks();
+    void ProcessDelayedTasks();
+
+    std::atomic<bool> Running;
+    std::shared_ptr<Reactor> ReactorPtr;
+    std::shared_ptr<Proactor> ProactorPtr;
+
+    // 任务队列
+    std::queue<std::function<void()>> TaskQueue;
+    mutable std::mutex TaskQueueMutex;
+
+    // 延迟任务队列
+    struct DelayedTask
     {
-    public:
-        IoContext();
-        ~IoContext();
+        std::function<void()> Task;
+        int64_t ExecuteTime;  // 毫秒时间戳
 
-        // Run event loop until stopped
-        void Run();
-        // Stop loop
-        void Stop();
-        // Post a task to be executed in loop
-        void Post(std::function<void()> Task);
-        // Post a delayed task executed after DelayMs
-        void PostDelayed(std::function<void()> Task, int DelayMs);
-
-        std::shared_ptr<Reactor> GetReactor() const;
-        std::shared_ptr<Proactor> GetProactor() const;
-
-    private:
-        std::atomic<bool> Running;
-        std::shared_ptr<Reactor> ReactorPtr;
-        std::shared_ptr<Proactor> ProactorPtr;
-        // Task queue and timers
-        std::mutex QueueMutex;
-        std::queue<std::function<void()>> TaskQueue;
-        struct ScheduledTask
+        DelayedTask(std::function<void()> TaskIn, int64_t ExecuteTimeIn)
+            : Task(std::move(TaskIn)), ExecuteTime(ExecuteTimeIn)
         {
-            std::chrono::steady_clock::time_point Due;
-            std::function<void()> Task;
-        };
-        std::mutex TimerMutex;
-        std::vector<ScheduledTask> Timers;
+        }
     };
-} // namespace Helianthus::Network::Asio
+    std::vector<DelayedTask> DelayedTaskQueue;
+    mutable std::mutex DelayedTaskQueueMutex;
+
+    // 跨线程唤醒机制
+    int WakeupFd = -1;
+};
+}  // namespace Helianthus::Network::Asio

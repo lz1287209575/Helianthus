@@ -1,126 +1,250 @@
 #include "Shared/Network/Asio/IoContext.h"
-#include "Shared/Network/Asio/Reactor.h"
+
 #include "Shared/Network/Asio/Proactor.h"
 #include "Shared/Network/Asio/ProactorReactorAdapter.h"
-#ifndef _WIN32
-#include "Shared/Network/Asio/ReactorEpoll.h"
+#include "Shared/Network/Asio/Reactor.h"
+#if defined(_WIN32)
+    #include "Shared/Network/Asio/ProactorIocp.h"
+    #include "Shared/Network/Asio/ReactorIocp.h"
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    #include "Shared/Network/Asio/ReactorKqueue.h"
 #else
-#include "Shared/Network/Asio/ReactorIocp.h"
-#include "Shared/Network/Asio/ProactorIocp.h"
+    #include "Shared/Network/Asio/ReactorEpoll.h"
 #endif
-#include <queue>
-#include <mutex>
+
 #include <algorithm>
+#include <chrono>
+#include <vector>
+#if !defined(_WIN32)
+    #include <errno.h>
+    #include <fcntl.h>
+    #include <sys/eventfd.h>
+    #include <unistd.h>
+#endif
 
 namespace Helianthus::Network::Asio
 {
-
-    IoContext::IoContext()
-        : Running(false)
+namespace
+{
+class TaskQueue
+{
+public:
+    void Push(std::function<void()> fn)
     {
-#ifndef _WIN32
-        ReactorPtr = std::make_shared<ReactorEpoll>();
-        ProactorPtr = std::make_shared<ProactorReactorAdapter>(ReactorPtr);
-#else
-        ReactorPtr = std::make_shared<ReactorIocp>();
-        ProactorPtr = std::make_shared<ProactorIocp>();
-#endif
+        std::lock_guard<std::mutex> l(m);
+        q.push(std::move(fn));
+    }
+    bool Pop(std::function<void()>& fn)
+    {
+        std::lock_guard<std::mutex> l(m);
+        if (q.empty())
+            return false;
+        fn = std::move(q.front());
+        q.pop();
+        return true;
     }
 
-    IoContext::~IoContext() = default;
+private:
+    std::queue<std::function<void()>> q;
+    std::mutex m;
+};
+}  // namespace
 
-    void IoContext::Run()
+IoContext::IoContext() : Running(false), WakeupFd(-1)
+{
+#if defined(_WIN32)
+    ReactorPtr = std::make_shared<ReactorIocp>();
+    ProactorPtr = std::make_shared<ProactorIocp>();
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    ReactorPtr = std::make_shared<ReactorKqueue>();
+    ProactorPtr = std::make_shared<ProactorReactorAdapter>(ReactorPtr);
+#else
+    ReactorPtr = std::make_shared<ReactorEpoll>();
+    ProactorPtr = std::make_shared<ProactorReactorAdapter>(ReactorPtr);
+#endif
+
+    InitializeWakeupFd();
+}
+
+IoContext::~IoContext()
+{
+    CleanupWakeupFd();
+}
+
+void IoContext::InitializeWakeupFd()
+{
+#ifndef _WIN32
+    // 使用 eventfd 创建唤醒文件描述符
+    WakeupFd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (WakeupFd >= 0 && ReactorPtr)
     {
-        Running = true;
-        while (Running)
-        {
-            // 先执行队列任务
-            {
-                std::queue<std::function<void()>> Local;
-                {
-                    std::lock_guard<std::mutex> L(QueueMutex);
-                    std::swap(Local, TaskQueue);
-                }
-                while (!Local.empty()) 
-                {
-                    auto Task = std::move(Local.front()); 
-                    Local.pop(); 
-                    if (Task) 
-                    {
-                        Task();
-                    }
-                }
-            }
-
-            // 执行到期的定时任务
-            {
-                std::vector<ScheduledTask> DueList;
-                auto Now = std::chrono::steady_clock::now();
-                {
-                    std::lock_guard<std::mutex> L(TimerMutex);
-                    auto It = std::remove_if(Timers.begin(), Timers.end(), [&](const ScheduledTask& T){
-                        if (T.Due <= Now) 
+        // 将唤醒文件描述符添加到 Reactor
+        ReactorPtr->Add(static_cast<Fd>(WakeupFd),
+                        EventMask::Read,
+                        [this](EventMask)
                         {
-                            DueList.push_back(T); 
-                            return true; 
-                        } 
-                        return false; 
-                    });
-                    if (It != Timers.end()) 
-                    {
-                        Timers.erase(It, Timers.end());
-                    }
-                }
-                for (auto& T : DueList) 
-                {
-                    if (T.Task) 
-                    {
-                        T.Task();
-                    }
-                }
-            }
+                            // 读取 eventfd 来清除事件
+                            uint64_t value;
+                            while (read(WakeupFd, &value, sizeof(value)) > 0)
+                            {
+                                // 继续读取直到没有更多数据
+                            }
+                        });
+    }
+#endif
+}
 
-            // 再轮询 IO
-            if (ProactorPtr) 
-            {
-                ProactorPtr->ProcessCompletions(10);
-            }
+void IoContext::CleanupWakeupFd()
+{
+#if !defined(_WIN32)
+    if (WakeupFd >= 0)
+    {
+        if (ReactorPtr)
+        {
+            ReactorPtr->Del(static_cast<Fd>(WakeupFd));
+        }
+        close(WakeupFd);
+        WakeupFd = -1;
+    }
+#endif
+}
 
-            if (ReactorPtr) 
-            {
-                ReactorPtr->PollOnce(10);
-            }
+void IoContext::ProcessTasks()
+{
+    std::vector<std::function<void()>> tasks;
+    {
+        std::lock_guard<std::mutex> lock(TaskQueueMutex);
+        while (!TaskQueue.empty())
+        {
+            tasks.push_back(std::move(TaskQueue.front()));
+            TaskQueue.pop();
         }
     }
 
-    void IoContext::Stop()
+    for (auto& task : tasks)
     {
-        Running = false;
+        task();
+    }
+}
+
+void IoContext::ProcessDelayedTasks()
+{
+    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+                   .count();
+
+    std::vector<std::function<void()>> readyTasks;
+    {
+        std::lock_guard<std::mutex> lock(DelayedTaskQueueMutex);
+
+        // 移除已到期的任务
+        DelayedTaskQueue.erase(std::remove_if(DelayedTaskQueue.begin(),
+                                              DelayedTaskQueue.end(),
+                                              [&](const DelayedTask& task)
+                                              {
+                                                  if (task.ExecuteTime <= now)
+                                                  {
+                                                      readyTasks.push_back(task.Task);
+                                                      return true;
+                                                  }
+                                                  return false;
+                                              }),
+                               DelayedTaskQueue.end());
     }
 
-    void IoContext::Post(std::function<void()> Task)
+    // 执行到期的任务
+    for (auto& task : readyTasks)
     {
-        std::lock_guard<std::mutex> L(QueueMutex);
+        task();
+    }
+}
+
+void IoContext::Run()
+{
+    Running = true;
+    while (Running)
+    {
+        // 处理普通任务
+        ProcessTasks();
+
+        // 处理延迟任务
+        ProcessDelayedTasks();
+
+        // 计算下次延迟任务的时间
+        int64_t nextDelay = -1;
+        {
+            std::lock_guard<std::mutex> lock(DelayedTaskQueueMutex);
+            if (!DelayedTaskQueue.empty())
+            {
+                auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now().time_since_epoch())
+                               .count();
+                nextDelay = std::max<int64_t>(0, DelayedTaskQueue.front().ExecuteTime - now);
+            }
+        }
+
+        // 轮询 IO/完成队列
+        int timeout = (nextDelay >= 0) ? static_cast<int>(std::min<int64_t>(nextDelay, 10)) : 10;
+
+        if (ProactorPtr)
+        {
+            ProactorPtr->ProcessCompletions(timeout);
+        }
+        if (ReactorPtr)
+        {
+            ReactorPtr->PollOnce(timeout);
+        }
+    }
+}
+
+void IoContext::Stop()
+{
+    Running = false;
+}
+
+void IoContext::Post(std::function<void()> Task)
+{
+    {
+        std::lock_guard<std::mutex> lock(TaskQueueMutex);
         TaskQueue.push(std::move(Task));
     }
 
-    std::shared_ptr<Reactor> IoContext::GetReactor() const
+    // 唤醒事件循环（非 Windows 使用 eventfd）
+#if !defined(_WIN32)
+    if (WakeupFd >= 0)
     {
-        return ReactorPtr;
+        uint64_t value = 1;
+        write(WakeupFd, &value, sizeof(value));
     }
+#endif
+}
 
-    std::shared_ptr<Proactor> IoContext::GetProactor() const
+void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
+{
+    auto executeTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now().time_since_epoch())
+                           .count() +
+                       DelayMs;
+
     {
-        return ProactorPtr;
-    }
+        std::lock_guard<std::mutex> lock(DelayedTaskQueueMutex);
+        DelayedTaskQueue.emplace_back(std::move(Task), executeTime);
 
-    void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
-    {
-        ScheduledTask T;
-        T.Due = std::chrono::steady_clock::now() + std::chrono::milliseconds(DelayMs);
-        T.Task = std::move(Task);
-        std::lock_guard<std::mutex> L(TimerMutex);
-        Timers.push_back(T);
+        // 按执行时间排序
+        std::sort(DelayedTaskQueue.begin(),
+                  DelayedTaskQueue.end(),
+                  [](const DelayedTask& a, const DelayedTask& b)
+                  { return a.ExecuteTime < b.ExecuteTime; });
     }
-} // namespace Helianthus::Network::Asio
+}
 
+std::shared_ptr<Reactor> IoContext::GetReactor() const
+{
+    return ReactorPtr;
+}
+
+std::shared_ptr<Proactor> IoContext::GetProactor() const
+{
+    return ProactorPtr;
+}
+}  // namespace Helianthus::Network::Asio

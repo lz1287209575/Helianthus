@@ -2,59 +2,59 @@
 
 // Helianthus Game Server Global Configuration
 #ifndef HELIANTHUS_CONFIG_H
-#define HELIANTHUS_CONFIG_H
+    #define HELIANTHUS_CONFIG_H
 
-// Version Information
-#define HELIANTHUS_VERSION_MAJOR 1
-#define HELIANTHUS_VERSION_MINOR 0
-#define HELIANTHUS_VERSION_PATCH 0
+    // Version Information
+    #define HELIANTHUS_VERSION_MAJOR 1
+    #define HELIANTHUS_VERSION_MINOR 0
+    #define HELIANTHUS_VERSION_PATCH 0
 
-// Build Configuration
-#ifdef _DEBUG
-    #define HELIANTHUS_DEBUG 1
-#else
-    #define HELIANTHUS_DEBUG 0
-#endif
+    // Build Configuration
+    #ifdef _DEBUG
+        #define HELIANTHUS_DEBUG 1
+    #else
+        #define HELIANTHUS_DEBUG 0
+    #endif
 
-// Scripting Engine Configuration (controlled by Bazel defines)
-#ifndef HELIANTHUS_ENABLE_LUA
-    #define HELIANTHUS_ENABLE_LUA 0
-#endif
+    // Scripting Engine Configuration (controlled by Bazel defines)
+    #ifndef HELIANTHUS_ENABLE_LUA
+        #define HELIANTHUS_ENABLE_LUA 0
+    #endif
 
-#ifndef HELIANTHUS_ENABLE_PYTHON
-    #define HELIANTHUS_ENABLE_PYTHON 0
-#endif
+    #ifndef HELIANTHUS_ENABLE_PYTHON
+        #define HELIANTHUS_ENABLE_PYTHON 0
+    #endif
 
-#ifndef HELIANTHUS_ENABLE_JS
-    #define HELIANTHUS_ENABLE_JS 0
-#endif
+    #ifndef HELIANTHUS_ENABLE_JS
+        #define HELIANTHUS_ENABLE_JS 0
+    #endif
 
-#ifndef HELIANTHUS_ENABLE_DOTNET
-    #define HELIANTHUS_ENABLE_DOTNET 0
-#endif
+    #ifndef HELIANTHUS_ENABLE_DOTNET
+        #define HELIANTHUS_ENABLE_DOTNET 0
+    #endif
 
-// Network Configuration
-#define HELIANTHUS_MAX_CONNECTIONS 10000
-#define HELIANTHUS_DEFAULT_BUFFER_SIZE 8192
-#define HELIANTHUS_NETWORK_TIMEOUT_MS 30000
+    // Network Configuration
+    #define HELIANTHUS_MAX_CONNECTIONS 10000
+    #define HELIANTHUS_DEFAULT_BUFFER_SIZE 8192
+    #define HELIANTHUS_NETWORK_TIMEOUT_MS 30000
 
-// Threading Configuration
-#define HELIANTHUS_DEFAULT_THREAD_POOL_SIZE 8
+    // Threading Configuration
+    #define HELIANTHUS_DEFAULT_THREAD_POOL_SIZE 8
 
-// Memory Configuration  
-#define HELIANTHUS_DEFAULT_MEMORY_POOL_SIZE (64 * 1024 * 1024) // 64MB
+    // Memory Configuration
+    #define HELIANTHUS_DEFAULT_MEMORY_POOL_SIZE (64 * 1024 * 1024)  // 64MB
 
-// Logging Configuration
-#define HELIANTHUS_ENABLE_LOGGING 1
-#define HELIANTHUS_LOG_LEVEL_DEBUG 0
-#define HELIANTHUS_LOG_LEVEL_INFO 1
-#define HELIANTHUS_LOG_LEVEL_WARN 2
-#define HELIANTHUS_LOG_LEVEL_ERROR 3
+    // Logging Configuration
+    #define HELIANTHUS_ENABLE_LOGGING 1
+    #define HELIANTHUS_LOG_LEVEL_DEBUG 0
+    #define HELIANTHUS_LOG_LEVEL_INFO 1
+    #define HELIANTHUS_LOG_LEVEL_WARN 2
+    #define HELIANTHUS_LOG_LEVEL_ERROR 3
 
-#if HELIANTHUS_DEBUG
-    #define HELIANTHUS_DEFAULT_LOG_LEVEL HELIANTHUS_LOG_LEVEL_DEBUG
-#else
-    #define HELIANTHUS_DEFAULT_LOG_LEVEL HELIANTHUS_LOG_LEVEL_INFO
-#endif
+    #if HELIANTHUS_DEBUG
+        #define HELIANTHUS_DEFAULT_LOG_LEVEL HELIANTHUS_LOG_LEVEL_DEBUG
+    #else
+        #define HELIANTHUS_DEFAULT_LOG_LEVEL HELIANTHUS_LOG_LEVEL_INFO
+    #endif
 
-#endif // HELIANTHUS_CONFIG_H
+#endif  // HELIANTHUS_CONFIG_H

@@ -1,9 +1,10 @@
-#include <gtest/gtest.h>
+#include <string>
+#include <vector>
+
+#include "Common/Types.h"
 #include "Message/Message.h"
 #include "Message/MessageTypes.h"
-#include "Common/Types.h"
-#include <vector>
-#include <string>
+#include <gtest/gtest.h>
 
 using namespace Helianthus::Message;
 
@@ -24,15 +25,15 @@ protected:
 TEST_F(MessageComprehensiveTest, DefaultConstructor)
 {
     Message Msg;
-    
-    EXPECT_NE(Msg.GetMessageId(), InvalidMessageId); // Message auto-generates ID
+
+    EXPECT_NE(Msg.GetMessageId(), InvalidMessageId);  // Message auto-generates ID
     EXPECT_EQ(Msg.GetMessageType(), MessageType::CUSTOM_MESSAGE_START);
     EXPECT_EQ(Msg.GetPriority(), MessagePriority::NORMAL);
     EXPECT_EQ(Msg.GetDeliveryMode(), DeliveryMode::FIRE_AND_FORGET);
     EXPECT_EQ(Msg.GetSenderId(), Helianthus::Common::InvalidServerId);
     EXPECT_EQ(Msg.GetReceiverId(), Helianthus::Common::InvalidServerId);
     EXPECT_EQ(Msg.GetTopicId(), InvalidTopicId);
-    EXPECT_GT(Msg.GetTimestamp(), 0); // Message auto-generates timestamp
+    EXPECT_GT(Msg.GetTimestamp(), 0);  // Message auto-generates timestamp
     EXPECT_EQ(Msg.GetSequenceNumber(), 0);
     EXPECT_EQ(Msg.GetPayloadSize(), 0);
     EXPECT_FALSE(Msg.HasPayload());
@@ -41,7 +42,7 @@ TEST_F(MessageComprehensiveTest, DefaultConstructor)
 TEST_F(MessageComprehensiveTest, ParameterizedConstructor)
 {
     Message Msg(MessageType::GAME_PLAYER_JOIN);
-    
+
     EXPECT_NE(Msg.GetMessageId(), InvalidMessageId);
     EXPECT_EQ(Msg.GetMessageType(), MessageType::GAME_PLAYER_JOIN);
     EXPECT_EQ(Msg.GetPriority(), MessagePriority::NORMAL);
@@ -55,7 +56,7 @@ TEST_F(MessageComprehensiveTest, ConstructorWithPayload)
 {
     std::string TestPayload = "Test payload data";
     Message Msg(MessageType::GAME_STATE_UPDATE, TestPayload);
-    
+
     EXPECT_EQ(Msg.GetMessageType(), MessageType::GAME_STATE_UPDATE);
     EXPECT_EQ(Msg.GetPayloadSize(), TestPayload.size());
     EXPECT_TRUE(Msg.HasPayload());
@@ -66,7 +67,7 @@ TEST_F(MessageComprehensiveTest, ConstructorWithBinaryPayload)
 {
     std::vector<char> BinaryPayload = {0x01, 0x02, 0x03, 0x04, 0x05};
     Message Msg(MessageType::NETWORK_DATA_RECEIVED, BinaryPayload);
-    
+
     EXPECT_EQ(Msg.GetMessageType(), MessageType::NETWORK_DATA_RECEIVED);
     EXPECT_EQ(Msg.GetPayloadSize(), BinaryPayload.size());
     EXPECT_TRUE(Msg.HasPayload());
@@ -80,9 +81,9 @@ TEST_F(MessageComprehensiveTest, CopyConstructor)
     Original.SetSenderId(123);
     Original.SetReceiverId(456);
     Original.SetPriority(MessagePriority::HIGH);
-    
+
     Message Copy(Original);
-    
+
     EXPECT_EQ(Copy.GetMessageType(), Original.GetMessageType());
     EXPECT_EQ(Copy.GetPayload(), Original.GetPayload());
     EXPECT_EQ(Copy.GetSenderId(), Original.GetSenderId());
@@ -97,9 +98,9 @@ TEST_F(MessageComprehensiveTest, MoveConstructor)
     Original.SetPayload("Move test payload");
     auto OriginalId = Original.GetMessageId();
     auto OriginalPayload = Original.GetPayload();
-    
+
     Message Moved(std::move(Original));
-    
+
     EXPECT_EQ(Moved.GetMessageId(), OriginalId);
     EXPECT_EQ(Moved.GetPayload(), OriginalPayload);
     EXPECT_EQ(Moved.GetMessageType(), MessageType::SYSTEM_HEARTBEAT);
@@ -110,10 +111,10 @@ TEST_F(MessageComprehensiveTest, CopyAssignment)
     Message Original(MessageType::GAME_PLAYER_LEAVE);
     Original.SetPayload("Assignment test");
     Original.SetSenderId(789);
-    
+
     Message Assigned;
     Assigned = Original;
-    
+
     EXPECT_EQ(Assigned.GetMessageType(), Original.GetMessageType());
     EXPECT_EQ(Assigned.GetPayload(), Original.GetPayload());
     EXPECT_EQ(Assigned.GetSenderId(), Original.GetSenderId());
@@ -124,10 +125,10 @@ TEST_F(MessageComprehensiveTest, MoveAssignment)
     Message Original(MessageType::SERVICE_REGISTER);
     Original.SetPayload("Move assignment test");
     auto OriginalId = Original.GetMessageId();
-    
+
     Message Assigned;
     Assigned = std::move(Original);
-    
+
     EXPECT_EQ(Assigned.GetMessageId(), OriginalId);
     EXPECT_EQ(Assigned.GetMessageType(), MessageType::SERVICE_REGISTER);
 }
@@ -135,25 +136,23 @@ TEST_F(MessageComprehensiveTest, MoveAssignment)
 TEST_F(MessageComprehensiveTest, SetAndGetPayload)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
-    
+
     // Test string payload
     std::string StringPayload = "String payload test";
     Msg.SetPayload(StringPayload);
     EXPECT_EQ(Msg.GetPayloadSize(), StringPayload.size());
     EXPECT_TRUE(Msg.HasPayload());
     EXPECT_EQ(Msg.GetJsonPayload(), StringPayload);
-    
+
     // Test binary payload
-    std::vector<char> BinaryPayload = {
-        static_cast<char>(0xAA),
-        static_cast<char>(0xBB),
-        static_cast<char>(0xCC),
-        static_cast<char>(0xDD)
-    };
+    std::vector<char> BinaryPayload = {static_cast<char>(0xAA),
+                                       static_cast<char>(0xBB),
+                                       static_cast<char>(0xCC),
+                                       static_cast<char>(0xDD)};
     Msg.SetPayload(BinaryPayload);
     EXPECT_EQ(Msg.GetPayloadSize(), BinaryPayload.size());
     EXPECT_EQ(Msg.GetPayload(), BinaryPayload);
-    
+
     // Test raw data payload
     char RawData[] = {0x11, 0x22, 0x33, 0x44, 0x55};
     Msg.SetPayload(RawData, sizeof(RawData));
@@ -163,11 +162,11 @@ TEST_F(MessageComprehensiveTest, SetAndGetPayload)
 TEST_F(MessageComprehensiveTest, SetAndGetJsonPayload)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
-    
+
     std::string JsonPayload = "{\"key\": \"value\", \"number\": 42}";
     EXPECT_TRUE(Msg.SetJsonPayload(JsonPayload));
     EXPECT_EQ(Msg.GetJsonPayload(), JsonPayload);
-    
+
     // Test different JSON string (our implementation doesn't validate JSON syntax)
     std::string AnotherJson = "{\"another\": \"value\"}";
     EXPECT_TRUE(Msg.SetJsonPayload(AnotherJson));
@@ -177,32 +176,32 @@ TEST_F(MessageComprehensiveTest, SetAndGetJsonPayload)
 TEST_F(MessageComprehensiveTest, MessageProperties)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
-    
+
     // Test all property setters and getters
     Msg.SetMessageId(12345);
     EXPECT_EQ(Msg.GetMessageId(), 12345);
-    
+
     Msg.SetMessageType(MessageType::AUTH_LOGIN_RESPONSE);
     EXPECT_EQ(Msg.GetMessageType(), MessageType::AUTH_LOGIN_RESPONSE);
-    
+
     Msg.SetPriority(MessagePriority::CRITICAL);
     EXPECT_EQ(Msg.GetPriority(), MessagePriority::CRITICAL);
-    
+
     Msg.SetDeliveryMode(DeliveryMode::RELIABLE);
     EXPECT_EQ(Msg.GetDeliveryMode(), DeliveryMode::RELIABLE);
-    
+
     Msg.SetSenderId(100);
     EXPECT_EQ(Msg.GetSenderId(), 100);
-    
+
     Msg.SetReceiverId(200);
     EXPECT_EQ(Msg.GetReceiverId(), 200);
-    
+
     Msg.SetTopicId(300);
     EXPECT_EQ(Msg.GetTopicId(), 300);
-    
+
     Msg.SetTimestamp(1234567890);
     EXPECT_EQ(Msg.GetTimestamp(), 1234567890);
-    
+
     Msg.SetSequenceNumber(42);
     EXPECT_EQ(Msg.GetSequenceNumber(), 42);
 }
@@ -218,15 +217,15 @@ TEST_F(MessageComprehensiveTest, SerializationAndDeserialization)
     Original.SetTopicId(789);
     Original.SetTimestamp(987654321);
     Original.SetSequenceNumber(999);
-    
+
     // Serialize
     auto SerializedData = Original.Serialize();
     EXPECT_GT(SerializedData.size(), 0);
-    
+
     // Deserialize
     Message Deserialized;
     bool DeserializeResult = Deserialized.Deserialize(SerializedData);
-    
+
     EXPECT_TRUE(DeserializeResult);
     EXPECT_EQ(Deserialized.GetMessageType(), Original.GetMessageType());
     EXPECT_EQ(Deserialized.GetPayload(), Original.GetPayload());
@@ -243,12 +242,12 @@ TEST_F(MessageComprehensiveTest, DeserializationWithRawData)
 {
     Message Original(MessageType::NETWORK_DATA_RECEIVED);
     Original.SetPayload("Raw data test");
-    
+
     auto SerializedData = Original.Serialize();
-    
+
     Message Deserialized;
     bool Result = Deserialized.Deserialize(SerializedData.data(), SerializedData.size());
-    
+
     EXPECT_TRUE(Result);
     EXPECT_EQ(Deserialized.GetMessageType(), Original.GetMessageType());
     EXPECT_EQ(Deserialized.GetPayload(), Original.GetPayload());
@@ -258,17 +257,17 @@ TEST_F(MessageComprehensiveTest, ChecksumValidation)
 {
     Message Msg(MessageType::SYSTEM_HEARTBEAT);
     Msg.SetPayload("Checksum validation test");
-    
+
     // Update checksum
     Msg.UpdateChecksum();
     EXPECT_TRUE(Msg.ValidateChecksum());
-    
+
     // Manually corrupt checksum
     auto& Header = Msg.GetHeader();
     uint32_t OriginalChecksum = Header.Checksum;
     Header.Checksum = 0xDEADBEEF;
     EXPECT_FALSE(Msg.ValidateChecksum());
-    
+
     // Restore checksum
     Header.Checksum = OriginalChecksum;
     EXPECT_TRUE(Msg.ValidateChecksum());
@@ -279,7 +278,7 @@ TEST_F(MessageComprehensiveTest, MessageValidation)
     Message ValidMsg(MessageType::GAME_PLAYER_JOIN);
     ValidMsg.SetPayload("Valid message");
     EXPECT_TRUE(ValidMsg.IsValid());
-    
+
     Message InvalidMsg;
     auto& InvalidHeader = InvalidMsg.GetHeader();
     InvalidHeader.MsgId = InvalidMessageId;
@@ -290,10 +289,10 @@ TEST_F(MessageComprehensiveTest, CalculateChecksum)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
     Msg.SetPayload("Checksum calculation test");
-    
+
     uint32_t Checksum1 = Msg.CalculateChecksum();
     uint32_t Checksum2 = Msg.CalculateChecksum();
-    
+
     EXPECT_EQ(Checksum1, Checksum2);
     EXPECT_NE(Checksum1, 0);
 }
@@ -302,7 +301,7 @@ TEST_F(MessageComprehensiveTest, GetTotalSize)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
     EXPECT_EQ(Msg.GetTotalSize(), sizeof(MessageHeader));
-    
+
     Msg.SetPayload("Test payload");
     EXPECT_EQ(Msg.GetTotalSize(), sizeof(MessageHeader) + Msg.GetPayloadSize());
 }
@@ -313,10 +312,10 @@ TEST_F(MessageComprehensiveTest, Reset)
     Msg.SetPayload("Reset test payload");
     Msg.SetSenderId(123);
     Msg.SetReceiverId(456);
-    
+
     Msg.Reset();
-    
-    EXPECT_NE(Msg.GetMessageId(), InvalidMessageId); // Reset generates new ID
+
+    EXPECT_NE(Msg.GetMessageId(), InvalidMessageId);  // Reset generates new ID
     EXPECT_EQ(Msg.GetMessageType(), MessageType::CUSTOM_MESSAGE_START);
     EXPECT_EQ(Msg.GetPayloadSize(), 0);
     EXPECT_FALSE(Msg.HasPayload());
@@ -331,15 +330,15 @@ TEST_F(MessageComprehensiveTest, Clone)
     Original.SetSenderId(111);
     Original.SetReceiverId(222);
     Original.SetPriority(MessagePriority::HIGH);
-    
+
     Message Cloned = Original.Clone();
-    
+
     EXPECT_EQ(Cloned.GetMessageType(), Original.GetMessageType());
     EXPECT_EQ(Cloned.GetPayload(), Original.GetPayload());
     EXPECT_EQ(Cloned.GetSenderId(), Original.GetSenderId());
     EXPECT_EQ(Cloned.GetReceiverId(), Original.GetReceiverId());
     EXPECT_EQ(Cloned.GetPriority(), Original.GetPriority());
-    
+
     // Clone preserves the same message ID
     EXPECT_EQ(Cloned.GetMessageId(), Original.GetMessageId());
 }
@@ -350,11 +349,13 @@ TEST_F(MessageComprehensiveTest, ToString)
     Msg.SetPayload("ToString test");
     Msg.SetSenderId(123);
     Msg.SetReceiverId(456);
-    
+
     std::string StringRep = Msg.ToString();
     EXPECT_FALSE(StringRep.empty());
     // Check that the string contains the message type as integer
-    EXPECT_NE(StringRep.find("Type=" + std::to_string(static_cast<int>(MessageType::GAME_PLAYER_JOIN))), std::string::npos);
+    EXPECT_NE(
+        StringRep.find("Type=" + std::to_string(static_cast<int>(MessageType::GAME_PLAYER_JOIN))),
+        std::string::npos);
 }
 
 TEST_F(MessageComprehensiveTest, GetHeaderString)
@@ -362,28 +363,30 @@ TEST_F(MessageComprehensiveTest, GetHeaderString)
     Message Msg(MessageType::SYSTEM_STATUS);
     Msg.SetSenderId(789);
     Msg.SetReceiverId(101);
-    
+
     std::string HeaderString = Msg.GetHeaderString();
     EXPECT_FALSE(HeaderString.empty());
     // Check that the string contains the message type as integer
-    EXPECT_NE(HeaderString.find("MessageType=" + std::to_string(static_cast<int>(MessageType::SYSTEM_STATUS))), std::string::npos);
+    EXPECT_NE(HeaderString.find("MessageType=" +
+                                std::to_string(static_cast<int>(MessageType::SYSTEM_STATUS))),
+              std::string::npos);
 }
 
 TEST_F(MessageComprehensiveTest, LargePayload)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
-    
+
     // Create a large payload
     std::string LargePayload(10000, 'A');
     Msg.SetPayload(LargePayload);
-    
+
     EXPECT_EQ(Msg.GetPayloadSize(), 10000);
     EXPECT_TRUE(Msg.HasPayload());
-    
+
     // Test serialization with large payload
     auto SerializedData = Msg.Serialize();
     EXPECT_GT(SerializedData.size(), 10000);
-    
+
     // Test deserialization
     Message Deserialized;
     bool Result = Deserialized.Deserialize(SerializedData);
@@ -394,12 +397,12 @@ TEST_F(MessageComprehensiveTest, LargePayload)
 TEST_F(MessageComprehensiveTest, EmptyPayload)
 {
     Message Msg(MessageType::CUSTOM_MESSAGE_START);
-    
+
     // Set empty payload
     Msg.SetPayload("");
     EXPECT_EQ(Msg.GetPayloadSize(), 0);
     EXPECT_FALSE(Msg.HasPayload());
-    
+
     // Serialize and deserialize
     auto SerializedData = Msg.Serialize();
     Message Deserialized;
@@ -412,14 +415,14 @@ TEST_F(MessageComprehensiveTest, EmptyPayload)
 TEST_F(MessageComprehensiveTest, BinaryPayloadWithNullBytes)
 {
     Message Msg(MessageType::NETWORK_DATA_RECEIVED);
-    
+
     // Create payload with null bytes
     std::vector<char> BinaryPayload = {0x00, 0x01, 0x00, 0x02, 0x00, 0x03};
     Msg.SetPayload(BinaryPayload);
-    
+
     EXPECT_EQ(Msg.GetPayloadSize(), BinaryPayload.size());
     EXPECT_EQ(Msg.GetPayload(), BinaryPayload);
-    
+
     // Test serialization
     auto SerializedData = Msg.Serialize();
     Message Deserialized;

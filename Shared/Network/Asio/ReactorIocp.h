@@ -2,32 +2,32 @@
 
 #ifdef _WIN32
 
-#include "Shared/Network/Asio/Reactor.h"
-#include <unordered_map>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
+    #include "Shared/Network/Asio/Reactor.h"
+
+    #include <unordered_map>
+
+    #include <windows.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
 
 namespace Helianthus::Network::Asio
 {
-    class ReactorIocp : public Reactor
-    {
-    public:
-        ReactorIocp();
-        ~ReactorIocp() override;
+class ReactorIocp : public Reactor
+{
+public:
+    ReactorIocp();
+    ~ReactorIocp() override;
 
-        bool Add(Fd Handle, EventMask Mask, IoCallback Callback) override;
-        bool Mod(Fd Handle, EventMask Mask) override;
-        bool Del(Fd Handle) override;
-        int  PollOnce(int TimeoutMs) override;
+    bool Add(Fd Handle, EventMask Mask, IoCallback Callback) override;
+    bool Mod(Fd Handle, EventMask Mask) override;
+    bool Del(Fd Handle) override;
+    int PollOnce(int TimeoutMs) override;
 
-    private:
-        HANDLE IocpHandle;
-        std::unordered_map<Fd, IoCallback> Callbacks;
-        std::unordered_map<Fd, EventMask> Masks;
-    };
-} // namespace Helianthus::Network::Asio
+private:
+    HANDLE IocpHandle;
+    std::unordered_map<Fd, IoCallback> Callbacks;
+    std::unordered_map<Fd, EventMask> Masks;
+};
+}  // namespace Helianthus::Network::Asio
 
-#endif // _WIN32
-
-
+#endif  // _WIN32

@@ -1,8 +1,9 @@
-#include <gtest/gtest.h>
-#include "../../Shared/Database/DatabaseTypes.h"
 #include "../../Shared/Database/DatabaseConfig.h"
+#include "../../Shared/Database/DatabaseTypes.h"
 #include "../../Shared/Database/MySQL/MySqlConnection.h"
-// #include "../../Shared/Database/Redis/RedisConnection.h"  // Temporarily disabled due to hiredis compilation issues
+#include <gtest/gtest.h>
+// #include "../../Shared/Database/Redis/RedisConnection.h"  // Temporarily disabled due to hiredis
+// compilation issues
 #include "../../Shared/Database/ORM.h"
 
 using namespace Helianthus::Database;
@@ -26,7 +27,8 @@ public:
     ParameterMap ToParameterMap() const override
     {
         ParameterMap Parameters;
-        if (Id != 0) Parameters["id"] = Id;
+        if (Id != 0)
+            Parameters["id"] = Id;
         Parameters["username"] = Username;
         Parameters["email"] = Email;
         Parameters["age"] = Age;
@@ -82,14 +84,12 @@ public:
         ORM::TableInfo TableInfo;
         TableInfo.Name = "users";
         TableInfo.PrimaryKeyField = "id";
-        
-        TableInfo.Fields = {
-            {"id", "BIGINT", true, true, false, "", 0},
-            {"username", "VARCHAR", false, false, false, "", 50},
-            {"email", "VARCHAR", false, false, false, "", 100},
-            {"age", "INT", false, false, true, "0", 0},
-            {"is_active", "BOOLEAN", false, false, false, "true", 0}
-        };
+
+        TableInfo.Fields = {{"id", "BIGINT", true, true, false, "", 0},
+                            {"username", "VARCHAR", false, false, false, "", 50},
+                            {"email", "VARCHAR", false, false, false, "", 100},
+                            {"age", "INT", false, false, true, "0", 0},
+                            {"is_active", "BOOLEAN", false, false, false, "true", 0}};
 
         return TableInfo;
     }
@@ -129,10 +129,10 @@ TEST_F(DatabaseConfigTest, ConfigurationValidation)
     // Set invalid configuration
     ConfigManager->SetValue("mysql.test", "host", std::string(""));
     ConfigManager->SetValue("mysql.test", "port", uint32_t(0));
-    
+
     ResultCode Result = ConfigManager->ValidateConfiguration();
     EXPECT_EQ(Result, ResultCode::INVALID_PARAMETER);
-    
+
     auto Errors = ConfigManager->GetValidationErrors();
     EXPECT_GT(Errors.size(), 0);
 }
@@ -164,11 +164,11 @@ protected:
 TEST_F(QueryBuilderTest, SelectQuery)
 {
     std::string Query = Builder->Select({"id", "username", "email"})
-                               .From("users")
-                               .WhereEquals("is_active", true)
-                               .OrderBy("username")
-                               .Limit(10)
-                               .Build();
+                            .From("users")
+                            .WhereEquals("is_active", true)
+                            .OrderBy("username")
+                            .Limit(10)
+                            .Build();
 
     EXPECT_FALSE(Query.empty());
     EXPECT_TRUE(Query.find("SELECT") != std::string::npos);
@@ -180,15 +180,11 @@ TEST_F(QueryBuilderTest, SelectQuery)
 
 TEST_F(QueryBuilderTest, InsertQuery)
 {
-    ParameterMap Values = {
-        {"username", std::string("testuser")},
-        {"email", std::string("test@example.com")},
-        {"age", uint32_t(25)}
-    };
+    ParameterMap Values = {{"username", std::string("testuser")},
+                           {"email", std::string("test@example.com")},
+                           {"age", uint32_t(25)}};
 
-    std::string Query = Builder->InsertInto("users")
-                               .Values(Values)
-                               .Build();
+    std::string Query = Builder->InsertInto("users").Values(Values).Build();
 
     EXPECT_FALSE(Query.empty());
     EXPECT_TRUE(Query.find("INSERT INTO") != std::string::npos);
@@ -199,9 +195,9 @@ TEST_F(QueryBuilderTest, InsertQuery)
 TEST_F(QueryBuilderTest, UpdateQuery)
 {
     std::string Query = Builder->Update("users")
-                               .Set("email", std::string("newemail@example.com"))
-                               .WhereEquals("id", uint64_t(1))
-                               .Build();
+                            .Set("email", std::string("newemail@example.com"))
+                            .WhereEquals("id", uint64_t(1))
+                            .Build();
 
     EXPECT_FALSE(Query.empty());
     EXPECT_TRUE(Query.find("UPDATE") != std::string::npos);
@@ -211,9 +207,7 @@ TEST_F(QueryBuilderTest, UpdateQuery)
 
 TEST_F(QueryBuilderTest, DeleteQuery)
 {
-    std::string Query = Builder->DeleteFrom("users")
-                               .WhereEquals("is_active", false)
-                               .Build();
+    std::string Query = Builder->DeleteFrom("users").WhereEquals("is_active", false).Build();
 
     EXPECT_FALSE(Query.empty());
     EXPECT_TRUE(Query.find("DELETE FROM") != std::string::npos);
@@ -224,23 +218,39 @@ TEST_F(QueryBuilderTest, DeleteQuery)
 class MockDatabase : public IDatabase
 {
 public:
-    ResultCode Initialize() override { return ResultCode::SUCCESS; }
+    ResultCode Initialize() override
+    {
+        return ResultCode::SUCCESS;
+    }
     void Shutdown() override {}
-    bool IsInitialized() const override { return true; }
+    bool IsInitialized() const override
+    {
+        return true;
+    }
 
-    std::shared_ptr<IConnection> GetConnection() override { return nullptr; }
+    std::shared_ptr<IConnection> GetConnection() override
+    {
+        return nullptr;
+    }
     void ReturnConnection(std::shared_ptr<IConnection> Connection) override {}
-    uint32_t GetActiveConnectionCount() const override { return 0; }
-    uint32_t GetTotalConnectionCount() const override { return 1; }
+    uint32_t GetActiveConnectionCount() const override
+    {
+        return 0;
+    }
+    uint32_t GetTotalConnectionCount() const override
+    {
+        return 1;
+    }
 
-    DatabaseResult ExecuteQuery(const std::string& Query, const ParameterMap& Parameters = {}) override
+    DatabaseResult ExecuteQuery(const std::string& Query,
+                                const ParameterMap& Parameters = {}) override
     {
         LastQuery = Query;
         LastParameters = Parameters;
-        
+
         DatabaseResult Result;
         Result.Code = ResultCode::SUCCESS;
-        
+
         // Mock data for SELECT queries
         if (Query.find("SELECT") != std::string::npos)
         {
@@ -252,29 +262,63 @@ public:
             Row["is_active"] = true;
             Result.Data.push_back(Row);
         }
-        
+
         return Result;
     }
 
-    DatabaseResult ExecuteStoredProcedure(const std::string& ProcedureName, const ParameterMap& Parameters = {}) override
+    DatabaseResult ExecuteStoredProcedure(const std::string& ProcedureName,
+                                          const ParameterMap& Parameters = {}) override
     {
         return DatabaseResult{};
     }
 
-    void ExecuteQueryAsync(const std::string& Query, QueryCallback Callback, const ParameterMap& Parameters = {}) override {}
-    void ExecuteStoredProcedureAsync(const std::string& ProcedureName, QueryCallback Callback, const ParameterMap& Parameters = {}) override {}
+    void ExecuteQueryAsync(const std::string& Query,
+                           QueryCallback Callback,
+                           const ParameterMap& Parameters = {}) override
+    {
+    }
+    void ExecuteStoredProcedureAsync(const std::string& ProcedureName,
+                                     QueryCallback Callback,
+                                     const ParameterMap& Parameters = {}) override
+    {
+    }
 
-    std::shared_ptr<ITransaction> BeginTransaction(IsolationLevel Level = IsolationLevel::READ_COMMITTED) override { return nullptr; }
+    std::shared_ptr<ITransaction>
+    BeginTransaction(IsolationLevel Level = IsolationLevel::READ_COMMITTED) override
+    {
+        return nullptr;
+    }
 
-    DatabaseType GetDatabaseType() const override { return DatabaseType::MYSQL; }
-    ConnectionInfo GetConnectionInfo() const override { return ConnectionInfo{}; }
-    std::string GetDatabaseVersion() const override { return "test"; }
+    DatabaseType GetDatabaseType() const override
+    {
+        return DatabaseType::MYSQL;
+    }
+    ConnectionInfo GetConnectionInfo() const override
+    {
+        return ConnectionInfo{};
+    }
+    std::string GetDatabaseVersion() const override
+    {
+        return "test";
+    }
 
-    bool IsHealthy() const override { return true; }
-    ResultCode TestConnection() override { return ResultCode::SUCCESS; }
+    bool IsHealthy() const override
+    {
+        return true;
+    }
+    ResultCode TestConnection() override
+    {
+        return ResultCode::SUCCESS;
+    }
 
-    std::string EscapeString(const std::string& Input) const override { return Input; }
-    std::string BuildConnectionString() const override { return "test://localhost"; }
+    std::string EscapeString(const std::string& Input) const override
+    {
+        return Input;
+    }
+    std::string BuildConnectionString() const override
+    {
+        return "test://localhost";
+    }
 
     std::string LastQuery;
     ParameterMap LastParameters;
@@ -357,7 +401,9 @@ TEST_F(RepositoryTest, DeleteEntity)
 // Integration tests would require actual database connections
 // These are placeholder tests for the basic functionality
 
-class DatabaseTypesTest : public ::testing::Test {};
+class DatabaseTypesTest : public ::testing::Test
+{
+};
 
 TEST_F(DatabaseTypesTest, MySqlConfigDefaults)
 {
@@ -400,7 +446,7 @@ TEST_F(DatabaseTypesTest, DatabaseResultSuccess)
     DatabaseResult Result;
     Result.Code = ResultCode::SUCCESS;
     Result.AffectedRows = 1;
-    
+
     EXPECT_TRUE(Result.IsSuccess());
     EXPECT_EQ(Result.AffectedRows, 1);
 }

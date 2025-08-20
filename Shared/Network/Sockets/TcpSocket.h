@@ -2,24 +2,24 @@
 
 #include "Shared/Network/NetworkTypes.h"
 
-#include "Network/INetworkSocket.h"
-#include "Network/NetworkTypes.h"
-
 #include <atomic>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
-#include <functional>
-#include <cstdint>
+
+#include "Network/INetworkSocket.h"
+#include "Network/NetworkTypes.h"
 
 namespace Helianthus::Network::Sockets
 {
 struct TcpSocketImpl
 {
-    int Fd = -1;
+    intptr_t Fd = -1;
     bool IsServer = false;
     bool IsBlocking = true;
-    std::atomic<bool> StopAsync {false};
+    std::atomic<bool> StopAsync{false};
     std::thread RecvThread;
     ConnectionState State = ConnectionState::DISCONNECTED;
     NetworkAddress Local;
@@ -74,9 +74,15 @@ public:
     using NativeHandle = uintptr_t;
     NativeHandle GetNativeHandle() const;
 
+    // Adopt an existing native handle (e.g., from AcceptEx)
+    void Adopt(NativeHandle Handle,
+               const NetworkAddress& Local,
+               const NetworkAddress& Remote,
+               bool IsServerSide);
+
 protected:
     std::unique_ptr<TcpSocketImpl> SockImpl;
     std::mutex Mutex;
-    std::atomic<bool> IsAsyncReceiving { false };
+    std::atomic<bool> IsAsyncReceiving{false};
 };
-}
+}  // namespace Helianthus::Network::Sockets

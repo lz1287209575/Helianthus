@@ -1,6 +1,7 @@
-#include <gtest/gtest.h>
 #include "Shared/Network/Asio/ErrorMapping.h"
+
 #include <errno.h>
+#include <gtest/gtest.h>
 
 using namespace Helianthus::Network::Asio;
 using namespace Helianthus::Network;
@@ -8,9 +9,7 @@ using namespace Helianthus::Network;
 class ErrorMappingTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-    }
+    void SetUp() override {}
 };
 
 TEST_F(ErrorMappingTest, BasicErrorMapping)
@@ -49,7 +48,8 @@ TEST_F(ErrorMappingTest, TimeoutErrorMapping)
 {
     // 测试超时相关的错误映射
     // EAGAIN 和 EWOULDBLOCK 在某些系统上可能相同
-    if (EAGAIN != EWOULDBLOCK) {
+    if (EAGAIN != EWOULDBLOCK)
+    {
         EXPECT_EQ(ErrorMapping::FromErrno(EAGAIN), NetworkError::TIMEOUT);
     }
     EXPECT_EQ(ErrorMapping::FromErrno(EWOULDBLOCK), NetworkError::TIMEOUT);
@@ -68,7 +68,8 @@ TEST_F(ErrorMappingTest, ErrorStringConversion)
     // 测试错误字符串转换
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::NONE), "Success");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::CONNECTION_FAILED), "Connection failed");
-    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::SOCKET_CREATE_FAILED), "Socket creation failed");
+    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::SOCKET_CREATE_FAILED),
+              "Socket creation failed");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::BIND_FAILED), "Bind failed");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::LISTEN_FAILED), "Listen failed");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::ACCEPT_FAILED), "Accept failed");
@@ -78,14 +79,19 @@ TEST_F(ErrorMappingTest, ErrorStringConversion)
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::BUFFER_OVERFLOW), "Buffer overflow");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::INVALID_ADDRESS), "Invalid address");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::PERMISSION_DENIED), "Permission denied");
-    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::NETWORK_UNREACHABLE), "Network unreachable");
-    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::ALREADY_INITIALIZED), "Already initialized");
+    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::NETWORK_UNREACHABLE),
+              "Network unreachable");
+    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::ALREADY_INITIALIZED),
+              "Already initialized");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::NOT_INITIALIZED), "Not initialized");
-    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::CONNECTION_NOT_FOUND), "Connection not found");
+    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::CONNECTION_NOT_FOUND),
+              "Connection not found");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::CONNECTION_CLOSED), "Connection closed");
-    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::SERIALIZATION_FAILED), "Serialization failed");
+    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::SERIALIZATION_FAILED),
+              "Serialization failed");
     EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::GROUP_NOT_FOUND), "Group not found");
-    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::SERVER_ALREADY_RUNNING), "Server already running");
+    EXPECT_EQ(ErrorMapping::GetErrorString(NetworkError::SERVER_ALREADY_RUNNING),
+              "Server already running");
 }
 
 TEST_F(ErrorMappingTest, SystemErrorString)
@@ -94,7 +100,7 @@ TEST_F(ErrorMappingTest, SystemErrorString)
     std::string ErrorStr = ErrorMapping::GetSystemErrorString(EINVAL);
     EXPECT_FALSE(ErrorStr.empty());
     EXPECT_NE(ErrorStr, "Unknown system error: 22");
-    
+
     // 测试未知错误码
     std::string UnknownErrorStr = ErrorMapping::GetSystemErrorString(99999);
     EXPECT_FALSE(UnknownErrorStr.empty());

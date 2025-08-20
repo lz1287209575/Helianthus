@@ -1,7 +1,8 @@
-#include <gtest/gtest.h>
-#include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/AsyncTcpSocket.h"
+#include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Sockets/UdpSocket.h"
+
+#include <gtest/gtest.h>
 
 using namespace Helianthus::Network;
 using namespace Helianthus::Network::Asio;
@@ -25,12 +26,10 @@ TEST(NetworkEchoTest, BasicSendReceive)
     ASSERT_EQ(Client.Send(Msg, 5, BytesSent), NetworkError::SUCCESS);
     ASSERT_EQ(BytesSent, 5u);
 
-    char Buffer[16] = {0}; 
+    char Buffer[16] = {0};
     size_t BytesRecv = 0;
     ASSERT_EQ(Server.Receive(Buffer, sizeof(Buffer), BytesRecv), NetworkError::SUCCESS);
     ASSERT_EQ(BytesRecv, 5u);
     Buffer[5] = '\0';
     ASSERT_STREQ(Buffer, "hello");
 }
-
-

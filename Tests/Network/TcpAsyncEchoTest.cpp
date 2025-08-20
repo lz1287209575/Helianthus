@@ -1,14 +1,16 @@
-#include <gtest/gtest.h>
-#include "Shared/Network/Asio/IoContext.h"
-#include "Shared/Network/Asio/AsyncTcpSocket.h"
 #include "Shared/Network/Asio/AsyncTcpAcceptor.h"
+#include "Shared/Network/Asio/AsyncTcpSocket.h"
+#include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/MessageProtocol.h"
 #include "Shared/Network/NetworkTypes.h"
-#include <thread>
-#include <chrono>
+
 #include <atomic>
-#include <vector>
+#include <chrono>
 #include <memory>
+#include <thread>
+#include <vector>
+
+#include <gtest/gtest.h>
 
 using namespace Helianthus::Network::Asio;
 using namespace Helianthus::Network;
@@ -20,33 +22,33 @@ protected:
     {
         ServerContext = std::make_shared<IoContext>();
         ClientContext = std::make_shared<IoContext>();
-        
+
         // 启动服务器事件循环
-        ServerThread = std::thread([this]() {
-            ServerContext->Run();
-        });
-        
-        // 启动客户端事件循环  
-        ClientThread = std::thread([this]() {
-            ClientContext->Run();
-        });
-        
+        ServerThread = std::thread([this]() { ServerContext->Run(); });
+
+        // 启动客户端事件循环
+        ClientThread = std::thread([this]() { ClientContext->Run(); });
+
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     void TearDown() override
     {
-        if (ServerContext) {
+        if (ServerContext)
+        {
             ServerContext->Stop();
         }
-        if (ClientContext) {
+        if (ClientContext)
+        {
             ClientContext->Stop();
         }
-        
-        if (ServerThread.joinable()) {
+
+        if (ServerThread.joinable())
+        {
             ServerThread.join();
         }
-        if (ClientThread.joinable()) {
+        if (ClientThread.joinable())
+        {
             ClientThread.join();
         }
     }
@@ -55,7 +57,7 @@ protected:
     std::shared_ptr<IoContext> ClientContext;
     std::thread ServerThread;
     std::thread ClientThread;
-    
+
     static constexpr uint16_t TestPort = 12345;
 };
 
@@ -65,84 +67,105 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
     std::atomic<bool> MessageReceived = false;
     std::atomic<bool> EchoReceived = false;
     std::string ReceivedMessage;
-    
+
     // 创建服务器
     auto Acceptor = std::make_shared<AsyncTcpAcceptor>(ServerContext);
     NetworkAddress ServerAddr("127.0.0.1", TestPort);
-    
+
     auto BindResult = Acceptor->Bind(ServerAddr);
     ASSERT_EQ(BindResult, NetworkError::NONE);
-    
+
     // 服务器接受连接
-    Acceptor->AsyncAccept([this, &ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err) {
-        EXPECT_EQ(Err, NetworkError::NONE);
-        ServerReady = true;
-        
-        // 创建服务器端连接
-        auto ServerSocket = std::make_shared<AsyncTcpSocket>(ServerContext);
-        auto Protocol = std::make_shared<MessageProtocol>();
-        
-        Protocol->SetMessageHandler([&MessageReceived, &ReceivedMessage, ServerSocket, Protocol](const std::string& Message) {
-            ReceivedMessage = Message;
-            MessageReceived = true;
-            
-            // 回显消息
-            auto EchoData = MessageProtocol::EncodeMessage(Message);
-            ServerSocket->AsyncSend(EchoData.data(), EchoData.size(), [](NetworkError, size_t) {
-                // 发送完成
-            });
+    Acceptor->AsyncAccept(
+        [this, &ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err)
+        {
+            EXPECT_EQ(Err, NetworkError::NONE);
+            ServerReady = true;
+
+            // 创建服务器端连接
+            auto ServerSocket = std::make_shared<AsyncTcpSocket>(ServerContext);
+            auto Protocol = std::make_shared<MessageProtocol>();
+
+            Protocol->SetMessageHandler(
+                [&MessageReceived, &ReceivedMessage, ServerSocket, Protocol](
+                    const std::string& Message)
+                {
+                    ReceivedMessage = Message;
+                    MessageReceived = true;
+
+                    // 回显消息
+                    auto EchoData = MessageProtocol::EncodeMessage(Message);
+                    ServerSocket->AsyncSend(EchoData.data(),
+                                            EchoData.size(),
+                                            [](NetworkError, size_t)
+                                            {
+                                                // 发送完成
+                                            });
+                });
+
+            // 开始接收数据
+            std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]()
+            {
+                static char Buffer[1024];
+                ServerSocket->AsyncReceive(Buffer,
+                                           sizeof(Buffer),
+                                           [Protocol, StartReceive](NetworkError Err, size_t Bytes)
+                                           {
+                                               if (Err == NetworkError::NONE && Bytes > 0)
+                                               {
+                                                   Protocol->ProcessReceivedData(Buffer, Bytes);
+                                                   StartReceive();  // 继续接收
+                                               }
+                                           });
+            };
+            StartReceive();
         });
-        
-        // 开始接收数据
-        std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]() {
-            static char Buffer[1024];
-            ServerSocket->AsyncReceive(Buffer, sizeof(Buffer), [Protocol, StartReceive](NetworkError Err, size_t Bytes) {
-                if (Err == NetworkError::NONE && Bytes > 0) {
-                    Protocol->ProcessReceivedData(Buffer, Bytes);
-                    StartReceive(); // 继续接收
-                }
-            });
-        };
-        StartReceive();
-    });
-    
+
     // 等待服务器准备就绪
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    
+
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
     auto ClientProtocol = std::make_shared<MessageProtocol>();
-    
-    ClientProtocol->SetMessageHandler([&EchoReceived](const std::string& Message) {
-        EXPECT_EQ(Message, "Hello, TCP Echo Server!");
-        EchoReceived = true;
-    });
-    
+
+    ClientProtocol->SetMessageHandler(
+        [&EchoReceived](const std::string& Message)
+        {
+            EXPECT_EQ(Message, "Hello, TCP Echo Server!");
+            EchoReceived = true;
+        });
+
     auto ConnectResult = ClientSocket->Connect(ServerAddr);
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
-    
+
     // 发送测试消息
     std::string TestMessage = "Hello, TCP Echo Server!";
     auto MessageData = MessageProtocol::EncodeMessage(TestMessage);
-    ClientSocket->AsyncSend(MessageData.data(), MessageData.size(), [](NetworkError Err, size_t) {
-        EXPECT_EQ(Err, NetworkError::NONE);
-    });
-    
+    ClientSocket->AsyncSend(MessageData.data(),
+                            MessageData.size(),
+                            [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
+
     // 开始接收回显
-    std::function<void()> StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]() {
+    std::function<void()> StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
+    {
         static char Buffer[1024];
-        ClientSocket->AsyncReceive(Buffer, sizeof(Buffer), [ClientProtocol, StartClientReceive](NetworkError Err, size_t Bytes) {
-            if (Err == NetworkError::NONE && Bytes > 0) {
-                ClientProtocol->ProcessReceivedData(Buffer, Bytes);
-                StartClientReceive(); // 继续接收
-            }
-        });
+        ClientSocket->AsyncReceive(
+            Buffer,
+            sizeof(Buffer),
+            [ClientProtocol, StartClientReceive](NetworkError Err, size_t Bytes)
+            {
+                if (Err == NetworkError::NONE && Bytes > 0)
+                {
+                    ClientProtocol->ProcessReceivedData(Buffer, Bytes);
+                    StartClientReceive();  // 继续接收
+                }
+            });
     };
     StartClientReceive();
-    
+
     // 等待测试完成
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    
+
     EXPECT_TRUE(MessageReceived);
     EXPECT_TRUE(EchoReceived);
     EXPECT_EQ(ReceivedMessage, TestMessage);
@@ -154,91 +177,106 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
     std::atomic<int> MessagesReceived = 0;
     std::vector<std::string> ReceivedMessages;
     std::mutex MessagesMutex;
-    
+
     // 创建服务器
     auto Acceptor = std::make_shared<AsyncTcpAcceptor>(ServerContext);
     NetworkAddress ServerAddr("127.0.0.1", TestPort + 1);
-    
+
     auto BindResult = Acceptor->Bind(ServerAddr);
     ASSERT_EQ(BindResult, NetworkError::NONE);
-    
+
     // 服务器接受连接
-    Acceptor->AsyncAccept([this, &MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err) {
-        EXPECT_EQ(Err, NetworkError::NONE);
-        
-        auto ServerSocket = std::make_shared<AsyncTcpSocket>(ServerContext);
-        auto Protocol = std::make_shared<MessageProtocol>();
-        
-        Protocol->SetMessageHandler([&MessagesReceived, &ReceivedMessages, &MessagesMutex](const std::string& Message) {
+    Acceptor->AsyncAccept(
+        [this, &MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err)
+        {
+            EXPECT_EQ(Err, NetworkError::NONE);
+
+            auto ServerSocket = std::make_shared<AsyncTcpSocket>(ServerContext);
+            auto Protocol = std::make_shared<MessageProtocol>();
+
+            Protocol->SetMessageHandler(
+                [&MessagesReceived, &ReceivedMessages, &MessagesMutex](const std::string& Message)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(MessagesMutex);
+                        ReceivedMessages.push_back(Message);
+                    }
+                    MessagesReceived++;
+                });
+
+            // 开始接收数据
+            std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
-                std::lock_guard<std::mutex> lock(MessagesMutex);
-                ReceivedMessages.push_back(Message);
-            }
-            MessagesReceived++;
+                static char Buffer[16];  // 小缓冲区模拟分片
+                ServerSocket->AsyncReceive(Buffer,
+                                           sizeof(Buffer),
+                                           [Protocol, StartReceive](NetworkError Err, size_t Bytes)
+                                           {
+                                               if (Err == NetworkError::NONE && Bytes > 0)
+                                               {
+                                                   Protocol->ProcessReceivedData(Buffer, Bytes);
+                                                   StartReceive();  // 继续接收
+                                               }
+                                           });
+            };
+            StartReceive();
         });
-        
-        // 开始接收数据
-        std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]() {
-            static char Buffer[16]; // 小缓冲区模拟分片
-            ServerSocket->AsyncReceive(Buffer, sizeof(Buffer), [Protocol, StartReceive](NetworkError Err, size_t Bytes) {
-                if (Err == NetworkError::NONE && Bytes > 0) {
-                    Protocol->ProcessReceivedData(Buffer, Bytes);
-                    StartReceive(); // 继续接收
-                }
-            });
-        };
-        StartReceive();
-    });
-    
+
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    
+
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
     auto ConnectResult = ClientSocket->Connect(ServerAddr);
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
-    
+
     // 发送多个消息，模拟粘包
-    std::vector<std::string> TestMessages = {
-        "Message 1",
-        "This is a longer message 2",
-        "Short msg 3",
-        "Another message with different length 4"
-    };
-    
+    std::vector<std::string> TestMessages = {"Message 1",
+                                             "This is a longer message 2",
+                                             "Short msg 3",
+                                             "Another message with different length 4"};
+
     // 将所有消息编码并拼接成一个大的数据包
     std::vector<char> CombinedData;
-    for (const auto& Msg : TestMessages) {
+    for (const auto& Msg : TestMessages)
+    {
         auto Encoded = MessageProtocol::EncodeMessage(Msg);
         CombinedData.insert(CombinedData.end(), Encoded.begin(), Encoded.end());
     }
-    
+
     // 分片发送，模拟半包
     size_t BytesToSend = CombinedData.size();
     size_t Offset = 0;
-    const size_t ChunkSize = 7; // 小块发送
-    
-    std::function<void()> SendNextChunk = [ClientSocket, &CombinedData, &Offset, ChunkSize, BytesToSend, SendNextChunk]() {
-        if (Offset >= BytesToSend) return;
-        
+    const size_t ChunkSize = 7;  // 小块发送
+
+    std::function<void()> SendNextChunk =
+        [ClientSocket, &CombinedData, &Offset, ChunkSize, BytesToSend, SendNextChunk]()
+    {
+        if (Offset >= BytesToSend)
+            return;
+
         size_t CurrentChunkSize = std::min(ChunkSize, BytesToSend - Offset);
-        ClientSocket->AsyncSend(CombinedData.data() + Offset, CurrentChunkSize, [&Offset, CurrentChunkSize, SendNextChunk](NetworkError Err, size_t) {
-            EXPECT_EQ(Err, NetworkError::NONE);
-            Offset += CurrentChunkSize;
-            // 继续发送下一块
-            SendNextChunk();
-        });
+        ClientSocket->AsyncSend(CombinedData.data() + Offset,
+                                CurrentChunkSize,
+                                [&Offset, CurrentChunkSize, SendNextChunk](NetworkError Err, size_t)
+                                {
+                                    EXPECT_EQ(Err, NetworkError::NONE);
+                                    Offset += CurrentChunkSize;
+                                    // 继续发送下一块
+                                    SendNextChunk();
+                                });
     };
-    
+
     SendNextChunk();
-    
+
     // 等待所有消息被接收
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    
+
     EXPECT_EQ(MessagesReceived, 4);
     {
         std::lock_guard<std::mutex> lock(MessagesMutex);
         EXPECT_EQ(ReceivedMessages.size(), 4);
-        for (size_t i = 0; i < TestMessages.size() && i < ReceivedMessages.size(); ++i) {
+        for (size_t i = 0; i < TestMessages.size() && i < ReceivedMessages.size(); ++i)
+        {
             EXPECT_EQ(ReceivedMessages[i], TestMessages[i]);
         }
     }
