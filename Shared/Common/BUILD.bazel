@@ -2,20 +2,19 @@ cc_library(
     name = "common",
     srcs = [
         "Logger.cpp",
+        "TCMallocWrapper.cpp",
     ],
     hdrs = [
         "Logger.h",
         "Types.h",
+        "TCMallocWrapper.h",
     ],
-    copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
-        "//conditions:default": ["-std:c++20"],
-    }),
     strip_include_prefix = ".",
     include_prefix = "Common",
     deps = [
         "//:helianthus_config",
         "@spdlog//:spdlog",
+        # TCMalloc linkage is propagated via //:helianthus_config when enabled
     ],
     visibility = ["//visibility:public"],
 )

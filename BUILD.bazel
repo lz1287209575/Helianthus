@@ -23,6 +23,21 @@ config_setting(
     define_values = {"ENABLE_DOTNET_SCRIPTING": "1"},
 )
 
+# Enable TCMalloc via --define USE_TCMALLOC=1
+config_setting(
+    name = "use_tcmalloc",
+    define_values = {"USE_TCMALLOC": "1"},
+)
+
+# Thin wrapper for allocator, to propagate as a dependency
+cc_library(
+    name = "allocator_impl",
+    deps = select({
+        ":use_tcmalloc": ["@tcmalloc//tcmalloc:tcmalloc"],
+        "//conditions:default": [],
+    }),
+)
+
 # Global C++ flags
 cc_library(
     name = "helianthus_config",
@@ -39,6 +54,9 @@ cc_library(
     }) + select({
         ":enable_dotnet_scripting": ["HELIANTHUS_ENABLE_DOTNET=1"],
         "//conditions:default": ["HELIANTHUS_ENABLE_DOTNET=0"],
+    }) + select({
+        ":use_tcmalloc": ["HELIANTHUS_USE_TCMALLOC"],
+        "//conditions:default": [],
     }),
     copts = select({
         "@bazel_tools//tools/cpp:msvc": [
@@ -53,4 +71,5 @@ cc_library(
             "-O2",
         ],
     }),
+    deps = [":allocator_impl"],
 )

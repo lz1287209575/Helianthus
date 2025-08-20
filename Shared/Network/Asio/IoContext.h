@@ -4,6 +4,8 @@
 #include <atomic>
 #include <memory>
 #include <vector>
+#include <queue>
+#include <mutex>
 
 namespace Helianthus::Network::Asio
 {
@@ -23,16 +25,39 @@ namespace Helianthus::Network::Asio
         void Stop();
         // Post a task to be executed in loop
         void Post(std::function<void()> Task);
+        // Post a task with delay (milliseconds)
+        void PostDelayed(std::function<void()> Task, int DelayMs);
 
         std::shared_ptr<Reactor> GetReactor() const;
         std::shared_ptr<Proactor> GetProactor() const;
 
     private:
+        void InitializeWakeupFd();
+        void CleanupWakeupFd();
+        void ProcessTasks();
+        void ProcessDelayedTasks();
+
         std::atomic<bool> Running;
         std::shared_ptr<Reactor> ReactorPtr;
         std::shared_ptr<Proactor> ProactorPtr;
-        // simple pending tasks queue (single-producer scenario for now)
-        // 为简化，此处实现放在 cpp 内部
+        
+        // 任务队列
+        std::queue<std::function<void()>> TaskQueue;
+        mutable std::mutex TaskQueueMutex;
+        
+        // 延迟任务队列
+        struct DelayedTask {
+            std::function<void()> Task;
+            int64_t ExecuteTime; // 毫秒时间戳
+            
+            DelayedTask(std::function<void()> TaskIn, int64_t ExecuteTimeIn)
+                : Task(std::move(TaskIn)), ExecuteTime(ExecuteTimeIn) {}
+        };
+        std::vector<DelayedTask> DelayedTaskQueue;
+        mutable std::mutex DelayedTaskQueueMutex;
+        
+        // 跨线程唤醒机制
+        int WakeupFd = -1;
     };
 }
 

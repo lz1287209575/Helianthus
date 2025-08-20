@@ -19,9 +19,18 @@ namespace Helianthus::Network::Asio
         bool Del(Fd Handle) override;
         int  PollOnce(int TimeoutMs) override;
 
+        // 配置选项
+        void SetEdgeTriggered(bool Enable) { EdgeTriggered = Enable; }
+        void SetMaxEvents(int MaxEvents) { MaxEvents = MaxEvents; }
+
     private:
+        static uint32_t ToNative(EventMask Mask, bool EdgeTriggered);
+        static EventMask FromNative(uint32_t Events);
+
         int EpollFd;
         std::unordered_map<Fd, IoCallback> Callbacks;
+        bool EdgeTriggered = false;  // 默认电平触发
+        int MaxEvents = 64;          // 默认最大事件数
     };
 }
 

@@ -24,6 +24,20 @@ bazel_dep(name = "nlohmann_json", version = "3.11.2")
 # Foreign CC (build C/C++ libraries via CMake/Autotools/Make)
 bazel_dep(name = "rules_foreign_cc", version = "0.10.1")
 
+# Provide legacy repo names that some third-party expect
+bazel_dep(name = "abseil-cpp", version = "20230802.1", repo_name = "com_google_absl")
+# protobuf via BCR may not provide legacy repo_name; we will add http_archive fallback below
+
+# Introduce tcmalloc as a module and override to upstream repo
+bazel_dep(name = "tcmalloc")
+archive_override(
+    module_name = "tcmalloc",
+    urls = [
+        "https://github.com/google/tcmalloc/archive/refs/heads/master.tar.gz",
+    ],
+    strip_prefix = "tcmalloc-master",
+)
+
 # Non-module dependencies using extension
 deps = use_extension("@bazel_tools//tools/build_defs/repo:non_module_dependencies.bzl", "non_module_dependencies")
 
@@ -52,6 +66,25 @@ http_archive(
         "https://github.com/mongodb/mongo-c-driver/archive/refs/tags/1.24.4.tar.gz",
     ],
     build_file = "//ThirdParty:mongo_c_driver.BUILD",
+)
+
+# Legacy gperftools kept (not used when module tcmalloc works)
+http_archive(
+    name = "gperftools",
+    strip_prefix = "gperftools-gperftools-2.10",
+    urls = [
+        "https://github.com/gperftools/gperftools/archive/gperftools-2.10.tar.gz",
+    ],
+    build_file = "//ThirdParty:gperftools.BUILD",
+)
+
+# Fallback legacy repos expected by tcmalloc when not provided via modules
+http_archive(
+    name = "com_google_protobuf",
+    strip_prefix = "protobuf-25.1",
+    urls = [
+        "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v25.1.tar.gz",
+    ],
 )
 
 ########################################

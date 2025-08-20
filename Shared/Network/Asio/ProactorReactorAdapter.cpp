@@ -4,9 +4,11 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #define ssize_t int
+using NativeSocketType = SOCKET;
 #else
 #include <sys/socket.h>
 #include <unistd.h>
+using NativeSocketType = int;
 #endif
 
 namespace Helianthus::Network::Asio
@@ -31,7 +33,7 @@ namespace Helianthus::Network::Asio
             {
                 return;
             }
-            ssize_t Received = ::recv(static_cast<SOCKET>(Handle), Buffer, static_cast<int>(BufferSize), 0);
+            ssize_t Received = ::recv(static_cast<NativeSocketType>(Handle), Buffer, static_cast<int>(BufferSize), 0);
             Network::NetworkError Err = (Received >= 0) ? Network::NetworkError::NONE : Network::NetworkError::RECEIVE_FAILED;
             if (Handler) 
             {
@@ -57,7 +59,7 @@ namespace Helianthus::Network::Asio
             {
                 return;
             }
-            ssize_t Sent = ::send(static_cast<SOCKET>(Handle), Data, static_cast<int>(Size), 0);
+            ssize_t Sent = ::send(static_cast<NativeSocketType>(Handle), Data, static_cast<int>(Size), 0);
             Network::NetworkError Err = (Sent >= 0) ? Network::NetworkError::NONE : Network::NetworkError::SEND_FAILED;
             if (Handler) 
             {

@@ -1,44 +1,83 @@
 cc_test(
-    name = "network_echo_test",
-    srcs = ["EchoTest.cpp"],
+    name = "asio_test",
+    srcs = ["AsioTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
     }),
     deps = [
         "//Shared/Network:network",
-        "//Shared/Common:common",
         "@googletest//:gtest_main",
     ],
-)
-
-cc_binary(
-    name = "tcp_socket_test",
-    srcs = ["TcpSocketTest.cpp"],
-    deps = [
-        "//Shared/Network:network",
-        "//Shared/Common:common",
-    ],
-    # linkopts = ["-lws2_32"],
     visibility = ["//visibility:public"],
 )
 
 cc_test(
-    name = "network_manager_test",
-    srcs = ["NetworkManagerTest.cpp"],
+    name = "tcp_async_echo_test",
+    srcs = ["TcpAsyncEchoTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
     deps = [
         "//Shared/Network:network",
-        "//Shared/Message:message",
         "@googletest//:gtest_main",
     ],
+    visibility = ["//visibility:public"],
 )
 
 cc_test(
-    name = "tcp_socket_unit_test",
-    srcs = ["TcpSocketUnitTest.cpp"],
+    name = "message_protocol_test",
+    srcs = ["MessageProtocolTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
     deps = [
         "//Shared/Network:network",
-        "//Shared/Common:common",
         "@googletest//:gtest_main",
     ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "error_mapping_test",
+    srcs = ["ErrorMappingTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "buffer_pool_test",
+    srcs = ["BufferPoolTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "zero_copy_buffer_test",
+    srcs = ["ZeroCopyBufferTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
 )
