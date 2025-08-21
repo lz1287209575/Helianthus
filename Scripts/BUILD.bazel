@@ -1,0 +1,5 @@
+filegroup(
+    name = "scripts",
+    srcs = glob(["*.lua"]),
+    visibility = ["//visibility:public"],
+)

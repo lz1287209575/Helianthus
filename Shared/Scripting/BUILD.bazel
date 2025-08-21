@@ -1,0 +1,31 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+config_setting(
+	name = "enable_lua",
+	values = {"define": "ENABLE_LUA_SCRIPTING=1"},
+)
+
+cc_library(
+	name = "scripting",
+	visibility = ["//visibility:public"],
+	hdrs = [
+		"IScriptEngine.h",
+		"LuaScriptEngine.h",
+		"ScriptingTypes.h",
+	],
+	srcs = [
+		"LuaScriptEngine.cpp",
+	],
+	deps = select({
+		":enable_lua": ["//ThirdParty/lua:lua"],
+		"//conditions:default": [],
+	}),
+	copts = [
+		"/std:c++20",
+	] + select({
+		"@bazel_tools//tools/cpp:msvc": ["/utf-8"],
+		"//conditions:default": ["-std=c++20", "-fPIC"],
+	}),
+)
+
+

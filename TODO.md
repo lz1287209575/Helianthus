@@ -79,8 +79,71 @@
     - 处理 IOCP 完成端口创建和事件处理错误。
     - 添加 IOCP 错误映射测试用例。
 
+- 脚本胶水层（Lua 引擎）
+  - 已完成：
+    - 创建 `Shared/Scripting` 目录结构与 `IScriptEngine` 接口。
+    - 实现 `LuaScriptEngine` 类，支持 Lua 5.4 运行时集成。
+    - 配置 `ThirdParty/lua` 作为 git submodule，创建 Bazel 构建目标。
+    - 实装完整的 Lua API 调用：`luaL_newstate`、`luaL_openlibs`、`luaL_loadfile`、`lua_pcall` 等。
+    - 支持宏控制编译：`--define=ENABLE_LUA_SCRIPTING=1` 启用 Lua 功能。
+    - 创建 `Scripts/hello.lua` 示例脚本，包含多种函数示例。
+    - 创建 `Tests/Scripting/ScriptingTest.cpp` 完整测试套件，覆盖初始化、执行字符串、加载文件、调用函数、错误处理等。
+    - 配置 MSVC 和 GCC/Clang 的编译选项，设置正确的依赖关系。
+  - 待办：
+    - 网络连接恢复后运行测试验证功能。
+    - 脚本热更新机制：文件变更监控、自动重加载。
+    - 配置系统集成：从脚本加载配置、热更新钩子。
+    - 安全沙箱：限制危险库、提供白名单模块、超时/内存限制。
+    - 性能优化：协程支持、JIT 编译、对象池管理。
+    - 多语言支持：Python、JavaScript、C# 引擎扩展。
+    - 反射绑定：与运行时反射系统集成，自动导出 C++ 类到脚本。
+
 - 其他
   - Windows：增加全局 WinSock 初始化（`WSAStartup/WSACleanup`），套接字类在构造/首次使用前确保初始化。
   - 编译：默认 C++20，Windows 目标覆盖 `/utf-8`，清理编码告警。
 
 > 注：以上 TODO 以跨平台优先级排序：先确保语义一致与基础测试通过，再逐步优化 IOCP/epoll/kqueue 的特性与性能。
+
+## P0：近期优先事项（Windows IOCP 冲刺清单）
+
+- IOCP 唤醒机制（跨线程 Post/Stop 立即生效）
+  - 在 `ProactorIocp` 中引入 Wake Key，`IoContext::Post/Stop` 调用 `PostQueuedCompletionStatus(IocpHandle, 0, WakeKey, nullptr)`；
+  - `ProcessCompletions` 识别 WakeKey 不做错误处理，仅用于唤醒。
+- AcceptEx 全流程与持续投递
+  - 每个挂起 accept 预创建 `WSASocket` 与固定 `AcceptBuffer`（`sizeof(sockaddr_in)*2 + 32`）；
+  - 完成后 `SO_UPDATE_ACCEPT_CONTEXT`，使用 `GetAcceptExSockaddrs` 获取本地/远端地址；
+  - 回调上层并调用 `TcpSocket.Adopt()`；
+  - 维持 1-4 个并发 `AcceptEx`，错误重投递，退出时统一取消。
+- AsyncRead/AsyncWrite 续传语义
+  - `WSARecv/WSASend` 完成后根据 `Transferred` 与目标长度继续投递，直至读满/写完或错误；
+  - 统一使用 `ConvertWinSockError` 做错误码映射；
+  - `Cancel(Fd)` 覆盖 Read/Write/Accept，挂起操作被取消应返回一致错误。
+- AsyncConnect（Windows）
+  - 使用 `ConnectEx` 实现非阻塞连接，完成后 `SO_UPDATE_CONNECT_CONTEXT`；
+  - 与超时/取消、错误码映射打通。
+- IoContext 驱动与停止
+  - Stop/Cancel 时向 IOCP 投递唤醒包，确保 `Run()` 能尽快退出；
+  - 统一 `PostDelayed` 定时触发语义（Windows 基于 IOCP 唤醒）。
+- 测试与构建（Windows）
+  - IOCP 路径下的 TCP 长度前缀 Echo（含半包/粘包）、并发、多尺寸；
+  - 取消与超时集成测试；
+  - Bazel 目标统一链接 `Ws2_32.lib`、`Mswsock.lib`，MSVC 使用 `/std:c++20` 与 `/utf-8`。
+
+## 非网络功能（建议并行推进）
+
+- 结构化日志与可观测性
+  - 统一 `Logger` 的字段化输出（连接 ID、操作 ID、错误码、耗时），提供开关与等级；
+  - 请求级 Trace ID 透传，便于端到端排查。
+- 指标与统计（Metrics）
+  - 暴露连接/操作级 QPS、延迟分位（P50/P95/P99）、错误计数（按类型）；
+  - 提供拉取接口或导出到文本（Prometheus 友好格式）。
+- 配置系统
+  - 基于 `json/yaml` 的配置加载、热更新钩子（可选），覆盖端口、缓冲区、并发数、日志等级等；
+  - 为测试提供最小配置样例与校验。
+- 基准与性能对比
+  - 提供 Echo 压测可执行与脚本，生成 CSV/Markdown 报告；
+  - 路径对比：IOCP vs POSIX（epoll）在不同 payload/并发下的吞吐与延迟。
+- CI 与多平台工况
+  - Windows + Linux 双平台流水线；
+  - 关键测试（Echo、取消/超时、错误映射）并行执行；
+  - 产物与符号（Release/Debug）归档。

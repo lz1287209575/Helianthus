@@ -142,7 +142,7 @@ NetworkError TcpSocket::Bind(const NetworkAddress& Address)
         }
 #ifdef _WIN32
         const char* WinOpt = "1";
-        ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, WinOpt, sizeof(int));
+        ::setsockopt(static_cast<SOCKET>(SockImpl->Fd), SOL_SOCKET, SO_REUSEADDR, WinOpt, sizeof(int));
 #else
         int Opt = 1;
         ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, &Opt, sizeof(Opt));
@@ -150,10 +150,17 @@ NetworkError TcpSocket::Bind(const NetworkAddress& Address)
     }
 
     sockaddr_in Addr = MakeSockaddr(Address);
+#ifdef _WIN32
+    if (::bind(static_cast<SOCKET>(SockImpl->Fd), reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) == SOCKET_ERROR)
+    {
+        return NetworkError::BIND_FAILED;
+    }
+#else
     if (::bind(SockImpl->Fd, reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) < 0)
     {
         return NetworkError::BIND_FAILED;
     }
+#endif
     SockImpl->Local = Address;
     return NetworkError::NONE;
 }
@@ -165,10 +172,17 @@ NetworkError TcpSocket::Listen(uint32_t Backlog)
     {
         return NetworkError::LISTEN_FAILED;
     }
+#ifdef _WIN32
+    if (::listen(static_cast<SOCKET>(SockImpl->Fd), static_cast<int>(Backlog)) == SOCKET_ERROR)
+    {
+        return NetworkError::LISTEN_FAILED;
+    }
+#else
     if (::listen(SockImpl->Fd, static_cast<int>(Backlog)) < 0)
     {
         return NetworkError::LISTEN_FAILED;
     }
+#endif
     SockImpl->IsServer = true;
     SockImpl->State = ConnectionState::CONNECTED;
     return NetworkError::NONE;
@@ -183,13 +197,21 @@ NetworkError TcpSocket::Accept()
     }
     sockaddr_in ClientAddr{};
     socklen_t Len = sizeof(ClientAddr);
+#ifdef _WIN32
+    SOCKET ClientFd = ::accept(static_cast<SOCKET>(SockImpl->Fd), reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
+    if (ClientFd == INVALID_SOCKET)
+    {
+        return NetworkError::ACCEPT_FAILED;
+    }
+    closesocket(ClientFd);
+#else
     int ClientFd = ::accept(SockImpl->Fd, reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
     if (ClientFd < 0)
     {
         return NetworkError::ACCEPT_FAILED;
     }
-    // Minimal: immediately close accepted client. A higher-level manager should own client sockets.
     closesocket(ClientFd);
+#endif
     return NetworkError::NONE;
 }
 
@@ -205,7 +227,11 @@ void TcpSocket::Disconnect()
     // 当前类不持有 Proactor 指针，取消由上层 Async* 封装或 Manager 负责调用
     if (SockImpl->Fd >= 0)
     {
+#ifdef _WIN32
+        closesocket(static_cast<SOCKET>(SockImpl->Fd));
+#else
         closesocket(SockImpl->Fd);
+#endif
         SockImpl->Fd = -1;
     }
     if (SockImpl->State == ConnectionState::CONNECTED)
@@ -221,44 +247,68 @@ void TcpSocket::Disconnect()
 NetworkError TcpSocket::Send(const char* Data, size_t Size, size_t& BytesSent)
 {
 	BytesSent = 0;
-	int FdSnapshot = -1;
+#ifdef _WIN32
+    SOCKET FdSnapshot = INVALID_SOCKET;
+#else
+    int FdSnapshot = -1;
+#endif
 	{
 		std::lock_guard<std::mutex> Lock(Mutex);
 		if (SockImpl->Fd < 0)
 		{
 			return NetworkError::SEND_FAILED;
 		}
-		FdSnapshot = static_cast<int>(SockImpl->Fd);
+#ifdef _WIN32
+        FdSnapshot = static_cast<SOCKET>(SockImpl->Fd);
+#else
+        FdSnapshot = static_cast<int>(SockImpl->Fd);
+#endif
 	}
-	size_t LocalSent = 0;
-	ssize_t N = ::send(FdSnapshot, Data, Size, 0);
+	ssize_t N = 0;
+#ifdef _WIN32
+    N = ::send(FdSnapshot, Data, static_cast<int>(Size), 0);
+#else
+    N = ::send(FdSnapshot, Data, Size, 0);
+#endif
 	if (N < 0)
 	{
 		return ConvertErrnoToNetworkError(errno);
 	}
-	LocalSent = static_cast<size_t>(N);
+	BytesSent = static_cast<size_t>(N);
 	{
 		std::lock_guard<std::mutex> Lock(Mutex);
-		SockImpl->Stats.BytesSent += static_cast<uint64_t>(LocalSent);
+		SockImpl->Stats.BytesSent += static_cast<uint64_t>(BytesSent);
 		SockImpl->Stats.PacketsSent += 1;
 	}
-	BytesSent = LocalSent;
 	return NetworkError::NONE;
 }
 
 NetworkError TcpSocket::Receive(char* Buffer, size_t BufferSize, size_t& BytesReceived)
 {
 	BytesReceived = 0;
-	int FdSnapshot = -1;
+#ifdef _WIN32
+    SOCKET FdSnapshot = INVALID_SOCKET;
+#else
+    int FdSnapshot = -1;
+#endif
 	{
 		std::lock_guard<std::mutex> Lock(Mutex);
 		if (SockImpl->Fd < 0)
 		{
 			return NetworkError::RECEIVE_FAILED;
 		}
-		FdSnapshot = static_cast<int>(SockImpl->Fd);
+#ifdef _WIN32
+        FdSnapshot = static_cast<SOCKET>(SockImpl->Fd);
+#else
+        FdSnapshot = static_cast<int>(SockImpl->Fd);
+#endif
 	}
-	int N = ::recv(FdSnapshot, (Buffer), BufferSize, 0);
+	int N = 0;
+#ifdef _WIN32
+    N = ::recv(FdSnapshot, (Buffer), static_cast<int>(BufferSize), 0);
+#else
+    N = ::recv(FdSnapshot, (Buffer), BufferSize, 0);
+#endif
 	if (N < 0)
 	{
 		return ConvertErrnoToNetworkError(errno);
@@ -267,13 +317,12 @@ NetworkError TcpSocket::Receive(char* Buffer, size_t BufferSize, size_t& BytesRe
 	{
 		return NetworkError::CONNECTION_CLOSED;
 	}
-	size_t LocalReceived = static_cast<size_t>(N);
+	BytesReceived = static_cast<size_t>(N);
 	{
 		std::lock_guard<std::mutex> Lock(Mutex);
-		SockImpl->Stats.BytesReceived += static_cast<uint64_t>(LocalReceived);
+		SockImpl->Stats.BytesReceived += static_cast<uint64_t>(BytesReceived);
 		SockImpl->Stats.PacketsReceived += 1;
 	}
-	BytesReceived = LocalReceived;
 	return NetworkError::NONE;
 }
 
@@ -381,7 +430,7 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
     {
         // 设置 SO_REUSEADDR 选项（跨平台）
         int reuseAddr = Config.ReuseAddr ? 1 : 0;
-        if (setsockopt(SockImpl->Fd,
+        if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
                        SOL_SOCKET,
                        SO_REUSEADDR,
                        reinterpret_cast<const char*>(&reuseAddr),
@@ -393,7 +442,7 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
 #ifdef _WIN32
         // Windows 特有选项（如 TCP_NODELAY）
         int noDelay = Config.NoDelay ? 1 : 0;
-        if (setsockopt(SockImpl->Fd,
+        if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
                        IPPROTO_TCP,
                        TCP_NODELAY,
                        reinterpret_cast<const char*>(&noDelay),
@@ -418,7 +467,7 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
 #ifdef _WIN32
     // Windows 特有选项（如 TCP_NODELAY）
     int noDelay = Config.NoDelay ? 1 : 0;
-    if (setsockopt(SockImpl->Fd,
+    if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
                    IPPROTO_TCP,
                    TCP_NODELAY,
                    reinterpret_cast<const char*>(&noDelay),
@@ -483,7 +532,7 @@ void TcpSocket::SetBlocking(bool Blocking)
     {
 #ifdef _WIN32
         u_long mode = Blocking ? 0 : 1;
-        ioctlsocket(SockImpl->Fd, FIONBIO, &mode);
+        ioctlsocket(static_cast<SOCKET>(SockImpl->Fd), FIONBIO, &mode);
 #else
         int flags = fcntl(SockImpl->Fd, F_GETFL, 0);
         if (Blocking)
@@ -533,9 +582,17 @@ void TcpSocket::Adopt(NativeHandle Handle,
     std::lock_guard<std::mutex> Lock(Mutex);
     if (SockImpl->Fd >= 0)
     {
+#ifdef _WIN32
+        closesocket(static_cast<SOCKET>(SockImpl->Fd));
+#else
         closesocket(SockImpl->Fd);
+#endif
     }
+#ifdef _WIN32
+    SockImpl->Fd = static_cast<intptr_t>(static_cast<SOCKET>(Handle));
+#else
     SockImpl->Fd = static_cast<int>(Handle);
+#endif
     SockImpl->Local = Local;
     SockImpl->Remote = Remote;
     SockImpl->IsServer = IsServerSide;
