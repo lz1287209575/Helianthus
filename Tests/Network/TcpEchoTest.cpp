@@ -5,11 +5,34 @@
 
 #include <atomic>
 #include <thread>
+#include <array>
 
 #include <gtest/gtest.h>
 
 using namespace Helianthus::Network;
 using namespace Helianthus::Network::Asio;
+
+namespace {
+struct ReadState {
+    std::shared_ptr<AsyncTcpSocket> Socket;
+    char* Buf = nullptr;
+    size_t Target = 0;
+    size_t Read = 0;
+};
+
+static void ReadExact(std::shared_ptr<ReadState> st,
+                      std::function<void(NetworkError)> onDone)
+{
+    const size_t remain = st->Target - st->Read;
+    st->Socket->AsyncReceive(st->Buf + st->Read, remain,
+        [st, onDone](NetworkError e, size_t n){
+            if (e != NetworkError::NONE) { onDone(e); return; }
+            st->Read += n;
+            if (st->Read < st->Target) { ReadExact(st, onDone); }
+            else { onDone(NetworkError::NONE); }
+        });
+}
+}
 
 static void WriteUint32LE(uint32_t v, char out[4])
 {
@@ -24,6 +47,9 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
     auto Ctx = std::make_shared<IoContext>();
     Helianthus::Network::EnsureWinSockInitialized();
 
+    // 提前启动事件循环线程，确保异步事件不丢失
+    std::thread LoopThread([&]() { Ctx->Run(); });
+
     AsyncTcpAcceptor Acceptor(Ctx);
     ASSERT_EQ(Acceptor.Native().Bind({"127.0.0.1", 50002}), NetworkError::NONE);
     ASSERT_EQ(Acceptor.Native().Listen(16), NetworkError::NONE);
@@ -31,9 +57,8 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
     ASSERT_GT(Bound.Port, 0);
 
     AsyncTcpSocket Client(Ctx);
-    ASSERT_EQ(Client.Connect({"127.0.0.1", Bound.Port}), NetworkError::NONE);
 
-    // Server accept and echo on callback（改为异步收发，避免阻塞/非阻塞差异）
+    // Server accept and echo on callback（全异步）
     std::atomic<bool> Done{false};
     std::atomic<bool> ServerOk{true};
     std::string Payload = "HelloEcho_LengthPrefix";
@@ -48,84 +73,76 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
                 ServerOk = false;
                 return;
             }
-            // 读 4 字节长度
-            auto HeaderBuf = std::make_shared<std::vector<char>>(4);
-            ServerSocket->AsyncReceive(HeaderBuf->data(), 4,
-                [&, HeaderBuf, ServerSocket](NetworkError e1, size_t b1)
-                {
-                    if (e1 != NetworkError::NONE || b1 != 4) { ServerOk = false; Done = true; return; }
-                    uint32_t Len = static_cast<uint8_t>((*HeaderBuf)[0]) |
-                                   (static_cast<uint8_t>((*HeaderBuf)[1]) << 8) |
-                                   (static_cast<uint8_t>((*HeaderBuf)[2]) << 16) |
-                                   (static_cast<uint8_t>((*HeaderBuf)[3]) << 24);
-                    auto BodyBuf = std::make_shared<std::vector<char>>(Len);
-                    ServerSocket->AsyncReceive(BodyBuf->data(), Len,
-                        [&, BodyBuf, ServerSocket](NetworkError e2, size_t b2)
-                        {
-                            if (e2 != NetworkError::NONE || b2 != BodyBuf->size()) { ServerOk = false; Done = true; return; }
-                            ServerSocket->AsyncSend(Header, 4,
-                                [&, BodyBuf, ServerSocket](NetworkError e3, size_t)
-                                {
-                                    if (e3 != NetworkError::NONE) { ServerOk = false; Done = true; return; }
-                                    ServerSocket->AsyncSend(BodyBuf->data(), BodyBuf->size(),
-                                        [&, BodyBuf](NetworkError e4, size_t)
-                                        {
-                                            if (e4 != NetworkError::NONE) ServerOk = false;
-                                            Done = true;
-                                        });
-                                });
+            // 读 4 字节长度（精确读）
+            auto Hdr = std::make_shared<std::array<char,4>>();
+            auto hs = std::make_shared<ReadState>();
+            hs->Socket = ServerSocket;
+            hs->Buf = Hdr->data();
+            hs->Target = 4;
+            hs->Read = 0;
+            ReadExact(hs, [&, Hdr, ServerSocket](NetworkError e1){
+                if (e1 != NetworkError::NONE) { ServerOk = false; Done = true; return; }
+                uint32_t Len = static_cast<uint8_t>((*Hdr)[0]) |
+                               (static_cast<uint8_t>((*Hdr)[1]) << 8) |
+                               (static_cast<uint8_t>((*Hdr)[2]) << 16) |
+                               (static_cast<uint8_t>((*Hdr)[3]) << 24);
+                auto Body = std::make_shared<std::vector<char>>(Len);
+                auto bs = std::make_shared<ReadState>();
+                bs->Socket = ServerSocket;
+                bs->Buf = Body->data();
+                bs->Target = Len;
+                bs->Read = 0;
+                ReadExact(bs, [&, Body, ServerSocket](NetworkError e2){
+                    if (e2 != NetworkError::NONE) { ServerOk = false; Done = true; return; }
+                    ServerSocket->AsyncSend(Header, 4,
+                        [&, Body, ServerSocket](NetworkError e3, size_t){
+                            if (e3 != NetworkError::NONE) { ServerOk = false; Done = true; Ctx->Post([&](){ Ctx->Stop(); }); return; }
+                            ServerSocket->AsyncSend(Body->data(), Body->size(),
+                                [&, Body](NetworkError e4, size_t){ if (e4 != NetworkError::NONE) ServerOk = false; Done = true; Ctx->Post([&](){ Ctx->Stop(); }); });
+                        });
+                });
+            });
+        });
+
+    // Client async send (header fragmented) + async receive echo back
+    std::vector<char> Echo(Payload.size());
+    std::atomic<bool> EchoDone{false};
+    // 先发起连接，确保服务端已注册 accept
+    ASSERT_EQ(Client.Connect({"127.0.0.1", Bound.Port}), NetworkError::NONE);
+    // send header in two parts
+    Client.AsyncSend(Header, 2,
+        [&](NetworkError e, size_t){
+            ASSERT_EQ(e, NetworkError::NONE);
+            Client.AsyncSend(Header + 2, 2,
+                [&](NetworkError e2, size_t){
+                    ASSERT_EQ(e2, NetworkError::NONE);
+                    // send body in two parts
+                    Client.AsyncSend(Payload.data(), 3,
+                        [&](NetworkError e3, size_t){
+                            ASSERT_EQ(e3, NetworkError::NONE);
+                            Client.AsyncSend(Payload.data() + 3, Payload.size() - 3,
+                                [&](NetworkError e4, size_t){ ASSERT_EQ(e4, NetworkError::NONE); });
                         });
                 });
         });
-
-    // Client send in fragments to simulate 半包/粘包
-    std::thread ClientSendThread(
-        [&]()
-        {
-            size_t s = 0;
-            ASSERT_EQ(Client.Native().Send(Header, 2, s), NetworkError::NONE);
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            s = 0;
-            ASSERT_EQ(Client.Native().Send(Header + 2, 2, s), NetworkError::NONE);
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            s = 0;
-            ASSERT_EQ(Client.Native().Send(Payload.data(), 3, s), NetworkError::NONE);
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            s = 0;
-            ASSERT_EQ(
-                Client.Native().Send(Payload.data() + 3, Payload.size() - 3, s),
-                NetworkError::NONE);
-        });
-
-    // Client read echo fully (off the event loop thread)
-    std::vector<char> Echo(Payload.size());
-    std::thread ClientRecvThread(
-        [&]()
-        {
-            size_t GotHdr = 0;
-            char EH[4];
-            while (GotHdr < 4)
-            {
-                size_t n = 0;
-                auto e = Client.Native().Receive(EH + GotHdr, 4 - GotHdr, n);
-                if (e != NetworkError::NONE)
-                    return;
-                GotHdr += n;
-            }
-            uint32_t Len = static_cast<uint8_t>(EH[0]) | (static_cast<uint8_t>(EH[1]) << 8) |
-                           (static_cast<uint8_t>(EH[2]) << 16) |
-                           (static_cast<uint8_t>(EH[3]) << 24);
-            size_t RecvTot = 0;
-            while (RecvTot < Len)
-            {
-                size_t n = 0;
-                auto e = Client.Native().Receive(Echo.data() + RecvTot, Len - RecvTot, n);
-                if (e != NetworkError::NONE)
-                    return;
-                RecvTot += n;
-            }
-            Ctx->Post([&]() { Ctx->Stop(); });
-        });
+    // read echo header then body
+    auto CEHdr = std::make_shared<std::array<char,4>>();
+    auto chs = std::make_shared<ReadState>();
+    chs->Socket = std::shared_ptr<AsyncTcpSocket>(&Client, [](AsyncTcpSocket*){}); // 非拥有包装
+    chs->Buf = CEHdr->data();
+    chs->Target = 4;
+    chs->Read = 0;
+    ReadExact(chs, [&](NetworkError er){
+        if (er != NetworkError::NONE) return;
+        uint32_t Len = static_cast<uint8_t>((*CEHdr)[0]) | (static_cast<uint8_t>((*CEHdr)[1]) << 8) |
+                       (static_cast<uint8_t>((*CEHdr)[2]) << 16) | (static_cast<uint8_t>((*CEHdr)[3]) << 24);
+        auto cbs = std::make_shared<ReadState>();
+        cbs->Socket = std::shared_ptr<AsyncTcpSocket>(&Client, [](AsyncTcpSocket*){}); // 非拥有包装
+        cbs->Buf = Echo.data();
+        cbs->Target = Len;
+        cbs->Read = 0;
+        ReadExact(cbs, [&](NetworkError er2){ if (er2 == NetworkError::NONE) { EchoDone = true; Ctx->Post([&](){ Ctx->Stop(); }); } });
+    });
 
     // Safety guard: force stop if not finished within 2 seconds
     Ctx->PostDelayed(
@@ -139,12 +156,12 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
         },
         2000);
 
-    Ctx->Run();
+    // 等待事件循环退出
+    if (LoopThread.joinable()) LoopThread.join();
 
-    if (ClientSendThread.joinable()) ClientSendThread.join();
-    if (ClientRecvThread.joinable()) ClientRecvThread.join();
     ASSERT_TRUE(ServerOk);
     ASSERT_TRUE(Done.load());
+    ASSERT_TRUE(EchoDone.load());
     ASSERT_EQ(std::string(Echo.begin(), Echo.end()), Payload);
 }
 
@@ -152,6 +169,9 @@ TEST(TcpEchoAsyncTest, TimeoutAndCancel)
 {
     auto Ctx = std::make_shared<IoContext>();
     Helianthus::Network::EnsureWinSockInitialized();
+
+    // 提前启动事件循环线程
+    std::thread LoopThread([&]() { Ctx->Run(); });
 
     AsyncTcpAcceptor Acceptor(Ctx);
     ASSERT_EQ(Acceptor.Native().Bind({"127.0.0.1", 50003}), NetworkError::NONE);
@@ -188,7 +208,7 @@ TEST(TcpEchoAsyncTest, TimeoutAndCancel)
         },
         20);
     Ctx->PostDelayed([&]() { Ctx->Stop(); }, 100);
-    Ctx->Run();
+    if (LoopThread.joinable()) LoopThread.join();
 
     ASSERT_TRUE(Accepted);
     ASSERT_TRUE(CanceledCalled);

@@ -34,6 +34,8 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandle
 
     PendingRecv = std::move(Handler);
     const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
+    PendingRecvBuf = Buffer;
+    PendingRecvSize = BufferSize;
 
     // Windows 下优先使用 Proactor（IOCP）。非 Windows 统一走 Reactor。
 #ifdef _WIN32
@@ -81,7 +83,7 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandle
     
     // 注册/更新到 Reactor（每次调用都更新回调）
     if (ReactorPtr->Add(FdValue, EventMask::Read,
-        [this, Buffer, BufferSize](EventMask Event)
+        [this](EventMask Event)
         {
             if (ClosedFlag)
             {
@@ -104,11 +106,11 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandle
             while (true)
             {
                 size_t chunk = 0;
-                Network::NetworkError errNow = Socket.Receive(Buffer + Received, BufferSize - Received, chunk);
+                Network::NetworkError errNow = Socket.Receive(PendingRecvBuf + Received, PendingRecvSize - Received, chunk);
                 if (errNow == Network::NetworkError::NONE && chunk > 0)
                 {
                     Received += chunk;
-                    if (Received >= BufferSize) break;
+                    if (Received >= PendingRecvSize) break;
                     continue;
                 }
                 break;
@@ -117,6 +119,8 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandle
 
             auto Callback = PendingRecv;
             PendingRecv = nullptr;
+            PendingRecvBuf = nullptr;
+            PendingRecvSize = 0;
 
             // 保持注册，不在此处删除，避免与后续再次注册产生竞态
             

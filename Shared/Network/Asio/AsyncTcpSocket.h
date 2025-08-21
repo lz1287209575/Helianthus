@@ -32,6 +32,8 @@ private:
     std::shared_ptr<Proactor> ProactorPtr;
     Network::Sockets::TcpSocket Socket;
     ReceiveHandler PendingRecv;
+    char* PendingRecvBuf = nullptr;
+    size_t PendingRecvSize = 0;
     // 简易发送状态（单次发送序列）
     const char* PendingSendPtr = nullptr;
     size_t PendingSendRemaining = 0;

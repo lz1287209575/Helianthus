@@ -78,7 +78,7 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [this, &ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [&ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -103,8 +103,9 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
                                             });
                 });
 
-            // 开始接收数据
-            std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]()
+            // 开始接收数据（使用 shared_ptr 递归闭包，确保生命周期安全）
+            auto StartReceive = std::make_shared<std::function<void()>>();
+            *StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
                 auto Buffer = std::make_shared<std::vector<char>>(1024);
                 ServerSocket->AsyncReceive(Buffer->data(),
@@ -114,11 +115,11 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
                                               if (Err == NetworkError::NONE && Bytes > 0)
                                               {
                                                   Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                  StartReceive();  // 继续接收
+                                                  (*StartReceive)();  // 继续接收
                                               }
                                           });
             };
-            StartReceive();
+            (*StartReceive)();
         });
 
     // 等待服务器准备就绪
@@ -145,8 +146,9 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
                             MessageData.size(),
                             [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
 
-    // 开始接收回显
-    std::function<void()> StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
+    // 开始接收回显（使用 shared_ptr 递归闭包）
+    auto StartClientReceive = std::make_shared<std::function<void()>>();
+    *StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
     {
         auto Buffer = std::make_shared<std::vector<char>>(1024);
         ClientSocket->AsyncReceive(
@@ -157,11 +159,11 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
                 if (Err == NetworkError::NONE && Bytes > 0)
                 {
                     ClientProtocol->ProcessReceivedData(Buffer->data(), Bytes);
-                    StartClientReceive();  // 继续接收
+                    (*StartClientReceive)();  // 继续接收
                 }
             });
     };
-    StartClientReceive();
+    (*StartClientReceive)();
 
     // 等待测试完成
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -187,7 +189,7 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [this, &MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [&MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -204,8 +206,9 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
                     MessagesReceived++;
                 });
 
-            // 开始接收数据
-            std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]()
+            // 开始接收数据（使用 shared_ptr 递归闭包）
+            auto StartReceive = std::make_shared<std::function<void()>>();
+            *StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
                 auto Buffer = std::make_shared<std::vector<char>>(16);  // 小缓冲区模拟分片
                 ServerSocket->AsyncReceive(Buffer->data(),
@@ -215,11 +218,11 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
                                               if (Err == NetworkError::NONE && Bytes > 0)
                                               {
                                                   Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                  StartReceive();  // 继续接收
+                                                  (*StartReceive)();  // 继续接收
                                               }
                                           });
             };
-            StartReceive();
+            (*StartReceive)();
         });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -248,8 +251,8 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
     size_t Offset = 0;
     const size_t ChunkSize = 7;  // 小块发送
 
-    std::function<void()> SendNextChunk =
-        [ClientSocket, &CombinedData, &Offset, ChunkSize, BytesToSend, SendNextChunk]()
+    auto SendNextChunk = std::make_shared<std::function<void()>>();
+    *SendNextChunk = [ClientSocket, &CombinedData, &Offset, ChunkSize, BytesToSend, SendNextChunk]()
     {
         if (Offset >= BytesToSend)
             return;
@@ -262,11 +265,11 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
                                     EXPECT_EQ(Err, NetworkError::NONE);
                                     Offset += CurrentChunkSize;
                                     // 继续发送下一块
-                                    SendNextChunk();
+                                    (*SendNextChunk)();
                                 });
     };
 
-    SendNextChunk();
+    (*SendNextChunk)();
 
     // 等待所有消息被接收
     std::this_thread::sleep_for(std::chrono::milliseconds(300));

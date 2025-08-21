@@ -14,6 +14,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace Helianthus::Network::Asio
@@ -58,6 +60,8 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
         ListenFd = static_cast<Fd>(Socket.GetNativeHandle());
         std::cout << "Got ListenFd: " << ListenFd << std::endl;
     }
+
+// 纯 Reactor 路径，依赖事件驱动
     
     std::cout << "About to check ProactorPtr..." << std::endl;
     // 暂时跳过 Proactor 路径，直接使用 Reactor
