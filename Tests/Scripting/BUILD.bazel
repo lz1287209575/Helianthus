@@ -5,7 +5,7 @@ cc_test(
     srcs = ["ScriptingTest.cpp"],
     deps = [
         "//Shared/Scripting:scripting",
-        "@com_google_googletest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
     data = [
         "//Scripts:hello.lua",

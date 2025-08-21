@@ -23,6 +23,9 @@ namespace Helianthus::Scripting
         std::string ErrorMessage;
     };
 
+    // 热更新回调函数类型
+    using HotReloadCallback = std::function<void(const std::string& ScriptPath, bool Success, const std::string& ErrorMessage)>;
+
     class IScriptEngine
     {
     public:
@@ -39,6 +42,12 @@ namespace Helianthus::Scripting
         // 调用脚本中的函数（可扩展为多值返回、反射绑定）
         virtual ScriptResult CallFunction(const std::string& Name,
                                           const std::vector<std::string>& Args) = 0;
+
+        // 热更新相关接口
+        virtual ScriptResult ReloadFile(const std::string& Path) = 0;
+        virtual void SetHotReloadCallback(HotReloadCallback Callback) = 0;
+        virtual bool IsFileLoaded(const std::string& Path) const = 0;
+        virtual std::vector<std::string> GetLoadedFiles() const = 0;
     };
 } // namespace Helianthus::Scripting
 

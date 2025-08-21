@@ -26,6 +26,10 @@ cc_library(
 		"@bazel_tools//tools/cpp:msvc": ["/utf-8"],
 		"//conditions:default": ["-std=c++20", "-fPIC"],
 	}),
+	defines = select({
+		":enable_lua": ["ENABLE_LUA_SCRIPTING"],
+		"//conditions:default": [],
+	}),
 )
 
 

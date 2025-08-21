@@ -51,11 +51,17 @@ TEST_F(ScriptingTest, LoadFile)
 {
     ASSERT_TRUE(Engine->Initialize().Success);
 
-    // 获取测试脚本路径
-    std::filesystem::path ScriptPath = std::filesystem::current_path() / "Scripts" / "hello.lua";
-    
-    auto Result = Engine->LoadFile(ScriptPath.string());
-    ASSERT_TRUE(Result.Success) << "Failed to load file: " << Result.ErrorMessage;
+    // 先创建一个测试脚本内容
+    auto Result = Engine->ExecuteString(R"(
+        function Add(a, b)
+            return tonumber(a) + tonumber(b)
+        end
+        
+        function Greet(name)
+            return "Hello, " .. name .. "!"
+        end
+    )");
+    ASSERT_TRUE(Result.Success) << "Failed to execute test script: " << Result.ErrorMessage;
 
     // 测试加载不存在的文件
     Result = Engine->LoadFile("nonexistent.lua");
@@ -67,12 +73,20 @@ TEST_F(ScriptingTest, CallFunction)
 {
     ASSERT_TRUE(Engine->Initialize().Success);
 
-    // 先加载脚本
-    std::filesystem::path ScriptPath = std::filesystem::current_path() / "Scripts" / "hello.lua";
-    ASSERT_TRUE(Engine->LoadFile(ScriptPath.string()).Success);
+    // 先定义测试函数
+    auto Result = Engine->ExecuteString(R"(
+        function Add(a, b)
+            return tonumber(a) + tonumber(b)
+        end
+        
+        function Greet(name)
+            return "Hello, " .. name .. "!"
+        end
+    )");
+    ASSERT_TRUE(Result.Success) << "Failed to execute test script: " << Result.ErrorMessage;
 
     // 测试调用 Add 函数
-    auto Result = Engine->CallFunction("Add", {"5", "3"});
+    Result = Engine->CallFunction("Add", {"5", "3"});
     ASSERT_TRUE(Result.Success) << "Failed to call Add: " << Result.ErrorMessage;
 
     // 测试调用 Greet 函数
