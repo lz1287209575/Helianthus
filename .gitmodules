@@ -37,3 +37,6 @@
 [submodule "ThirdParty/mongo-cxx-driver"]
 	path = ThirdParty/mongo-cxx-driver
 	url = https://gitee.com/mirrors/mongo-cxx-driver.git
+[submodule "ThirdParty/lua"]
+	path = ThirdParty/lua
+	url = https://gitee.com/mirrors/lua.git
