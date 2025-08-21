@@ -18,7 +18,13 @@ AsyncTcpSocket::AsyncTcpSocket(std::shared_ptr<IoContext> CtxIn)
 
 Network::NetworkError AsyncTcpSocket::Connect(const Network::NetworkAddress& Address)
 {
-    return Socket.Connect(Address);
+    auto Err = Socket.Connect(Address);
+    if (Err == Network::NetworkError::NONE)
+    {
+        // 确保用于 Reactor 的套接字为非阻塞，避免在回调中阻塞导致事件循环卡死
+        Socket.SetBlocking(false);
+    }
+    return Err;
 }
 
 void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandler Handler)
@@ -102,31 +108,51 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandle
             }
 
             size_t Received = 0;
-            // 读尽直到 EAGAIN 或缓冲满
+            bool PeerClosed = false;
+            // 读尽直到 EAGAIN/无数据 或 缓冲满
             while (true)
             {
                 size_t chunk = 0;
-                Network::NetworkError errNow = Socket.Receive(PendingRecvBuf + Received, PendingRecvSize - Received, chunk);
+                Network::NetworkError errNow = Socket.Receive(
+                    PendingRecvBuf + Received,
+                    PendingRecvSize - Received,
+                    chunk);
                 if (errNow == Network::NetworkError::NONE && chunk > 0)
                 {
                     Received += chunk;
-                    if (Received >= PendingRecvSize) break;
+                    if (Received >= PendingRecvSize)
+                    {
+                        break;
+                    }
                     continue;
                 }
+                if (errNow == Network::NetworkError::CONNECTION_CLOSED)
+                {
+                    PeerClosed = true;
+                }
+                // 对于非致命情况（如 EAGAIN 映射为 RECEIVE_FAILED），跳出等待下一次事件
                 break;
             }
-            Network::NetworkError Err = (Received > 0) ? Network::NetworkError::NONE : Network::NetworkError::RECEIVE_FAILED;
 
-            auto Callback = PendingRecv;
-            PendingRecv = nullptr;
-            PendingRecvBuf = nullptr;
-            PendingRecvSize = 0;
-
-            // 保持注册，不在此处删除，避免与后续再次注册产生竞态
-            
-            if (Callback)
+            // 仅在读到数据或对端关闭时回调并清理状态；否则保留 PendingRecv 以等待下一次事件
+            if (Received > 0 || PeerClosed)
             {
-                Callback(Err, Received);
+                auto Callback = PendingRecv;
+                PendingRecv = nullptr;
+                PendingRecvBuf = nullptr;
+                PendingRecvSize = 0;
+
+                // 保持注册，不在此处删除，避免与后续再次注册产生竞态
+                if (Callback)
+                {
+                    Callback(PeerClosed ? Network::NetworkError::CONNECTION_CLOSED
+                                        : Network::NetworkError::NONE,
+                             Received);
+                }
+                if (PeerClosed)
+                {
+                    Close();
+                }
             }
         }))
     {

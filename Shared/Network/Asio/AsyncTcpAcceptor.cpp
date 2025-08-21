@@ -5,7 +5,6 @@
 #include "Shared/Network/Asio/Proactor.h"
 #include "Shared/Network/Asio/Reactor.h"
 
-#include <iostream>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -42,42 +41,27 @@ Network::NetworkError AsyncTcpAcceptor::Bind(const Network::NetworkAddress& Addr
 
 void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
 {
-    std::cout << "AsyncAccept called" << std::endl;
-    std::cout << "Moving handler..." << std::endl;
     PendingAccept = std::move(Handler);
-    std::cout << "Handler moved successfully" << std::endl;
-    
-    std::cout << "About to check socket..." << std::endl;
     
     // 检查 Socket 是否已经绑定和监听
     Fd ListenFd;
     {
-        std::cout << "Acquiring socket mutex..." << std::endl;
         std::lock_guard<std::mutex> lock(SocketMutex);
-        std::cout << "Socket mutex acquired" << std::endl;
-        std::cout << "About to call Socket.IsListening()..." << std::endl;
         // 暂时跳过 IsListening 检查，直接获取文件描述符
         ListenFd = static_cast<Fd>(Socket.GetNativeHandle());
-        std::cout << "Got ListenFd: " << ListenFd << std::endl;
     }
 
 // 纯 Reactor 路径，依赖事件驱动
     
-    std::cout << "About to check ProactorPtr..." << std::endl;
     // 暂时跳过 Proactor 路径，直接使用 Reactor
-    std::cout << "Skipping Proactor path, using Reactor" << std::endl;
-    
-    std::cout << "About to check ReactorPtr..." << std::endl;
     if (!ReactorPtr)
     {
-        std::cout << "ReactorPtr is null, returning" << std::endl;
         if (PendingAccept)
         {
             PendingAccept(Network::NetworkError::NOT_INITIALIZED, nullptr);
         }
         return;
     }
-    std::cout << "ReactorPtr is not null" << std::endl;
     
     // 如果已经注册，先移除
     if (IsRegistered)
@@ -87,14 +71,9 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
     }
     
     // 注册到 Reactor
-    std::cout << "Attempting to register fd " << ListenFd << " to Reactor" << std::endl;
-    std::cout << "ReactorPtr is null: " << (ReactorPtr == nullptr) << std::endl;
-    std::cout << "Socket native handle: " << Socket.GetNativeHandle() << std::endl;
-    std::cout << "Socket is listening: " << Socket.IsListening() << std::endl;
     bool AddResult = ReactorPtr->Add(ListenFd, EventMask::Read,
         [this](EventMask Event)
         {
-            std::cout << "Reactor event received: " << static_cast<int>(Event) << std::endl;
             if ((static_cast<uint32_t>(Event) & static_cast<uint32_t>(EventMask::Read)) == 0)
             {
                 return;
@@ -104,8 +83,6 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
             sockaddr_in ClientAddr{};
             socklen_t Len = sizeof(ClientAddr);
             int ClientFd = ::accept(Socket.GetNativeHandle(), reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
-            
-            std::cout << "Accept result: " << ClientFd << std::endl;
             
             auto Callback = PendingAccept;
             PendingAccept = nullptr;
@@ -134,8 +111,6 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
                 }
             }
         });
-    
-    std::cout << "Reactor Add result: " << AddResult << std::endl;
     if (AddResult)
     {
         IsRegistered = true;
