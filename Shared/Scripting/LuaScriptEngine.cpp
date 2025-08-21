@@ -63,6 +63,11 @@ namespace Helianthus::Scripting
             return {false, ErrorMsg ? ErrorMsg : "Unknown error executing file"};
         }
 
+        LoadedFileSet.insert(Path);
+        if (HotReloadHandler)
+        {
+            HotReloadHandler(Path, true, "");
+        }
         return {true, {}};
 #else
         (void)Path;
@@ -137,6 +142,36 @@ namespace Helianthus::Scripting
         (void)Name; (void)Args;
         return {true, {}};
 #endif
+    }
+
+    ScriptResult LuaScriptEngine::ReloadFile(const std::string& Path)
+    {
+#ifdef ENABLE_LUA_SCRIPTING
+        auto result = LoadFile(Path);
+        if (HotReloadHandler)
+        {
+            HotReloadHandler(Path, result.Success, result.ErrorMessage);
+        }
+        return result;
+#else
+        (void)Path;
+        return {true, {}};
+#endif
+    }
+
+    void LuaScriptEngine::SetHotReloadCallback(HotReloadCallback Callback)
+    {
+        HotReloadHandler = std::move(Callback);
+    }
+
+    bool LuaScriptEngine::IsFileLoaded(const std::string& Path) const
+    {
+        return LoadedFileSet.find(Path) != LoadedFileSet.end();
+    }
+
+    std::vector<std::string> LuaScriptEngine::GetLoadedFiles() const
+    {
+        return std::vector<std::string>(LoadedFileSet.begin(), LoadedFileSet.end());
     }
 }
 

@@ -16,5 +16,17 @@ cc_library(
         "@spdlog//:spdlog",
         # TCMalloc linkage is propagated via //:helianthus_config when enabled
     ],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": [
+            "/std:c++20",
+            "/utf-8",
+            "/W4",
+        ],
+        "//conditions:default": [
+            "-std=c++20",
+            "-Wall",
+            "-Wextra",
+        ],
+    }),
     visibility = ["//visibility:public"],
 )

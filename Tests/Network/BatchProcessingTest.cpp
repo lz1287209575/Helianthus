@@ -5,8 +5,10 @@
 #include <thread>
 #include <chrono>
 #include <vector>
-#include <sys/eventfd.h>
-#include <unistd.h>
+#if !defined(_WIN32)
+    #include <sys/eventfd.h>
+    #include <unistd.h>
+#endif
 
 using namespace Helianthus::Network::Asio;
 
@@ -31,6 +33,7 @@ protected:
 
 TEST_F(BatchProcessingTest, TaskBatchConfig)
 {
+#if defined(__linux__)
     // 测试任务批处理配置
     TaskBatchConfig Config;
     Config.MaxTaskBatchSize = 64;
@@ -45,10 +48,14 @@ TEST_F(BatchProcessingTest, TaskBatchConfig)
     EXPECT_EQ(RetrievedConfig.MinTaskBatchSize, 8);
     EXPECT_EQ(RetrievedConfig.MaxTaskBatchTimeoutMs, 2);
     EXPECT_TRUE(RetrievedConfig.EnableTaskBatching);
+#else
+    GTEST_SKIP() << "批处理 API 仅在 Linux 下启用，测试跳过";
+#endif
 }
 
 TEST_F(BatchProcessingTest, ReactorBatchConfig)
 {
+#if defined(__linux__)
     // 测试 Reactor 批处理配置
     auto Reactor = Context->GetReactor();
     ASSERT_NE(Reactor, nullptr);
@@ -68,10 +75,14 @@ TEST_F(BatchProcessingTest, ReactorBatchConfig)
     EXPECT_EQ(RetrievedConfig.MaxBatchTimeoutMs, 5);
     EXPECT_TRUE(RetrievedConfig.EnableAdaptiveBatching);
     EXPECT_EQ(RetrievedConfig.AdaptiveThreshold, 32);
+#else
+    GTEST_SKIP() << "批处理 API 仅在 Linux 下启用，测试跳过";
+#endif
 }
 
 TEST_F(BatchProcessingTest, TaskBatchProcessing)
 {
+#if defined(__linux__)
     // 测试任务批处理
     std::atomic<int> TaskCounter = 0;
     std::vector<std::thread> Threads;
@@ -123,10 +134,14 @@ TEST_F(BatchProcessingTest, TaskBatchProcessing)
     EXPECT_GT(Stats.AverageBatchSize, 0);
     EXPECT_GT(Stats.MaxBatchSize, 0);
     EXPECT_GT(Stats.MinBatchSize, 0);
+#else
+    GTEST_SKIP() << "批处理 API 仅在 Linux 下启用，测试跳过";
+#endif
 }
 
 TEST_F(BatchProcessingTest, ReactorBatchProcessing)
 {
+#if defined(__linux__)
     // 测试 Reactor 批处理
     auto Reactor = Context->GetReactor();
     ASSERT_NE(Reactor, nullptr);
@@ -173,10 +188,14 @@ TEST_F(BatchProcessingTest, ReactorBatchProcessing)
         Reactor->Del(static_cast<Fd>(fd));
         close(fd);
     }
+#else
+    GTEST_SKIP() << "批处理 API 及 eventfd 仅在 Linux 下启用，测试跳过";
+#endif
 }
 
 TEST_F(BatchProcessingTest, PerformanceComparison)
 {
+#if defined(__linux__)
     // 性能对比测试
     std::atomic<int> TaskCounter = 0;
     const int NumTasks = 1000;
@@ -269,10 +288,14 @@ TEST_F(BatchProcessingTest, PerformanceComparison)
         std::cout << "  最大批处理大小: " << Stats.MaxBatchSize << std::endl;
         std::cout << "  最小批处理大小: " << Stats.MinBatchSize << std::endl;
     }
+#else
+    GTEST_SKIP() << "批处理 API 仅在 Linux 下启用，测试跳过";
+#endif
 }
 
 TEST_F(BatchProcessingTest, AdaptiveBatching)
 {
+#if defined(__linux__)
     // 测试自适应批处理
     auto Reactor = Context->GetReactor();
     ASSERT_NE(Reactor, nullptr);
@@ -328,4 +351,7 @@ TEST_F(BatchProcessingTest, AdaptiveBatching)
         Reactor->Del(static_cast<Fd>(fd));
         close(fd);
     }
+#else
+    GTEST_SKIP() << "批处理 API 及 eventfd 仅在 Linux 下启用，测试跳过";
+#endif
 }

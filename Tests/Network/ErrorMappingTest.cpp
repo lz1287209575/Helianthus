@@ -14,7 +14,36 @@ protected:
 
 TEST_F(ErrorMappingTest, BasicErrorMapping)
 {
-    // 测试基本的错误映射
+#ifdef _WIN32
+    EXPECT_EQ(ErrorMapping::FromWsaError(0), NetworkError::NONE);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEINTR), NetworkError::CONNECTION_CLOSED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEBADF), NetworkError::SOCKET_CREATE_FAILED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEACCES), NetworkError::PERMISSION_DENIED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEFAULT), NetworkError::BUFFER_OVERFLOW);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEINVAL), NetworkError::INVALID_ADDRESS);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEMFILE), NetworkError::CONNECTION_FAILED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEINPROGRESS), NetworkError::CONNECTION_FAILED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEALREADY), NetworkError::ALREADY_INITIALIZED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAENOTSOCK), NetworkError::SOCKET_CREATE_FAILED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEDESTADDRREQ), NetworkError::INVALID_ADDRESS);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEMSGSIZE), NetworkError::BUFFER_OVERFLOW);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEADDRINUSE), NetworkError::BIND_FAILED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEADDRNOTAVAIL), NetworkError::INVALID_ADDRESS);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAENETDOWN), NetworkError::NETWORK_UNREACHABLE);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAENETUNREACH), NetworkError::NETWORK_UNREACHABLE);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAENETRESET), NetworkError::CONNECTION_CLOSED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAECONNABORTED), NetworkError::CONNECTION_CLOSED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAECONNRESET), NetworkError::CONNECTION_CLOSED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAENOBUFS), NetworkError::BUFFER_OVERFLOW);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEISCONN), NetworkError::ALREADY_INITIALIZED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAENOTCONN), NetworkError::CONNECTION_NOT_FOUND);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAESHUTDOWN), NetworkError::CONNECTION_CLOSED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAETIMEDOUT), NetworkError::TIMEOUT);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAECONNREFUSED), NetworkError::CONNECTION_FAILED);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEHOSTDOWN), NetworkError::NETWORK_UNREACHABLE);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEHOSTUNREACH), NetworkError::NETWORK_UNREACHABLE);
+#else
+    // POSIX errno 分支
     EXPECT_EQ(ErrorMapping::FromErrno(0), NetworkError::NONE);
     EXPECT_EQ(ErrorMapping::FromErrno(EINTR), NetworkError::CONNECTION_CLOSED);
     EXPECT_EQ(ErrorMapping::FromErrno(EBADF), NetworkError::SOCKET_CREATE_FAILED);
@@ -42,18 +71,22 @@ TEST_F(ErrorMappingTest, BasicErrorMapping)
     EXPECT_EQ(ErrorMapping::FromErrno(ECONNREFUSED), NetworkError::CONNECTION_FAILED);
     EXPECT_EQ(ErrorMapping::FromErrno(EHOSTDOWN), NetworkError::NETWORK_UNREACHABLE);
     EXPECT_EQ(ErrorMapping::FromErrno(EHOSTUNREACH), NetworkError::NETWORK_UNREACHABLE);
+#endif
 }
 
 TEST_F(ErrorMappingTest, TimeoutErrorMapping)
 {
-    // 测试超时相关的错误映射
-    // EAGAIN 和 EWOULDBLOCK 在某些系统上可能相同
+#ifdef _WIN32
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAEWOULDBLOCK), NetworkError::TIMEOUT);
+    EXPECT_EQ(ErrorMapping::FromWsaError(WSAETIMEDOUT), NetworkError::TIMEOUT);
+#else
     if (EAGAIN != EWOULDBLOCK)
     {
         EXPECT_EQ(ErrorMapping::FromErrno(EAGAIN), NetworkError::TIMEOUT);
     }
     EXPECT_EQ(ErrorMapping::FromErrno(EWOULDBLOCK), NetworkError::TIMEOUT);
     EXPECT_EQ(ErrorMapping::FromErrno(ETIMEDOUT), NetworkError::TIMEOUT);
+#endif
 }
 
 TEST_F(ErrorMappingTest, UnknownErrorMapping)
@@ -96,20 +129,29 @@ TEST_F(ErrorMappingTest, ErrorStringConversion)
 
 TEST_F(ErrorMappingTest, SystemErrorString)
 {
-    // 测试系统错误字符串获取
+#ifdef _WIN32
+    // 使用一个常见的 Win32 错误码
+    std::string ErrorStr = ErrorMapping::GetSystemErrorString(ERROR_INVALID_PARAMETER);
+    EXPECT_FALSE(ErrorStr.empty());
+#else
     std::string ErrorStr = ErrorMapping::GetSystemErrorString(EINVAL);
     EXPECT_FALSE(ErrorStr.empty());
     EXPECT_NE(ErrorStr, "Unknown system error: 22");
+#endif
 
-    // 测试未知错误码
     std::string UnknownErrorStr = ErrorMapping::GetSystemErrorString(99999);
     EXPECT_FALSE(UnknownErrorStr.empty());
 }
 
 TEST_F(ErrorMappingTest, FromSystemError)
 {
-    // 测试 FromSystemError 方法
+#ifdef _WIN32
+    EXPECT_EQ(ErrorMapping::FromSystemError(0), NetworkError::NONE);
+    EXPECT_EQ(ErrorMapping::FromSystemError(WSAEINVAL), NetworkError::INVALID_ADDRESS);
+    EXPECT_EQ(ErrorMapping::FromSystemError(WSAECONNREFUSED), NetworkError::CONNECTION_FAILED);
+#else
     EXPECT_EQ(ErrorMapping::FromSystemError(0), NetworkError::NONE);
     EXPECT_EQ(ErrorMapping::FromSystemError(EINVAL), NetworkError::INVALID_ADDRESS);
     EXPECT_EQ(ErrorMapping::FromSystemError(ECONNREFUSED), NetworkError::CONNECTION_FAILED);
+#endif
 }

@@ -29,6 +29,9 @@ config_setting(
     define_values = {"USE_TCMALLOC": "1"},
 )
 
+# Windows platform detection
+## Windows detection is done via built-in condition label
+
 # Thin wrapper for allocator, to propagate as a dependency
 cc_library(
     name = "allocator_impl",
@@ -59,13 +62,13 @@ cc_library(
         "//conditions:default": [],
     }),
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": [
-            "/std:c++17",
+        "@bazel_tools//src/conditions:windows": [
+            "/std:c++20",
             "/W4",
             "/O2",
         ],
         "//conditions:default": [
-            "-std=c++17",
+            "-std=c++20",
             "-Wall",
             "-Wextra",
             "-O2",

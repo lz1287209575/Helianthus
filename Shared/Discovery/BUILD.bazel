@@ -26,5 +26,14 @@ cc_library(
         "//Shared/Message:message",
         "//Shared/RPC:rpc",
     ],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": [
+            "/std:c++20",
+            "/utf-8",
+        ],
+        "//conditions:default": [
+            "-std=c++20",
+        ],
+    }),
     visibility = ["//visibility:public"],
 )

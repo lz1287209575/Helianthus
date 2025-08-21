@@ -7,6 +7,11 @@
 
 #include <gtest/gtest.h>
 
+#if defined(__linux__)
+    #include <unistd.h>
+    #include <string.h>
+#endif
+
 using namespace Helianthus::Network::Asio;
 
 class AsioTest : public ::testing::Test
@@ -104,6 +109,7 @@ TEST_F(AsioTest, DelayedTask)
     EXPECT_LE(actualDelay, 100);
 }
 
+#if defined(__linux__)
 TEST_F(AsioTest, EpollEdgeTriggered)
 {
     // 这个测试验证 Epoll 的边沿触发模式
@@ -169,3 +175,9 @@ TEST_F(AsioTest, EpollEdgeTriggered)
     Context->Stop();
     eventLoopThread.join();
 }
+#else
+TEST_F(AsioTest, EpollEdgeTriggered)
+{
+    GTEST_SKIP() << "Epoll 边沿触发用例依赖 pipe/read/write，仅在 Linux 下执行";
+}
+#endif

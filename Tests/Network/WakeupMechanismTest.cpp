@@ -1,11 +1,19 @@
 #include <gtest/gtest.h>
 #include "Shared/Network/Asio/IoContext.h"
+#include "Shared/Network/Asio/IoContext.h"  // ensure WakeupType visible
 #include <atomic>
 #include <thread>
 #include <chrono>
 #include <vector>
 
 using namespace Helianthus::Network::Asio;
+
+namespace {
+template <typename T>
+inline T ValueOf(const T& Value) { return Value; }
+template <typename T>
+inline T ValueOf(const std::atomic<T>& Value) { return Value.load(); }
+}
 
 class WakeupMechanismTest : public ::testing::Test
 {
@@ -65,7 +73,7 @@ TEST_F(WakeupMechanismTest, CrossThreadWakeup)
         }
         
         // 提交多个任务
-        for (int i = 0; i < 100; ++i)
+        for (int I = 0; I < 100; ++I)
         {
             Context->Post([&TaskCounter]() {
                 TaskCounter.fetch_add(1);
@@ -94,7 +102,7 @@ TEST_F(WakeupMechanismTest, CrossThreadWakeup)
     // 检查唤醒统计
     auto Stats = Context->GetWakeupStats();
     EXPECT_GT(Stats.TotalWakeups, 0);
-    EXPECT_GT(Stats.CrossThreadWakeups, 0);
+    EXPECT_GT(ValueOf(Stats.CrossThreadWakeups), 0);
 }
 
 TEST_F(WakeupMechanismTest, MultipleThreadWakeup)
@@ -114,10 +122,10 @@ TEST_F(WakeupMechanismTest, MultipleThreadWakeup)
     
     // 启动多个线程提交任务
     std::vector<std::thread> PostThreads;
-    for (int i = 0; i < NumThreads; ++i)
+    for (int I = 0; I < NumThreads; ++I)
     {
         PostThreads.emplace_back([this, &TaskCounter, TasksPerThread]() {
-            for (int j = 0; j < TasksPerThread; ++j)
+            for (int J = 0; J < TasksPerThread; ++J)
             {
                 Context->Post([&TaskCounter]() {
                     TaskCounter.fetch_add(1);
@@ -149,7 +157,7 @@ TEST_F(WakeupMechanismTest, MultipleThreadWakeup)
     // 检查唤醒统计
     auto Stats = Context->GetWakeupStats();
     EXPECT_GT(Stats.TotalWakeups, 0);
-    EXPECT_GT(Stats.CrossThreadWakeups, 0);
+    EXPECT_GT(ValueOf(Stats.CrossThreadWakeups), 0);
     EXPECT_GT(Stats.AverageWakeupLatencyMs, 0.0);
 }
 
@@ -171,7 +179,7 @@ TEST_F(WakeupMechanismTest, WakeupLatency)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     // 提交大量任务来测试延迟
-    for (int i = 0; i < NumTasks; ++i)
+    for (int I = 0; I < NumTasks; ++I)
     {
         Context->Post([&TaskCounter]() {
             TaskCounter.fetch_add(1);
@@ -191,7 +199,7 @@ TEST_F(WakeupMechanismTest, WakeupLatency)
     // 检查唤醒统计
     auto Stats = Context->GetWakeupStats();
     EXPECT_EQ(Stats.TotalWakeups, NumTasks);
-    EXPECT_GT(Stats.CrossThreadWakeups, 0);
+    EXPECT_GT(ValueOf(Stats.CrossThreadWakeups), 0);
     EXPECT_GE(Stats.AverageWakeupLatencyMs, 0.0);
     EXPECT_GE(Stats.MaxWakeupLatencyMs, 0);
     
@@ -209,7 +217,7 @@ TEST_F(WakeupMechanismTest, WakeupStatsReset)
     std::atomic<int> TaskCounter = 0;
     
     // 提交一些任务
-    for (int i = 0; i < 10; ++i)
+    for (int I = 0; I < 10; ++I)
     {
         Context->Post([&TaskCounter]() {
             TaskCounter.fetch_add(1);
@@ -261,7 +269,7 @@ TEST_F(WakeupMechanismTest, WakeupFromOtherThread)
     
     // 从另一个线程直接调用唤醒
     std::thread WakeupThread([this, &TaskCounter]() {
-        for (int i = 0; i < 50; ++i)
+        for (int I = 0; I < 50; ++I)
         {
             // 提交任务
             Context->Post([&TaskCounter]() {

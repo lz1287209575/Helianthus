@@ -2,7 +2,7 @@ cc_test(
     name = "message_test",
     srcs = ["MessageTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
         "//conditions:default": ["-std=c++17"],
     }),
     deps = [
@@ -14,6 +14,10 @@ cc_test(
 cc_test(
     name = "message_queue_test", 
     srcs = ["MessageQueueTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
     deps = [
         "//Shared/Message:message",
         "@googletest//:gtest_main",
@@ -23,6 +27,10 @@ cc_test(
 cc_test(
     name = "message_comprehensive_test",
     srcs = ["MessageComprehensiveTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
     deps = [
         "//Shared/Message:message",
         "//Shared/Common:common",

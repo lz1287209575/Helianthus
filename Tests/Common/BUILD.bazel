@@ -2,7 +2,7 @@ cc_test(
     name = "tcmalloc_test",
     srcs = ["TCMallocTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
         "//conditions:default": [],
     }),
     deps = [
@@ -16,7 +16,7 @@ cc_test(
     name = "tcmalloc_runtime_config_test",
     srcs = ["TCMallocRuntimeConfigTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
         "//conditions:default": [],
     }),
     deps = [

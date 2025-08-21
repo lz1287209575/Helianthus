@@ -12,16 +12,18 @@ cc_library(
 		"IScriptEngine.h",
 		"LuaScriptEngine.h",
 		"ScriptingTypes.h",
+		"HotReloadManager.h",
 	],
 	srcs = [
 		"LuaScriptEngine.cpp",
+		"HotReloadManager.cpp",
 	],
 	deps = select({
 		":enable_lua": ["//ThirdParty/lua:lua"],
 		"//conditions:default": [],
 	}),
 	copts = select({
-		"@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
+		"@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
 		"//conditions:default": ["-std=c++20", "-fPIC"],
 	}),
 	defines = select({

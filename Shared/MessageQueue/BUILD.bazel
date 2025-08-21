@@ -17,8 +17,9 @@ cc_library(
         "//Shared/Network:network",
     ],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": [
+        "@bazel_tools//src/conditions:windows": [
             "/std:c++20",
+            "/utf-8",
             "/W4",
             "/O2",
         ],

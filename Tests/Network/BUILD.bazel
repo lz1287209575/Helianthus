@@ -2,7 +2,7 @@ cc_test(
     name = "asio_test",
     srcs = ["AsioTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -16,7 +16,7 @@ cc_test(
     name = "tcp_echo_async_test",
     srcs = ["TcpEchoTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": ["-std=c++20"],
     }),
     deps = [
@@ -30,7 +30,7 @@ cc_test(
     name = "tcp_async_echo_test",
     srcs = ["TcpAsyncEchoTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -44,7 +44,7 @@ cc_test(
     name = "message_protocol_test",
     srcs = ["MessageProtocolTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -58,7 +58,7 @@ cc_test(
     name = "error_mapping_test",
     srcs = ["ErrorMappingTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -72,7 +72,7 @@ cc_test(
     name = "buffer_pool_test",
     srcs = ["BufferPoolTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -86,7 +86,7 @@ cc_test(
     name = "zero_copy_buffer_test",
     srcs = ["ZeroCopyBufferTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -100,7 +100,7 @@ cc_test(
     name = "batch_processing_test",
     srcs = ["BatchProcessingTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -114,7 +114,7 @@ cc_test(
     name = "wakeup_mechanism_test",
     srcs = ["WakeupMechanismTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -128,7 +128,7 @@ cc_test(
     name = "simple_tcp_test",
     srcs = ["SimpleTcpTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -142,7 +142,7 @@ cc_test(
     name = "reactor_test",
     srcs = ["ReactorTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
@@ -156,7 +156,7 @@ cc_test(
     name = "length_prefix_echo_test",
     srcs = ["LengthPrefixEchoTest.cpp"],
     copts = select({
-        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": [],
     }),
     deps = [
