@@ -95,3 +95,73 @@ cc_test(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_test(
+    name = "batch_processing_test",
+    srcs = ["BatchProcessingTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "wakeup_mechanism_test",
+    srcs = ["WakeupMechanismTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "simple_tcp_test",
+    srcs = ["SimpleTcpTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "reactor_test",
+    srcs = ["ReactorTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "length_prefix_echo_test",
+    srcs = ["LengthPrefixEchoTest.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)

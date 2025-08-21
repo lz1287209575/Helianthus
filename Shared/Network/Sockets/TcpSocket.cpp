@@ -268,7 +268,11 @@ NetworkError TcpSocket::Send(const char* Data, size_t Size, size_t& BytesSent)
 #ifdef _WIN32
     N = ::send(FdSnapshot, Data, static_cast<int>(Size), 0);
 #else
+#  ifdef __linux__
+    N = ::send(FdSnapshot, Data, Size, MSG_NOSIGNAL);
+#  else
     N = ::send(FdSnapshot, Data, Size, 0);
+#  endif
 #endif
 	if (N < 0)
 	{
@@ -430,11 +434,19 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
     {
         // 设置 SO_REUSEADDR 选项（跨平台）
         int reuseAddr = Config.ReuseAddr ? 1 : 0;
+#ifdef _WIN32
         if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
                        SOL_SOCKET,
                        SO_REUSEADDR,
                        reinterpret_cast<const char*>(&reuseAddr),
                        sizeof(reuseAddr)) < 0)
+#else
+        if (setsockopt(SockImpl->Fd,
+                       SOL_SOCKET,
+                       SO_REUSEADDR,
+                       reinterpret_cast<const char*>(&reuseAddr),
+                       sizeof(reuseAddr)) < 0)
+#endif
         {
             // 处理错误
         }
@@ -463,30 +475,6 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
         }
 #endif
     }
-
-#ifdef _WIN32
-    // Windows 特有选项（如 TCP_NODELAY）
-    int noDelay = Config.NoDelay ? 1 : 0;
-    if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
-                   IPPROTO_TCP,
-                   TCP_NODELAY,
-                   reinterpret_cast<const char*>(&noDelay),
-                   sizeof(noDelay)) < 0)
-    {
-        // 处理错误
-    }
-#else
-    // Unix 特有选项（如 SO_KEEPALIVE）
-    int keepAlive = Config.KeepAlive ? 1 : 0;
-    if (setsockopt(SockImpl->Fd,
-                   SOL_SOCKET,
-                   SO_KEEPALIVE,
-                   reinterpret_cast<const char*>(&keepAlive),
-                   sizeof(keepAlive)) < 0)
-    {
-        // 处理错误
-    }
-#endif
 }
 
 NetworkConfig TcpSocket::GetSocketOptions() const
@@ -521,6 +509,10 @@ bool TcpSocket::IsConnected() const
 
 bool TcpSocket::IsListening() const
 {
+    if (!SockImpl)
+    {
+        return false;
+    }
     return SockImpl->IsServer;
 }
 
@@ -597,6 +589,15 @@ void TcpSocket::Adopt(NativeHandle Handle,
     SockImpl->Remote = Remote;
     SockImpl->IsServer = IsServerSide;
     SockImpl->State = ConnectionState::CONNECTED;
+    
+    // 设置为非阻塞模式
+#ifdef _WIN32
+    u_long mode = 1;
+    ioctlsocket(static_cast<SOCKET>(SockImpl->Fd), FIONBIO, &mode);
+#else
+    int flags = fcntl(SockImpl->Fd, F_GETFL, 0);
+    fcntl(SockImpl->Fd, F_SETFL, flags | O_NONBLOCK);
+#endif
 }
 
 }  // namespace Helianthus::Network::Sockets

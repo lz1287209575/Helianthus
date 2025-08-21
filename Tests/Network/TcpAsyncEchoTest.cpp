@@ -9,6 +9,7 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <mutex>
 
 #include <gtest/gtest.h>
 
@@ -58,7 +59,7 @@ protected:
     std::thread ServerThread;
     std::thread ClientThread;
 
-    static constexpr uint16_t TestPort = 12345;
+    static constexpr uint16_t TestPort = 12346;
 };
 
 TEST_F(TcpAsyncEchoTest, SimpleEcho)
@@ -77,13 +78,12 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [this, &ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err)
+        [this, &ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
+            EXPECT_NE(ServerSocket, nullptr);
             ServerReady = true;
 
-            // 创建服务器端连接
-            auto ServerSocket = std::make_shared<AsyncTcpSocket>(ServerContext);
             auto Protocol = std::make_shared<MessageProtocol>();
 
             Protocol->SetMessageHandler(
@@ -106,17 +106,17 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
             // 开始接收数据
             std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
-                static char Buffer[1024];
-                ServerSocket->AsyncReceive(Buffer,
-                                           sizeof(Buffer),
-                                           [Protocol, StartReceive](NetworkError Err, size_t Bytes)
-                                           {
-                                               if (Err == NetworkError::NONE && Bytes > 0)
-                                               {
-                                                   Protocol->ProcessReceivedData(Buffer, Bytes);
-                                                   StartReceive();  // 继续接收
-                                               }
-                                           });
+                auto Buffer = std::make_shared<std::vector<char>>(1024);
+                ServerSocket->AsyncReceive(Buffer->data(),
+                                          1024,
+                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                          {
+                                              if (Err == NetworkError::NONE && Bytes > 0)
+                                              {
+                                                  Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                                                  StartReceive();  // 继续接收
+                                              }
+                                          });
             };
             StartReceive();
         });
@@ -148,15 +148,15 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
     // 开始接收回显
     std::function<void()> StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
     {
-        static char Buffer[1024];
+        auto Buffer = std::make_shared<std::vector<char>>(1024);
         ClientSocket->AsyncReceive(
-            Buffer,
-            sizeof(Buffer),
-            [ClientProtocol, StartClientReceive](NetworkError Err, size_t Bytes)
+            Buffer->data(),
+            1024,
+            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes)
             {
                 if (Err == NetworkError::NONE && Bytes > 0)
                 {
-                    ClientProtocol->ProcessReceivedData(Buffer, Bytes);
+                    ClientProtocol->ProcessReceivedData(Buffer->data(), Bytes);
                     StartClientReceive();  // 继续接收
                 }
             });
@@ -180,18 +180,18 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
 
     // 创建服务器
     auto Acceptor = std::make_shared<AsyncTcpAcceptor>(ServerContext);
-    NetworkAddress ServerAddr("127.0.0.1", TestPort + 1);
+    NetworkAddress ServerAddr("127.0.0.1", TestPort + 2);
 
     auto BindResult = Acceptor->Bind(ServerAddr);
     ASSERT_EQ(BindResult, NetworkError::NONE);
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [this, &MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err)
+        [this, &MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
+            EXPECT_NE(ServerSocket, nullptr);
 
-            auto ServerSocket = std::make_shared<AsyncTcpSocket>(ServerContext);
             auto Protocol = std::make_shared<MessageProtocol>();
 
             Protocol->SetMessageHandler(
@@ -207,17 +207,17 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
             // 开始接收数据
             std::function<void()> StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
-                static char Buffer[16];  // 小缓冲区模拟分片
-                ServerSocket->AsyncReceive(Buffer,
-                                           sizeof(Buffer),
-                                           [Protocol, StartReceive](NetworkError Err, size_t Bytes)
-                                           {
-                                               if (Err == NetworkError::NONE && Bytes > 0)
-                                               {
-                                                   Protocol->ProcessReceivedData(Buffer, Bytes);
-                                                   StartReceive();  // 继续接收
-                                               }
-                                           });
+                auto Buffer = std::make_shared<std::vector<char>>(16);  // 小缓冲区模拟分片
+                ServerSocket->AsyncReceive(Buffer->data(),
+                                          16,
+                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                          {
+                                              if (Err == NetworkError::NONE && Bytes > 0)
+                                              {
+                                                  Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                                                  StartReceive();  // 继续接收
+                                              }
+                                          });
             };
             StartReceive();
         });

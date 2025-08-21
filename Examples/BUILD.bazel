@@ -1,0 +1,38 @@
+cc_binary(
+    name = "tcmalloc_config_example",
+    srcs = ["TCMallocConfigExample.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "batch_processing_example",
+    srcs = ["BatchProcessingExample.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "wakeup_mechanism_example",
+    srcs = ["WakeupMechanismExample.cpp"],
+    copts = select({
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+    ],
+    visibility = ["//visibility:public"],
+)

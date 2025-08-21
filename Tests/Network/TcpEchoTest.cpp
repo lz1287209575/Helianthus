@@ -33,81 +33,49 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
     AsyncTcpSocket Client(Ctx);
     ASSERT_EQ(Client.Connect({"127.0.0.1", Bound.Port}), NetworkError::NONE);
 
-    // Server accept and echo on callback
+    // Server accept and echo on callback（改为异步收发，避免阻塞/非阻塞差异）
     std::atomic<bool> Done{false};
     std::atomic<bool> ServerOk{true};
     std::string Payload = "HelloEcho_LengthPrefix";
     char Header[4];
     WriteUint32LE(static_cast<uint32_t>(Payload.size()), Header);
 
-    Acceptor.AsyncAcceptEx(
-        [&](NetworkError Err, Fd Accepted)
+    Acceptor.AsyncAccept(
+        [&](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
-            if (Err != NetworkError::NONE)
+            if (Err != NetworkError::NONE || !ServerSocket)
             {
                 ServerOk = false;
                 return;
             }
-            std::thread(
-                [&, Accepted]()
+            // 读 4 字节长度
+            auto HeaderBuf = std::make_shared<std::vector<char>>(4);
+            ServerSocket->AsyncReceive(HeaderBuf->data(), 4,
+                [&, HeaderBuf, ServerSocket](NetworkError e1, size_t b1)
                 {
-                    Sockets::TcpSocket ServerConn;
-                    ServerConn.Adopt(Accepted,
-                                     {/*ip*/ "127.0.0.1", /*port*/ 0},
-                                     {/*ip*/ "127.0.0.1", /*port*/ 0},
-                                     true);
-                    char Hdr[4];
-                    size_t Got = 0;
-                    while (Got < 4)
-                    {
-                        size_t n = 0;
-                        auto e = ServerConn.Receive(Hdr + Got, 4 - Got, n);
-                        if (e != NetworkError::NONE)
+                    if (e1 != NetworkError::NONE || b1 != 4) { ServerOk = false; Done = true; return; }
+                    uint32_t Len = static_cast<uint8_t>((*HeaderBuf)[0]) |
+                                   (static_cast<uint8_t>((*HeaderBuf)[1]) << 8) |
+                                   (static_cast<uint8_t>((*HeaderBuf)[2]) << 16) |
+                                   (static_cast<uint8_t>((*HeaderBuf)[3]) << 24);
+                    auto BodyBuf = std::make_shared<std::vector<char>>(Len);
+                    ServerSocket->AsyncReceive(BodyBuf->data(), Len,
+                        [&, BodyBuf, ServerSocket](NetworkError e2, size_t b2)
                         {
-                            ServerOk = false;
-                            break;
-                        }
-                        Got += n;
-                    }
-                    if (ServerOk)
-                    {
-                        uint32_t Len = static_cast<uint8_t>(Hdr[0]) |
-                                       (static_cast<uint8_t>(Hdr[1]) << 8) |
-                                       (static_cast<uint8_t>(Hdr[2]) << 16) |
-                                       (static_cast<uint8_t>(Hdr[3]) << 24);
-                        std::vector<char> Buf(Len);
-                        size_t RecvTot = 0;
-                        while (RecvTot < Len)
-                        {
-                            size_t n = 0;
-                            auto e = ServerConn.Receive(Buf.data() + RecvTot, Len - RecvTot, n);
-                            if (e != NetworkError::NONE)
-                            {
-                                ServerOk = false;
-                                break;
-                            }
-                            RecvTot += n;
-                        }
-                        if (ServerOk)
-                        {
-                            size_t Sent = 0;
-                            if (ServerConn.Send(Header, 4, Sent) != NetworkError::NONE ||
-                                Sent != 4u)
-                            {
-                                ServerOk = false;
-                            }
-                            size_t Sent2 = 0;
-                            if (ServerConn.Send(Buf.data(), Buf.size(), Sent2) !=
-                                    NetworkError::NONE ||
-                                Sent2 != Buf.size())
-                            {
-                                ServerOk = false;
-                            }
-                        }
-                    }
-                    Done = true;
-                })
-                .detach();
+                            if (e2 != NetworkError::NONE || b2 != BodyBuf->size()) { ServerOk = false; Done = true; return; }
+                            ServerSocket->AsyncSend(Header, 4,
+                                [&, BodyBuf, ServerSocket](NetworkError e3, size_t)
+                                {
+                                    if (e3 != NetworkError::NONE) { ServerOk = false; Done = true; return; }
+                                    ServerSocket->AsyncSend(BodyBuf->data(), BodyBuf->size(),
+                                        [&, BodyBuf](NetworkError e4, size_t)
+                                        {
+                                            if (e4 != NetworkError::NONE) ServerOk = false;
+                                            Done = true;
+                                        });
+                                });
+                        });
+                });
         });
 
     // Client send in fragments to simulate 半包/粘包
@@ -195,7 +163,10 @@ TEST(TcpEchoAsyncTest, TimeoutAndCancel)
 
     // Accept and do nothing (no data)
     bool Accepted = false;
-    Acceptor.AsyncAccept([&](NetworkError e) { Accepted = (e == NetworkError::NONE); });
+    Acceptor.AsyncAccept([&](NetworkError e, std::shared_ptr<AsyncTcpSocket> s) {
+        (void)s;
+        Accepted = (e == NetworkError::NONE);
+    });
 
     // Set a pending read on client, then cancel after 20ms
     std::vector<char> BigBuf(4096);

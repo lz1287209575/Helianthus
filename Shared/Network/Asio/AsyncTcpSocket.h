@@ -32,6 +32,13 @@ private:
     std::shared_ptr<Proactor> ProactorPtr;
     Network::Sockets::TcpSocket Socket;
     ReceiveHandler PendingRecv;
+    // 简易发送状态（单次发送序列）
+    const char* PendingSendPtr = nullptr;
+    size_t PendingSendRemaining = 0;
+    size_t PendingSendTotalSent = 0;
+    SendHandler PendingSendHandler;
+    bool SendRegistered = false;
     bool ClosedFlag = false;
+    bool IsRegistered = false;  // 是否已注册到 Reactor
 };
 }  // namespace Helianthus::Network::Asio

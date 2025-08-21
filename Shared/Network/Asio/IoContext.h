@@ -12,6 +12,45 @@ namespace Helianthus::Network::Asio
     class Reactor;
     class Proactor;
 
+    // 批处理配置
+    struct TaskBatchConfig
+    {
+        size_t MaxTaskBatchSize = 32;     // 最大任务批处理大小
+        size_t MinTaskBatchSize = 4;      // 最小任务批处理大小
+        int MaxTaskBatchTimeoutMs = 1;    // 最大任务批处理超时
+        bool EnableTaskBatching = true;   // 启用任务批处理
+    };
+    
+    // 任务批处理统计
+    struct TaskBatchStats
+    {
+        size_t TotalTasks = 0;
+        size_t TotalBatches = 0;
+        size_t AverageBatchSize = 0;
+        double AverageProcessingTimeMs = 0.0;
+        size_t MaxBatchSize = 0;
+        size_t MinBatchSize = 0;
+    };
+    
+    // 跨平台唤醒机制
+    enum class WakeupType
+    {
+        EventFd,        // Linux: eventfd
+        Pipe,           // BSD/macOS: pipe
+        IOCP,           // Windows: IOCP completion
+        WakeByAddress   // Windows: WakeByAddressSingle
+    };
+    
+    // 唤醒统计
+    struct WakeupStats
+    {
+        size_t TotalWakeups = 0;
+        size_t CrossThreadWakeups = 0;
+        size_t SameThreadWakeups = 0;
+        double AverageWakeupLatencyMs = 0.0;
+        size_t MaxWakeupLatencyMs = 0;
+    };
+
     // Minimal io_context-like executor
     class IoContext
     {
@@ -30,6 +69,29 @@ namespace Helianthus::Network::Asio
 
         std::shared_ptr<Reactor> GetReactor() const;
         std::shared_ptr<Proactor> GetProactor() const;
+        
+        // 批处理配置方法
+        void SetTaskBatchConfig(const TaskBatchConfig& Config);
+        TaskBatchConfig GetTaskBatchConfig() const;
+        
+        // 批处理统计方法
+        TaskBatchStats GetTaskBatchStats() const;
+        void ResetTaskBatchStats();
+        
+        // 批处理运行方法
+        void RunBatch();
+        
+        // 跨线程唤醒方法
+        void Wakeup();
+        void WakeupFromOtherThread();
+        
+        // 唤醒统计方法
+        WakeupStats GetWakeupStats() const;
+        void ResetWakeupStats();
+        
+        // 唤醒配置方法
+        void SetWakeupType(WakeupType Type);
+        WakeupType GetWakeupType() const;
 
     private:
         void InitializeWakeupFd();
@@ -58,6 +120,34 @@ namespace Helianthus::Network::Asio
         
         // 跨线程唤醒机制
         int WakeupFd = -1;
+        
+        WakeupType CurrentWakeupType = WakeupType::EventFd;
+        
+        // 管道唤醒（用于 BSD/macOS）
+        int WakeupPipe[2] = {-1, -1};
+        
+        // Windows 唤醒相关
+#ifdef _WIN32
+        HANDLE WakeupEvent = INVALID_HANDLE_VALUE;
+        HANDLE WakeupIOCP = INVALID_HANDLE_VALUE;
+#endif
+        
+        mutable std::mutex WakeupStatsMutex;
+        WakeupStats WakeupStatsData;
+        
+        TaskBatchConfig TaskBatchConfigData;
+        mutable std::mutex TaskBatchConfigMutex;
+        
+        mutable std::mutex TaskBatchStatsMutex;
+        TaskBatchStats TaskBatchStatsData;
+        
+        // 批处理辅助方法
+        void ProcessTaskBatch();
+        void UpdateTaskBatchStats(size_t BatchSize, double ProcessingTimeMs);
+        size_t CalculateTaskBatchSize() const;
+        
+        // 唤醒辅助方法
+        void UpdateWakeupStats(double LatencyMs, bool IsSameThread);
     };
 }
 
