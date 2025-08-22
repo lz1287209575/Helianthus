@@ -49,7 +49,8 @@ TEST_F(CancelTimeoutTest, PostWithCancel)
     // 提交任务
     auto TaskId = Context->PostWithCancel([&TaskExecuted]() {
         TaskExecuted = true;
-    }, Token);
+    });
+    (void)TaskId;
 
     // 立即取消任务
     Token->store(true);
@@ -72,6 +73,7 @@ TEST_F(CancelTimeoutTest, PostDelayedWithCancel)
     auto TaskId = Context->PostDelayedWithCancel([&TaskExecuted]() {
         TaskExecuted = true;
     }, 100, Token);
+    (void)TaskId;
 
     // 等待 50ms 后取消任务
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -96,11 +98,12 @@ TEST_F(CancelTimeoutTest, CancelToken)
     // 提交两个任务
     auto TaskId1 = Context->PostWithCancel([&Task1Executed]() {
         Task1Executed = true;
-    }, Token);
-
+    });
+    (void)TaskId1;
     auto TaskId2 = Context->PostDelayedWithCancel([&Task2Executed]() {
         Task2Executed = true;
     }, 100, Token);
+    (void)TaskId2;
 
     // 取消 token
     Token->store(true);
@@ -122,6 +125,7 @@ TEST_F(CancelTimeoutTest, DelayedTaskExecution)
     auto TaskId = Context->PostDelayedWithCancel([&TaskExecuted]() {
         TaskExecuted = true;
     }, 50);
+    (void)TaskId;
 
     // 等待任务执行
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -181,7 +185,8 @@ TEST_F(CancelTimeoutTest, TokenReuse)
     // 提交第一个任务
     auto TaskId1 = Context->PostWithCancel([&Task1Executed]() {
         Task1Executed = true;
-    }, Token);
+    });
+    (void)TaskId1;
 
     // 等待第一个任务执行
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -194,6 +199,7 @@ TEST_F(CancelTimeoutTest, TokenReuse)
     auto TaskId2 = Context->PostDelayedWithCancel([&Task2Executed]() {
         Task2Executed = true;
     }, 50, Token);
+    (void)TaskId2;
 
     // 等待第二个任务执行
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

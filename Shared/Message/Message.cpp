@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <cstdint>
 
 namespace Helianthus::Message
 {
@@ -52,7 +53,9 @@ uint32_t CalculateCRC32(const char* Data, size_t Length)
     uint32_t CRC = 0xFFFFFFFF;
     for (size_t I = 0; I < Length; I++)
     {
-        CRC = (CRC >> 8) ^ CRC32Table[(CRC & 0xFF) ^ Data[I]];
+        uint8_t Byte = static_cast<uint8_t>(Data[I]);
+        uint8_t Index = static_cast<uint8_t>((CRC & 0xFF) ^ Byte);
+        CRC = (CRC >> 8) ^ CRC32Table[Index];
     }
     return CRC ^ 0xFFFFFFFF;
 }
@@ -206,7 +209,14 @@ bool Message::Deserialize(const std::vector<char>& Data)
 
 bool Message::Deserialize(const char* Data, size_t Size)
 {
-    if (!Data || Size < sizeof(MessageHeader))
+    // 基本边界：至少包含 magic + header
+    if (!Data)
+    {
+        return false;
+    }
+
+    const size_t HeaderSize = sizeof(MessageHeader);
+    if (Size < sizeof(uint32_t) + HeaderSize)
     {
         return false;
     }
@@ -224,12 +234,6 @@ bool Message::Deserialize(const char* Data, size_t Size)
     }
 
     // Copy header
-    size_t HeaderSize = sizeof(MessageHeader);
-    if (Size < sizeof(uint32_t) + HeaderSize)
-    {
-        return false;
-    }
-
     std::memcpy(&Header, Data + Offset, HeaderSize);
     Offset += HeaderSize;
 

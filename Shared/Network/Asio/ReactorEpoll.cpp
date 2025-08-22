@@ -11,6 +11,12 @@
 #include <mutex>
 #include <iostream>
 #include <unordered_map>
+#include "Common/Logger.h"
+#include "Common/LogCategories.h"
+
+using namespace Helianthus::Network::Asio;
+using Helianthus::Common::Logger;
+using Helianthus::Common::LogVerbosity;
 
 namespace Helianthus::Network::Asio
 {
@@ -64,8 +70,7 @@ namespace Helianthus::Network::Asio
         , MaxEvents(64)
     {
         if (EpollFd < 0) {
-            auto Error = ErrorMapping::FromErrno(errno);
-            // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
+            H_LOG(Net, LogVerbosity::Error, "epoll_create1 failed: {}({})", std::strerror(errno), errno);
         }
     }
 
@@ -101,8 +106,7 @@ namespace Helianthus::Network::Asio
                 Ev2.data.fd = static_cast<int>(Handle);
                 if (epoll_ctl(EpollFd, EPOLL_CTL_MOD, static_cast<int>(Handle), &Ev2) != 0)
                 {
-                    auto Error = ErrorMapping::FromErrno(errno);
-                    // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
+                    H_LOG(Net, LogVerbosity::Warning, "epoll_ctl MOD failed fd={} mask={} err={}({})", Handle, static_cast<int>(Ev.events), std::strerror(errno), errno);
                     return false;
                 }
                 {
@@ -112,8 +116,7 @@ namespace Helianthus::Network::Asio
             }
             else
             {
-                auto Error = ErrorMapping::FromErrno(AddErrno);
-                // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
+                H_LOG(Net, LogVerbosity::Warning, "epoll_ctl ADD retry failed fd={} err={}({})", Handle, std::strerror(AddErrno), AddErrno);
                 return false;
             }
         }
@@ -139,8 +142,7 @@ namespace Helianthus::Network::Asio
         
         if (epoll_ctl(EpollFd, EPOLL_CTL_MOD, static_cast<int>(Handle), &Ev) != 0) 
         {
-            auto Error = ErrorMapping::FromErrno(errno);
-            // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
+            H_LOG(Net, LogVerbosity::Warning, "epoll_ctl MOD failed fd={} mask={} err={}({})", Handle, static_cast<int>(Ev.events), std::strerror(errno), errno);
             return false;
         }
         
@@ -160,8 +162,7 @@ namespace Helianthus::Network::Asio
         
         if (epoll_ctl(EpollFd, EPOLL_CTL_DEL, static_cast<int>(Handle), nullptr) != 0) 
         {
-            auto Error = ErrorMapping::FromErrno(errno);
-            // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
+            H_LOG(Net, LogVerbosity::Warning, "epoll_ctl DEL failed fd={} err={}({})", Handle, std::strerror(errno), errno);
             return false;
         }
         
@@ -180,8 +181,8 @@ namespace Helianthus::Network::Asio
                 // 被信号中断，正常情况
                 return 0;
             }
-            auto Error = ErrorMapping::FromErrno(errno);
-            // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
+            (void)ErrorMapping::FromErrno(errno);
+            H_LOG(Net, LogVerbosity::Warning, "epoll_wait error: {}({})", std::strerror(errno), errno);
             return -1;
         }
         
@@ -239,7 +240,7 @@ namespace Helianthus::Network::Asio
             {
                 return 0;
             }
-            auto Error = ErrorMapping::FromErrno(errno);
+            (void)ErrorMapping::FromErrno(errno);
             return -1;
         }
         

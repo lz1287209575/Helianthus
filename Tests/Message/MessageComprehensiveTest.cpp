@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <cstring>
 
 #include "Common/Types.h"
 #include "Message/Message.h"
@@ -429,4 +430,52 @@ TEST_F(MessageComprehensiveTest, BinaryPayloadWithNullBytes)
     bool Result = Deserialized.Deserialize(SerializedData);
     EXPECT_TRUE(Result);
     EXPECT_EQ(Deserialized.GetPayload(), BinaryPayload);
+}
+
+// 新增：非法Magic导致反序列化失败
+TEST_F(MessageComprehensiveTest, DeserializeInvalidMagic)
+{
+    Message Msg(MessageType::CUSTOM_MESSAGE_START);
+    Msg.SetPayload("bad magic");
+    auto Data = Msg.Serialize();
+
+    // 覆盖magic为错误值
+    uint32_t BadMagic = 0xDEADBEEF;
+    std::memcpy(Data.data(), &BadMagic, sizeof(BadMagic));
+
+    Message Deserialized;
+    EXPECT_FALSE(Deserialized.Deserialize(Data));
+}
+
+// 新增：数据长度不足（截断）导致反序列化失败
+TEST_F(MessageComprehensiveTest, DeserializeTruncatedBuffer)
+{
+    Message Msg(MessageType::CUSTOM_MESSAGE_START);
+    Msg.SetPayload("truncated");
+    auto Data = Msg.Serialize();
+
+    // 截断到小于 magic+header
+    size_t MinSize = sizeof(uint32_t) + sizeof(MessageHeader) - 4;
+    Data.resize(MinSize);
+
+    Message Deserialized;
+    EXPECT_FALSE(Deserialized.Deserialize(Data));
+}
+
+// 新增：声明的PayloadSize与实际不一致导致失败
+TEST_F(MessageComprehensiveTest, DeserializeMismatchedPayloadSize)
+{
+    Message Msg(MessageType::CUSTOM_MESSAGE_START);
+    Msg.SetPayload("payload");
+    auto Data = Msg.Serialize();
+
+    // 将header中的PayloadSize改为+1
+    size_t Offset = sizeof(uint32_t);
+    MessageHeader Header;
+    std::memcpy(&Header, Data.data() + Offset, sizeof(Header));
+    Header.PayloadSize += 1;
+    std::memcpy(Data.data() + Offset, &Header, sizeof(Header));
+
+    Message Deserialized;
+    EXPECT_FALSE(Deserialized.Deserialize(Data));
 }

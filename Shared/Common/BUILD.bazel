@@ -2,10 +2,13 @@ cc_library(
     name = "common",
     srcs = [
         "Logger.cpp",
+        "LogCategories.cpp",
         "TCMallocWrapper.cpp",
     ],
     hdrs = [
         "Logger.h",
+        "LogCategory.h",
+        "LogCategories.h",
         "Types.h",
         "TCMallocWrapper.h",
     ],
@@ -14,7 +17,6 @@ cc_library(
     deps = [
         "//:helianthus_config",
         "@spdlog//:spdlog",
-        # TCMalloc linkage is propagated via //:helianthus_config when enabled
     ],
     copts = select({
         "@bazel_tools//src/conditions:windows": [

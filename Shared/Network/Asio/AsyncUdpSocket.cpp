@@ -2,6 +2,8 @@
 #include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/Reactor.h"
 #include "Shared/Network/Asio/ErrorMapping.h"
+#include "Common/LogCategory.h"
+#include "Common/LogCategories.h"
 
 namespace Helianthus::Network::Asio
 {

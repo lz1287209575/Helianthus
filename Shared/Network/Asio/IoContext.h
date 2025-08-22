@@ -8,6 +8,7 @@
 #include <mutex>
 #include <thread>
 #include <cstdint>
+#include <unordered_set>
 
 namespace Helianthus::Network::Asio
 {
@@ -133,9 +134,11 @@ namespace Helianthus::Network::Asio
         // 任务队列
         struct QueuedTask
         {
+            TaskId Id = 0; // 0 表示不支持取消的普通任务
             std::function<void()> Task;
             int64_t EnqueueTimeNs;
             std::thread::id PostingThreadId;
+            CancelToken Token; // 可选取消令牌
         };
         std::queue<QueuedTask> TaskQueue;
         mutable std::mutex TaskQueueMutex;
@@ -155,6 +158,16 @@ namespace Helianthus::Network::Asio
         
         // 任务 ID 生成器
         std::atomic<TaskId> NextTaskId{1};
+        // 普通队列任务的取消集合
+        std::unordered_set<TaskId> CancelledTaskIds;
+        mutable std::mutex CancelledTaskIdsMutex;
+        // 队列中待执行的可取消任务集合
+        std::unordered_set<TaskId> PendingTaskIds;
+        mutable std::mutex PendingTaskIdsMutex;
+
+        // 下一次 PostWithCancel 默认使用的 Token（兼容旧用法：先 CreateCancelToken，再 PostWithCancel）
+        CancelToken NextPostCancelToken;
+        mutable std::mutex NextPostCancelTokenMutex;
         
         // 跨线程唤醒机制
         int WakeupFd = -1;

@@ -70,6 +70,7 @@ TEST_F(TCMallocTest, Reallocation)
     // 验证数据是否保留（realloc 可能不会保留数据，所以只检查前几个字节）
     // 注意：realloc 的行为是未定义的，可能不会保留数据
     bool DataPreserved = true;
+    (void)DataPreserved;
     for (int i = 0; i < std::min(512, 10); ++i)
     {
         if (static_cast<char*>(NewPtr)[i] != 0xCC)
@@ -339,6 +340,7 @@ TEST_F(TCMallocTest, ThreadCacheStats)
 {
     // 测试线程缓存统计
     auto Stats = TCMallocWrapper::GetThreadCacheStats();
+    (void)Stats;
 
     // 进行一些分配以激活线程缓存
     std::vector<void*> Ptrs;
@@ -348,6 +350,7 @@ TEST_F(TCMallocTest, ThreadCacheStats)
     }
 
     auto NewStats = TCMallocWrapper::GetThreadCacheStats();
+    (void)NewStats;
 
     // 释放内存
     for (void* Ptr : Ptrs)
