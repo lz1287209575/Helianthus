@@ -10,6 +10,11 @@
 #include <cstdint>
 #include <unordered_set>
 
+#ifdef _WIN32
+    // Forward declaration for Windows types
+    typedef void* HANDLE;
+#endif
+
 namespace Helianthus::Network::Asio
 {
     class Reactor;
@@ -179,8 +184,8 @@ namespace Helianthus::Network::Asio
         
         // Windows 唤醒相关
 #ifdef _WIN32
-        HANDLE WakeupEvent = INVALID_HANDLE_VALUE;
-        HANDLE WakeupIOCP = INVALID_HANDLE_VALUE;
+        HANDLE WakeupEvent;
+        HANDLE WakeupIOCP;
 #endif
         
         // Stats
