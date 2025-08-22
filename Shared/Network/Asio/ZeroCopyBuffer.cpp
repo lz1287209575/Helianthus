@@ -64,6 +64,73 @@ size_t ZeroCopyBuffer::GetTotalSize() const
 void ZeroCopyBuffer::Clear()
 {
     Fragments.clear();
+    MappedFragments.clear();
+}
+
+// 新增的内存映射文件支持方法
+void ZeroCopyBuffer::AddMemoryMappedFragment(const MemoryMappedBufferFragment& Fragment)
+{
+    if (Fragment.IsValid())
+    {
+        MappedFragments.push_back(Fragment);
+        // 同时添加到普通片段中以保持兼容性
+        Fragments.emplace_back(Fragment.GetData(), Fragment.GetSize());
+    }
+}
+
+void ZeroCopyBuffer::AddMemoryMappedFile(std::shared_ptr<MemoryMappedFile> File, size_t Offset, size_t Size)
+{
+    if (!File || !File->IsMapped())
+    {
+        return;
+    }
+    
+    if (Size == 0)
+    {
+        Size = File->GetSize() - Offset;
+    }
+    
+    if (Offset + Size > File->GetSize())
+    {
+        Size = File->GetSize() - Offset;
+    }
+    
+    if (Size > 0)
+    {
+        MemoryMappedBufferFragment Fragment(File, Offset, Size);
+        AddMemoryMappedFragment(Fragment);
+    }
+}
+
+bool ZeroCopyBuffer::AddFileFragment(const std::string& FilePath, size_t Offset, size_t Size)
+{
+    auto MappedFile = std::make_shared<MemoryMappedFile>();
+    if (!MappedFile->MapFile(FilePath, MappingMode::ReadOnly))
+    {
+        return false;
+    }
+    
+    AddMemoryMappedFile(MappedFile, Offset, Size);
+    return true;
+}
+
+bool ZeroCopyBuffer::AddOptimizedFileFragments(const std::string& FilePath, 
+                                              const LargeFileTransferOptimizer::TransferConfig& Config)
+{
+    auto OptimizedFragments = LargeFileTransferOptimizer::CreateOptimizedFragments(FilePath, Config);
+    
+    if (OptimizedFragments.empty())
+    {
+        // 如果无法创建内存映射片段，尝试添加单个文件片段
+        return AddFileFragment(FilePath);
+    }
+    
+    for (const auto& Fragment : OptimizedFragments)
+    {
+        AddMemoryMappedFragment(Fragment);
+    }
+    
+    return true;
 }
 
 // ZeroCopyReadBuffer 实现

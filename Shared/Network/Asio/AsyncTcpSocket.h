@@ -20,6 +20,7 @@ public:
     explicit AsyncTcpSocket(std::shared_ptr<IoContext> Ctx);
 
     Network::NetworkError Connect(const Network::NetworkAddress& Address);
+    void AsyncConnect(const Network::NetworkAddress& Address, std::function<void(Network::NetworkError)> Handler);
     void AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandler Handler);
     void AsyncSend(const char* Data, size_t Size, SendHandler Handler);
     void Close();

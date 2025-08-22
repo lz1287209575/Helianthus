@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "Shared/Network/Asio/MemoryMappedFile.h"
+
 namespace Helianthus::Network::Asio
 {
 // 零拷贝缓冲区片段
@@ -54,6 +56,17 @@ public:
     void AddFragment(const void* Data, size_t Size);
     void AddFragment(const std::string& Str);
     void AddFragment(const std::vector<uint8_t>& Bytes);
+    
+    // 添加内存映射文件片段
+    void AddMemoryMappedFragment(const MemoryMappedBufferFragment& Fragment);
+    void AddMemoryMappedFile(std::shared_ptr<MemoryMappedFile> File, size_t Offset = 0, size_t Size = 0);
+    
+    // 从文件路径添加内存映射片段（便利方法）
+    bool AddFileFragment(const std::string& FilePath, size_t Offset = 0, size_t Size = 0);
+    
+    // 为大文件传输优化添加片段
+    bool AddOptimizedFileFragments(const std::string& FilePath, 
+                                  const LargeFileTransferOptimizer::TransferConfig& Config = {});
 
     // 获取所有片段
     const std::vector<BufferFragment>& GetFragments() const
@@ -79,8 +92,21 @@ public:
         return Fragments.size();
     }
 
+    // 获取内存映射片段数量
+    size_t GetMemoryMappedFragmentCount() const
+    {
+        return MappedFragments.size();
+    }
+    
+    // 获取内存映射片段
+    const std::vector<MemoryMappedBufferFragment>& GetMemoryMappedFragments() const
+    {
+        return MappedFragments;
+    }
+
 private:
     std::vector<BufferFragment> Fragments;
+    std::vector<MemoryMappedBufferFragment> MappedFragments;
 };
 
 // 零拷贝读取缓冲区（支持从多个源读取）

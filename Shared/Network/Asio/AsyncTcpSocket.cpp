@@ -27,6 +27,36 @@ Network::NetworkError AsyncTcpSocket::Connect(const Network::NetworkAddress& Add
     return Err;
 }
 
+void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address, std::function<void(Network::NetworkError)> Handler)
+{
+    if (ClosedFlag)
+    {
+        if (Handler)
+        {
+            Handler(Network::NetworkError::CONNECTION_CLOSED);
+        }
+        return;
+    }
+
+    const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
+    
+    // Windows 下优先使用 Proactor（IOCP）
+#ifdef _WIN32
+    if (ProactorPtr)
+    {
+        ProactorPtr->AsyncConnect(FdValue, Address, std::move(Handler));
+        return;
+    }
+#endif
+
+    // 非 Windows 或没有 Proactor 时，使用同步连接
+    auto Err = Connect(Address);
+    if (Handler)
+    {
+        Handler(Err);
+    }
+}
+
 void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandler Handler)
 {
     if (ClosedFlag)

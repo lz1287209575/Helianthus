@@ -197,19 +197,50 @@ void IoContext::ProcessDelayedTasks()
         if (ProactorPtr)
         {
             ProactorPtr->ProcessCompletions(Timeout);
+            // 检查是否在 ProcessCompletions 中收到了停止信号
+            if (!Running)
+            {
+                break;
+            }
         }
         if (ReactorPtr)
         {
             // 使用批处理轮询，提高吞吐量
             ReactorPtr->PollBatch(Timeout, 64);
-            }
         }
+        
+        // 再次检查运行状态，确保能及时响应停止请求
+        if (!Running)
+        {
+            break;
+        }
+    }
     }
 
     void IoContext::Stop()
+{
+    Running = false;
+    
+    // 在 Windows 上使用 IOCP 唤醒机制确保立即停止
+#if defined(_WIN32)
+    if (ProactorPtr)
     {
-        Running = false;
+        ProactorPtr->Stop();
     }
+    else
+    {
+        // 如果没有 Proactor，使用其他唤醒机制
+        Wakeup();
+    }
+#else
+    // 非 Windows 平台使用文件描述符唤醒
+    if (WakeupFd >= 0)
+    {
+        uint64_t Value = 1;
+        write(WakeupFd, &Value, sizeof(Value));
+    }
+#endif
+}
 
     void IoContext::Post(std::function<void()> Task)
     {
@@ -233,8 +264,13 @@ void IoContext::ProcessDelayedTasks()
     // bool IsCrossThread = (PostingThreadId != RunningThreadId) || (RunningThreadId == std::thread::id{});
     // UpdateWakeupStats(0.0, !IsCrossThread); // 延迟将在任务执行时计算
 
-    // 唤醒事件循环（非 Windows 使用 eventfd）
-#if !defined(_WIN32)
+    // 唤醒事件循环
+#if defined(_WIN32)
+    if (ProactorPtr)
+    {
+        ProactorPtr->Wakeup();
+    }
+#else
     if (WakeupFd >= 0)
     {
         uint64_t Value = 1;
@@ -250,6 +286,7 @@ void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
                            .count() +
                        DelayMs;
 
+    bool ShouldWakeup = false;
     {
         std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
         DelayedTaskQueue.emplace_back(NextTaskId.fetch_add(1), std::move(Task), ExecuteTime);
@@ -259,6 +296,29 @@ void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
                   DelayedTaskQueue.end(),
                   [](const DelayedTask& A, const DelayedTask& B)
                   { return A.ExecuteTime < B.ExecuteTime; });
+        
+        // 如果这个任务是新的最早任务，需要唤醒事件循环
+        if (!DelayedTaskQueue.empty() && DelayedTaskQueue.front().ExecuteTime == ExecuteTime)
+        {
+            ShouldWakeup = true;
+        }
+    }
+    
+    // 如果需要唤醒，则唤醒事件循环
+    if (ShouldWakeup)
+    {
+#if defined(_WIN32)
+        if (ProactorPtr)
+        {
+            ProactorPtr->Wakeup();
+        }
+#else
+        if (WakeupFd >= 0)
+        {
+            uint64_t Value = 1;
+            write(WakeupFd, &Value, sizeof(Value));
+        }
+#endif
     }
 }
 
@@ -318,6 +378,7 @@ IoContext::TaskId IoContext::PostDelayedWithCancel(std::function<void()> Task, i
                            .count() +
                        DelayMs;
 
+    bool ShouldWakeup = false;
     {
         std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
         DelayedTaskQueue.emplace_back(Id, std::move(Task), ExecuteTime, Token);
@@ -327,6 +388,29 @@ IoContext::TaskId IoContext::PostDelayedWithCancel(std::function<void()> Task, i
                   DelayedTaskQueue.end(),
                   [](const DelayedTask& A, const DelayedTask& B)
                   { return A.ExecuteTime < B.ExecuteTime; });
+        
+        // 如果这个任务是新的最早任务，需要唤醒事件循环
+        if (!DelayedTaskQueue.empty() && DelayedTaskQueue.front().ExecuteTime == ExecuteTime)
+        {
+            ShouldWakeup = true;
+        }
+    }
+    
+    // 如果需要唤醒，则唤醒事件循环
+    if (ShouldWakeup)
+    {
+#if defined(_WIN32)
+        if (ProactorPtr)
+        {
+            ProactorPtr->Wakeup();
+        }
+#else
+        if (WakeupFd >= 0)
+        {
+            uint64_t Value = 1;
+            write(WakeupFd, &Value, sizeof(Value));
+        }
+#endif
     }
     
     return Id;

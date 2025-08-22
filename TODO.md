@@ -3,14 +3,14 @@
 ## 🎯 P0：近期优先事项（Windows IOCP 冲刺清单）
 
 ### IOCP 唤醒机制（跨线程 Post/Stop 立即生效）
-- [ ] 在 `ProactorIocp` 中引入 Wake Key，`IoContext::Post/Stop` 调用 `PostQueuedCompletionStatus(IocpHandle, 0, WakeKey, nullptr)`
-- [ ] `ProcessCompletions` 识别 WakeKey 不做错误处理，仅用于唤醒
+- [x] 在 `ProactorIocp` 中引入 Wake Key，`IoContext::Post/Stop` 调用 `PostQueuedCompletionStatus(IocpHandle, 0, WakeKey, nullptr)`
+- [x] `ProcessCompletions` 识别 WakeKey 不做错误处理，仅用于唤醒
 
 ### AcceptEx 全流程与持续投递
-- [ ] 每个挂起 accept 预创建 `WSASocket` 与固定 `AcceptBuffer`（`sizeof(sockaddr_in)*2 + 32`）
-- [ ] 完成后 `SO_UPDATE_ACCEPT_CONTEXT`，使用 `GetAcceptExSockaddrs` 获取本地/远端地址
-- [ ] 回调上层并调用 `TcpSocket.Adopt()`
-- [ ] 维持 1-4 个并发 `AcceptEx`，错误重投递，退出时统一取消
+- [x] 每个挂起 accept 预创建 `WSASocket` 与固定 `AcceptBuffer`（`sizeof(sockaddr_in)*2 + 32`）
+- [x] 完成后 `SO_UPDATE_ACCEPT_CONTEXT`，使用 `GetAcceptExSockaddrs` 获取本地/远端地址
+- [x] 回调上层并调用 `TcpSocket.Adopt()`
+- [x] 维持 1-4 个并发 `AcceptEx`，错误重投递，退出时统一取消
 
 ### AsyncRead/AsyncWrite 续传语义
 - [ ] `WSARecv/WSASend` 完成后根据 `Transferred` 与目标长度继续投递，直至读满/写完或错误

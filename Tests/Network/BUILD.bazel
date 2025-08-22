@@ -207,3 +207,129 @@ cc_test(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_test(
+    name = "iocp_wakeup_test",
+    srcs = ["IocpWakeupTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "acceptex_test",
+    srcs = ["AcceptExTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "acceptex_concurrent_test",
+    srcs = ["AcceptExConcurrentTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "async_read_write_test",
+    srcs = ["AsyncReadWriteTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "iocp_resume_test",
+    srcs = ["IocpResumeTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "async_connect_test",
+    srcs = ["AsyncConnectTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "iocontext_stop_test",
+    srcs = ["IoContextStopTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "acceptex_concurrency_test",
+    srcs = ["AcceptExConcurrencyTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "zerocopy_optimization_test",
+    srcs = ["ZeroCopyOptimizationTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)

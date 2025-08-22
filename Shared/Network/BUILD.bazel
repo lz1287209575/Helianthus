@@ -18,6 +18,7 @@ cc_library(
         "Asio/ErrorMapping.cpp",
         "Asio/BufferPool.cpp",
         "Asio/ZeroCopyBuffer.cpp",
+        "Asio/MemoryMappedFile.cpp",
     ],
     hdrs = [
         "INetworkSocket.h",
@@ -42,6 +43,7 @@ cc_library(
         "Asio/ErrorMapping.h",
         "Asio/BufferPool.h",
         "Asio/ZeroCopyBuffer.h",
+        "Asio/MemoryMappedFile.h",
         "Asio/PerformanceMetrics.h",
     ],
     strip_include_prefix = ".",
