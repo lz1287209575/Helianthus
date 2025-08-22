@@ -1,8 +1,6 @@
 build:linux --repo_env=CC=gcc
 build:linux --repo_env=CXX=g++
-build:linux --repo_env=BAZEL_CXXOPTS=-std=c++20
 build:linux --repo_env=BAZEL_COPTS=-std=c11
-build:linux --cxxopt=-std=c++20
 
 build:msvc --cxxopt=/std:c++20
 build:msvc --cxxopt=/utf-8

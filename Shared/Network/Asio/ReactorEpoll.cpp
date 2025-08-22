@@ -10,50 +10,51 @@
 #include <algorithm>
 #include <mutex>
 #include <iostream>
+#include <unordered_map>
 
 namespace Helianthus::Network::Asio
 {
     uint32_t ReactorEpoll::ToNative(EventMask Mask, bool EdgeTriggered)
     {
-        uint32_t ev = 0;
+        uint32_t Ev = 0;
         if ((static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Read)) != 0) 
         {
-            ev |= EPOLLIN;
+            Ev |= EPOLLIN;
         }
         if ((static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Write)) != 0) 
         {
-            ev |= EPOLLOUT;
+            Ev |= EPOLLOUT;
         }
         if ((static_cast<uint32_t>(Mask) & static_cast<uint32_t>(EventMask::Error)) != 0) 
         {
-            ev |= EPOLLERR;
+            Ev |= EPOLLERR;
         }
         
         // 边沿触发模式
         if (EdgeTriggered) 
         {
-            ev |= EPOLLET;
+            Ev |= EPOLLET;
         }
         
-        return ev;
+        return Ev;
     }
 
     EventMask ReactorEpoll::FromNative(uint32_t Events)
     {
-        EventMask mask = EventMask::None;
+        EventMask Mask = EventMask::None;
         if (Events & (EPOLLIN | EPOLLPRI)) 
         {
-            mask = mask | EventMask::Read;
+            Mask = Mask | EventMask::Read;
         }
         if (Events & EPOLLOUT) 
         {
-            mask = mask | EventMask::Write;
+            Mask = Mask | EventMask::Write;
         }
         if (Events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) 
         {
-            mask = mask | EventMask::Error;
+            Mask = Mask | EventMask::Error;
         }
-        return mask;
+        return Mask;
     }
 
     ReactorEpoll::ReactorEpoll()
@@ -78,65 +79,65 @@ namespace Helianthus::Network::Asio
 
     bool ReactorEpoll::Add(Fd Handle, EventMask Mask, IoCallback Callback)
     {
-        epoll_event ev{};
-        ev.events = ToNative(Mask, EdgeTriggered);
-        ev.data.fd = static_cast<int>(Handle);
+        epoll_event Ev{};
+        Ev.events = ToNative(Mask, EdgeTriggered);
+        Ev.data.fd = static_cast<int>(Handle);
         
-        if (epoll_ctl(EpollFd, EPOLL_CTL_ADD, static_cast<int>(Handle), &ev) != 0) 
+        if (epoll_ctl(EpollFd, EPOLL_CTL_ADD, static_cast<int>(Handle), &Ev) != 0) 
         {
-            int addErrno = errno;
-            if (addErrno == EEXIST)
+            int AddErrno = errno;
+            if (AddErrno == EEXIST)
             {
                 // 已存在则改为修改，合并已有掩码与新掩码，避免覆盖
-                uint32_t existingMaskBits = 0;
+                uint32_t ExistingMaskBits = 0;
                 {
-                    std::lock_guard<std::mutex> gm(RegisteredMasksMutex);
-                    auto it = RegisteredMasks.find(Handle);
-                    if (it != RegisteredMasks.end()) existingMaskBits = it->second;
+                    std::lock_guard<std::mutex> Gm(RegisteredMasksMutex);
+                    auto It = RegisteredMasks.find(Handle);
+                    if (It != RegisteredMasks.end()) ExistingMaskBits = It->second;
                 }
-                uint32_t newMaskBits = static_cast<uint32_t>(Mask) | existingMaskBits;
-                epoll_event ev2{};
-                ev2.events = ToNative(static_cast<EventMask>(newMaskBits), EdgeTriggered);
-                ev2.data.fd = static_cast<int>(Handle);
-                if (epoll_ctl(EpollFd, EPOLL_CTL_MOD, static_cast<int>(Handle), &ev2) != 0)
+                uint32_t NewMaskBits = static_cast<uint32_t>(Mask) | ExistingMaskBits;
+                epoll_event Ev2{};
+                Ev2.events = ToNative(static_cast<EventMask>(NewMaskBits), EdgeTriggered);
+                Ev2.data.fd = static_cast<int>(Handle);
+                if (epoll_ctl(EpollFd, EPOLL_CTL_MOD, static_cast<int>(Handle), &Ev2) != 0)
                 {
                     auto Error = ErrorMapping::FromErrno(errno);
                     // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
                     return false;
                 }
                 {
-                    std::lock_guard<std::mutex> gm(RegisteredMasksMutex);
-                    RegisteredMasks[Handle] = newMaskBits;
+                    std::lock_guard<std::mutex> Gm(RegisteredMasksMutex);
+                    RegisteredMasks[Handle] = NewMaskBits;
                 }
             }
             else
             {
-                auto Error = ErrorMapping::FromErrno(addErrno);
+                auto Error = ErrorMapping::FromErrno(AddErrno);
                 // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
                 return false;
             }
         }
         
         {
-            std::lock_guard<std::mutex> g(CallbacksMutex);
+            std::lock_guard<std::mutex> G(CallbacksMutex);
             Callbacks[Handle] = std::move(Callback);
         }
         {
-            std::lock_guard<std::mutex> gm(RegisteredMasksMutex);
-            auto it = RegisteredMasks.find(Handle);
-            uint32_t prev = (it != RegisteredMasks.end()) ? it->second : 0u;
-            RegisteredMasks[Handle] = prev | static_cast<uint32_t>(Mask);
+            std::lock_guard<std::mutex> Gm(RegisteredMasksMutex);
+            auto It = RegisteredMasks.find(Handle);
+            uint32_t Prev = (It != RegisteredMasks.end()) ? It->second : 0u;
+            RegisteredMasks[Handle] = Prev | static_cast<uint32_t>(Mask);
         }
         return true;
     }
 
     bool ReactorEpoll::Mod(Fd Handle, EventMask Mask)
     {
-        epoll_event ev{};
-        ev.events = ToNative(Mask, EdgeTriggered);
-        ev.data.fd = static_cast<int>(Handle);
+        epoll_event Ev{};
+        Ev.events = ToNative(Mask, EdgeTriggered);
+        Ev.data.fd = static_cast<int>(Handle);
         
-        if (epoll_ctl(EpollFd, EPOLL_CTL_MOD, static_cast<int>(Handle), &ev) != 0) 
+        if (epoll_ctl(EpollFd, EPOLL_CTL_MOD, static_cast<int>(Handle), &Ev) != 0) 
         {
             auto Error = ErrorMapping::FromErrno(errno);
             // TODO: 使用项目的日志系统记录 ErrorMapping::GetErrorString(Error)
@@ -169,10 +170,10 @@ namespace Helianthus::Network::Asio
 
     int ReactorEpoll::PollOnce(int TimeoutMs)
     {
-        std::vector<epoll_event> events(MaxEvents);
-        int n = epoll_wait(EpollFd, events.data(), MaxEvents, TimeoutMs);
+        std::vector<epoll_event> Events(MaxEvents);
+        int N = epoll_wait(EpollFd, Events.data(), MaxEvents, TimeoutMs);
         
-        if (n < 0) 
+        if (N < 0) 
         {
             if (errno == EINTR) 
             {
@@ -184,28 +185,28 @@ namespace Helianthus::Network::Asio
             return -1;
         }
         
-        if (n == 0) 
+        if (N == 0) 
         {
             // 超时，没有事件
             return 0;
         }
         
         // 处理事件
-        for (int i = 0; i < n; ++i)
+        for (int I = 0; I < N; ++I)
         {
-            IoCallback cb;
-            EventMask mask = FromNative(events[i].events);
-            if (mask == EventMask::None) { continue; }
+            IoCallback Cb;
+            EventMask Mask = FromNative(Events[I].events);
+            if (Mask == EventMask::None) { continue; }
             {
-                std::lock_guard<std::mutex> g(CallbacksMutex);
-                auto it = Callbacks.find(static_cast<Fd>(events[i].data.fd));
-                if (it == Callbacks.end()) { continue; }
-                cb = it->second;
+                std::lock_guard<std::mutex> G(CallbacksMutex);
+                auto It = Callbacks.find(static_cast<Fd>(Events[I].data.fd));
+                if (It == Callbacks.end()) { continue; }
+                Cb = It->second;
             }
-            if (cb) { cb(mask); }
+            if (Cb) { Cb(Mask); }
         }
         
-        return n;
+        return N;
     }
 
     // 批处理相关方法实现
@@ -217,7 +218,11 @@ namespace Helianthus::Network::Asio
         size_t BatchSize = CalculateAdaptiveBatchSize();
         BatchSize = std::min(BatchSize, MaxEvents);
         
-        std::vector<epoll_event> events(BatchSize);
+        // 预分配事件缓冲区，避免重复分配
+        static thread_local std::vector<epoll_event> EventBuffer;
+        if (EventBuffer.size() < BatchSize) {
+            EventBuffer.resize(BatchSize);
+        }
         
         // 计算实际超时时间
         int ActualTimeout = TimeoutMs;
@@ -226,7 +231,7 @@ namespace Helianthus::Network::Asio
             ActualTimeout = std::min(TimeoutMs, BatchConfigData.MaxBatchTimeoutMs);
         }
         
-        int n = epoll_wait(EpollFd, events.data(), static_cast<int>(BatchSize), ActualTimeout);
+        int n = epoll_wait(EpollFd, EventBuffer.data(), static_cast<int>(BatchSize), ActualTimeout);
         
         if (n < 0) 
         {
@@ -243,8 +248,8 @@ namespace Helianthus::Network::Asio
             return 0;
         }
         
-        // 处理批处理事件
-        int ProcessedEvents = ProcessBatchEvents(events, static_cast<size_t>(n));
+        // 处理批处理事件（优化版本）
+        int ProcessedEvents = ProcessBatchEventsOptimized(EventBuffer, static_cast<size_t>(n));
         
         // 更新性能统计
         auto EndTime = std::chrono::high_resolution_clock::now();
@@ -256,59 +261,91 @@ namespace Helianthus::Network::Asio
 
     void ReactorEpoll::SetBatchConfig(const BatchConfig& Config)
     {
-        std::lock_guard<std::mutex> lock(BatchConfigMutex);
+        std::lock_guard<std::mutex> Lock(BatchConfigMutex);
         BatchConfigData = Config;
     }
 
     BatchConfig ReactorEpoll::GetBatchConfig() const
     {
-        std::lock_guard<std::mutex> lock(BatchConfigMutex);
+        std::lock_guard<std::mutex> Lock(BatchConfigMutex);
         return BatchConfigData;
     }
 
     ReactorEpoll::PerformanceStats ReactorEpoll::GetPerformanceStats() const
     {
-        std::lock_guard<std::mutex> lock(StatsMutex);
+        std::lock_guard<std::mutex> Lock(StatsMutex);
         return PerformanceStatsData;
     }
 
     void ReactorEpoll::ResetPerformanceStats()
     {
-        std::lock_guard<std::mutex> lock(StatsMutex);
+        std::lock_guard<std::mutex> Lock(StatsMutex);
         PerformanceStatsData = PerformanceStats{};
     }
 
-    int ReactorEpoll::ProcessBatchEvents(const std::vector<epoll_event>& Events, size_t Count)
+    int ReactorEpoll::ProcessBatchEventsOptimized(const std::vector<epoll_event>& Events, size_t Count)
     {
         int ProcessedCount = 0;
         
-        // 批量处理事件，减少锁竞争
-        std::vector<std::pair<Fd, EventMask>> EventBatch;
+        // 使用线程本地存储减少锁竞争
+        static thread_local std::vector<std::pair<Fd, EventMask>> EventBatch;
+        EventBatch.clear();
         EventBatch.reserve(Count);
         
-        // 收集所有事件
-        for (size_t i = 0; i < Count; ++i)
+        // 收集所有事件，进行去抖处理
+        std::unordered_map<Fd, EventMask> EventMap;
+        for (size_t I = 0; I < Count; ++I)
         {
-            auto fd = static_cast<Fd>(Events[i].data.fd);
-            EventMask mask = FromNative(Events[i].events);
-            if (mask != EventMask::None)
+            auto SocketFd = static_cast<Fd>(Events[I].data.fd);
+            EventMask Mask = FromNative(Events[I].events);
+            if (Mask != EventMask::None)
             {
-                EventBatch.emplace_back(fd, mask);
+                // 事件去抖：合并同一 fd 的多个事件
+                auto It = EventMap.find(SocketFd);
+                if (It != EventMap.end()) {
+                    It->second = static_cast<EventMask>(static_cast<int>(It->second) | static_cast<int>(Mask));
+                } else {
+                    EventMap[SocketFd] = Mask;
+                }
             }
         }
         
-        // 批量执行回调
-        for (const auto& [fd, mask] : EventBatch)
+        // 转换为批处理格式
+        for (const auto& [Fd, Mask] : EventMap) {
+            EventBatch.emplace_back(Fd, Mask);
+        }
+        
+        // 批量获取回调，减少锁持有时间
+        std::vector<IoCallback> CallbackBatch;
+        CallbackBatch.reserve(EventBatch.size());
+        
         {
-            auto it = Callbacks.find(fd);
-            if (it != Callbacks.end())
-            {
-                it->second(mask);
+            std::lock_guard<std::mutex> G(CallbacksMutex);
+            for (const auto& [Fd, Mask] : EventBatch) {
+                auto It = Callbacks.find(Fd);
+                if (It != Callbacks.end()) {
+                    CallbackBatch.push_back(It->second);
+                } else {
+                    CallbackBatch.push_back(nullptr);
+                }
+            }
+        }
+        
+        // 批量执行回调，无锁执行
+        for (size_t I = 0; I < EventBatch.size(); ++I) {
+            if (CallbackBatch[I]) {
+                CallbackBatch[I](EventBatch[I].second);
                 ProcessedCount++;
             }
         }
         
         return ProcessedCount;
+    }
+
+    int ReactorEpoll::ProcessBatchEvents(const std::vector<epoll_event>& Events, size_t Count)
+    {
+        // 使用优化版本
+        return ProcessBatchEventsOptimized(Events, Count);
     }
 
     void ReactorEpoll::UpdatePerformanceStats(size_t BatchSize, double ProcessingTimeMs)

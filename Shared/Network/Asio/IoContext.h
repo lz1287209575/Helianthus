@@ -6,6 +6,8 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <thread>
+#include <cstdint>
 
 namespace Helianthus::Network::Asio
 {
@@ -66,6 +68,28 @@ namespace Helianthus::Network::Asio
         void Post(std::function<void()> Task);
         // Post a task with delay (milliseconds)
         void PostDelayed(std::function<void()> Task, int DelayMs);
+        
+        // 取消和超时语义支持
+        using TaskId = uint64_t;
+        using CancelToken = std::shared_ptr<std::atomic<bool>>;
+        
+        // 带取消 token 的任务提交
+        TaskId PostWithCancel(std::function<void()> Task, CancelToken Token = nullptr);
+        TaskId PostDelayedWithCancel(std::function<void()> Task, int DelayMs, CancelToken Token = nullptr);
+        
+        // 取消任务
+        bool CancelTask(TaskId TaskId);
+        
+        // 创建取消 token
+        CancelToken CreateCancelToken();
+        
+        // 带超时的异步操作
+        template<typename T>
+        struct AsyncResult {
+            T Result;
+            bool IsTimeout = false;
+            bool IsCancelled = false;
+        };
 
         std::shared_ptr<Reactor> GetReactor() const;
         std::shared_ptr<Proactor> GetProactor() const;
@@ -103,20 +127,34 @@ namespace Helianthus::Network::Asio
         std::shared_ptr<Reactor> ReactorPtr;
         std::shared_ptr<Proactor> ProactorPtr;
         
+        // Identify the event loop thread
+        std::thread::id RunningThreadId;
+        
         // 任务队列
-        std::queue<std::function<void()>> TaskQueue;
+        struct QueuedTask
+        {
+            std::function<void()> Task;
+            int64_t EnqueueTimeNs;
+            std::thread::id PostingThreadId;
+        };
+        std::queue<QueuedTask> TaskQueue;
         mutable std::mutex TaskQueueMutex;
         
         // 延迟任务队列
         struct DelayedTask {
+            TaskId Id;
             std::function<void()> Task;
             int64_t ExecuteTime; // 毫秒时间戳
+            CancelToken Token;
             
-            DelayedTask(std::function<void()> TaskIn, int64_t ExecuteTimeIn)
-                : Task(std::move(TaskIn)), ExecuteTime(ExecuteTimeIn) {}
+            DelayedTask(TaskId IdIn, std::function<void()> TaskIn, int64_t ExecuteTimeIn, CancelToken TokenIn = nullptr)
+                : Id(IdIn), Task(std::move(TaskIn)), ExecuteTime(ExecuteTimeIn), Token(std::move(TokenIn)) {}
         };
         std::vector<DelayedTask> DelayedTaskQueue;
         mutable std::mutex DelayedTaskQueueMutex;
+        
+        // 任务 ID 生成器
+        std::atomic<TaskId> NextTaskId{1};
         
         // 跨线程唤醒机制
         int WakeupFd = -1;
@@ -131,6 +169,14 @@ namespace Helianthus::Network::Asio
         HANDLE WakeupEvent = INVALID_HANDLE_VALUE;
         HANDLE WakeupIOCP = INVALID_HANDLE_VALUE;
 #endif
+        
+        // Stats
+        mutable std::mutex StatsMutex;
+        int TotalWakeupsInternal = 0;
+        int CrossThreadWakeupsInternal = 0;
+        int SameThreadWakeupsInternal = 0;
+        double SumWakeupLatencyMsInternal = 0.0;
+        int MaxWakeupLatencyMsInternal = 0;
         
         mutable std::mutex WakeupStatsMutex;
         WakeupStats WakeupStatsData;
@@ -148,6 +194,9 @@ namespace Helianthus::Network::Asio
         
         // 唤醒辅助方法
         void UpdateWakeupStats(double LatencyMs, bool IsSameThread);
+        
+        // 超时计算辅助方法
+        int CalculateOptimalTimeout(int64_t NextDelay) const;
     };
 }
 

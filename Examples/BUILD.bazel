@@ -2,7 +2,7 @@ cc_binary(
     name = "tcmalloc_config_example",
     srcs = ["TCMallocConfigExample.cpp"],
     copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
         "//conditions:default": ["-std=c++20"],
     }),
     deps = [
@@ -15,7 +15,7 @@ cc_binary(
     name = "batch_processing_example",
     srcs = ["BatchProcessingExample.cpp"],
     copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
         "//conditions:default": ["-std=c++20"],
     }),
     deps = [
@@ -28,8 +28,8 @@ cc_binary(
     name = "wakeup_mechanism_example",
     srcs = ["WakeupMechanismExample.cpp"],
     copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std:c++20"],
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
     }),
     deps = [
         "//Shared/Network:network",
@@ -41,8 +41,8 @@ cc_binary(
     name = "lua_hotreload_example",
     srcs = ["LuaHotReloadExample.cpp"],
     copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std:c++20"],
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
     }),
     deps = [
         "//Shared/Scripting:scripting",
@@ -54,8 +54,8 @@ cc_binary(
     name = "game_server_with_hotreload",
     srcs = ["GameServerWithHotReload.cpp"],
     copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std:c++20"],
+        "@bazel_tools//tools/cpp:msvc": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
     }),
     deps = [
         "//Shared/Scripting:scripting",

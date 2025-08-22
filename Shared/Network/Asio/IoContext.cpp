@@ -93,44 +93,8 @@ void IoContext::CleanupWakeupFd()
 
 void IoContext::ProcessTasks()
 {
-    std::vector<QueuedTask> Tasks;
-    {
-        std::lock_guard<std::mutex> Lock(TaskQueueMutex);
-        while (!TaskQueue.empty())
-        {
-            Tasks.push_back(std::move(TaskQueue.front()));
-            TaskQueue.pop();
-        }
-    }
-
-    for (auto& Node : Tasks)
-    {
-        // Stats before executing task
-        int64_t NowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch())
-                            .count();
-        int64_t LatencyNs = NowNs - Node.EnqueueTimeNs;
-        int LatencyMs = static_cast<int>(LatencyNs / 1'000'000);
-        {
-            std::lock_guard<std::mutex> Lock(StatsMutex);
-            ++TotalWakeupsInternal;
-            if (Node.PostingThreadId == RunningThreadId)
-            {
-                ++SameThreadWakeupsInternal;
-            }
-            else
-            {
-                ++CrossThreadWakeupsInternal;
-            }
-            SumWakeupLatencyMsInternal += static_cast<double>(LatencyMs);
-            if (LatencyMs > MaxWakeupLatencyMsInternal)
-            {
-                MaxWakeupLatencyMsInternal = LatencyMs;
-            }
-        }
-
-        Node.Task();
-    }
+    // 保留原有实现作为兼容性接口
+    ProcessTaskBatch();
 }
 
 void IoContext::ProcessDelayedTasks()
@@ -146,11 +110,15 @@ void IoContext::ProcessDelayedTasks()
         // 移除已到期的任务
         DelayedTaskQueue.erase(std::remove_if(DelayedTaskQueue.begin(),
                                               DelayedTaskQueue.end(),
-                                              [&](const DelayedTask& task)
+                                              [&](const DelayedTask& Task)
                                               {
-                                                  if (task.ExecuteTime <= Now)
+                                                  if (Task.ExecuteTime <= Now)
                                                   {
-                                                      ReadyTasks.push_back(task.Task);
+                                                      // 检查是否被取消
+                                                      if (Task.Token && Task.Token->load()) {
+                                                          return true; // 被取消，移除任务
+                                                      }
+                                                      ReadyTasks.push_back(Task.Task);
                                                       return true;
                                                   }
                                                   return false;
@@ -169,10 +137,23 @@ void IoContext::Run()
 {
     Running = true;
     RunningThreadId = std::this_thread::get_id();
+    
+    // 配置 Reactor 批处理
+    if (ReactorPtr)
+    {
+        BatchConfig Config;
+        Config.MaxBatchSize = 64;
+        Config.MinBatchSize = 4;
+        Config.MaxBatchTimeoutMs = 1;
+        Config.EnableAdaptiveBatching = true;
+        Config.AdaptiveThreshold = 16;
+        ReactorPtr->SetBatchConfig(Config);
+    }
+    
     while (Running)
     {
-        // 处理普通任务
-        ProcessTasks();
+        // 处理普通任务（批处理）
+        ProcessTaskBatch();
 
         // 处理延迟任务
         ProcessDelayedTasks();
@@ -190,16 +171,18 @@ void IoContext::Run()
             }
         }
 
-        // 轮询 IO/完成队列
-        int Timeout = (NextDelay >= 0) ? static_cast<int>(std::min<int64_t>(NextDelay, 10)) : 10;
-
+        // 智能超时计算：根据任务队列状态和延迟任务调整超时
+        int Timeout = CalculateOptimalTimeout(NextDelay);
+        
+        // 使用批处理轮询，减少上下文切换
         if (ProactorPtr)
         {
             ProactorPtr->ProcessCompletions(Timeout);
         }
         if (ReactorPtr)
         {
-            ReactorPtr->PollOnce(Timeout);
+            // 使用批处理轮询，提高吞吐量
+            ReactorPtr->PollBatch(Timeout, 64);
         }
     }
 }
@@ -211,16 +194,24 @@ void IoContext::Stop()
 
 void IoContext::Post(std::function<void()> Task)
 {
+    auto PostTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch())
+                          .count();
+    auto PostingThreadId = std::this_thread::get_id();
+    
     {
         std::lock_guard<std::mutex> Lock(TaskQueueMutex);
         QueuedTask Node;
         Node.Task = std::move(Task);
-        Node.EnqueueTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                 std::chrono::steady_clock::now().time_since_epoch())
-                                 .count();
-        Node.PostingThreadId = std::this_thread::get_id();
+        Node.EnqueueTimeNs = PostTimeNs;
+        Node.PostingThreadId = PostingThreadId;
         TaskQueue.push(std::move(Node));
     }
+
+    // 更新唤醒统计
+    // 注意：唤醒统计在 ProcessTaskBatch 中计算，避免重复统计
+    // bool IsCrossThread = (PostingThreadId != RunningThreadId) || (RunningThreadId == std::thread::id{});
+    // UpdateWakeupStats(0.0, !IsCrossThread); // 延迟将在任务执行时计算
 
     // 唤醒事件循环（非 Windows 使用 eventfd）
 #if !defined(_WIN32)
@@ -241,7 +232,7 @@ void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
 
     {
         std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
-        DelayedTaskQueue.emplace_back(std::move(Task), ExecuteTime);
+        DelayedTaskQueue.emplace_back(NextTaskId.fetch_add(1), std::move(Task), ExecuteTime);
 
         // 按执行时间排序
         std::sort(DelayedTaskQueue.begin(),
@@ -249,6 +240,90 @@ void IoContext::PostDelayed(std::function<void()> Task, int DelayMs)
                   [](const DelayedTask& A, const DelayedTask& B)
                   { return A.ExecuteTime < B.ExecuteTime; });
     }
+}
+
+IoContext::TaskId IoContext::PostWithCancel(std::function<void()> Task, CancelToken Token)
+{
+    TaskId Id = NextTaskId.fetch_add(1);
+    
+    auto PostTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch())
+                          .count();
+    auto PostingThreadId = std::this_thread::get_id();
+    
+    {
+        std::lock_guard<std::mutex> Lock(TaskQueueMutex);
+        QueuedTask Node;
+        Node.Task = [Task = std::move(Task), Token]() {
+            // 检查是否被取消
+            if (Token && Token->load()) {
+                return; // 任务被取消，不执行
+            }
+            Task();
+        };
+        Node.EnqueueTimeNs = PostTimeNs;
+        Node.PostingThreadId = PostingThreadId;
+        TaskQueue.push(std::move(Node));
+    }
+
+    // 更新唤醒统计
+    bool IsCrossThread = (PostingThreadId != RunningThreadId) || (RunningThreadId == std::thread::id{});
+    UpdateWakeupStats(0.0, !IsCrossThread);
+
+    // 唤醒事件循环
+#if !defined(_WIN32)
+    if (WakeupFd >= 0)
+    {
+        uint64_t Value = 1;
+        write(WakeupFd, &Value, sizeof(Value));
+    }
+#endif
+
+    return Id;
+}
+
+IoContext::TaskId IoContext::PostDelayedWithCancel(std::function<void()> Task, int DelayMs, CancelToken Token)
+{
+    TaskId Id = NextTaskId.fetch_add(1);
+    auto ExecuteTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now().time_since_epoch())
+                           .count() +
+                       DelayMs;
+
+    {
+        std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
+        DelayedTaskQueue.emplace_back(Id, std::move(Task), ExecuteTime, Token);
+
+        // 按执行时间排序
+        std::sort(DelayedTaskQueue.begin(),
+                  DelayedTaskQueue.end(),
+                  [](const DelayedTask& A, const DelayedTask& B)
+                  { return A.ExecuteTime < B.ExecuteTime; });
+    }
+    
+    return Id;
+}
+
+bool IoContext::CancelTask(TaskId TaskId)
+{
+    // 检查延迟任务队列
+    {
+        std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
+        auto It = std::find_if(DelayedTaskQueue.begin(), DelayedTaskQueue.end(),
+                              [TaskId](const DelayedTask& Task) { return Task.Id == TaskId; });
+        if (It != DelayedTaskQueue.end()) {
+            DelayedTaskQueue.erase(It);
+            return true;
+        }
+    }
+    
+    // 注意：普通任务队列中的任务无法取消，因为它们可能已经在执行中
+    return false;
+}
+
+IoContext::CancelToken IoContext::CreateCancelToken()
+{
+    return std::make_shared<std::atomic<bool>>(false);
 }
 
 std::shared_ptr<Reactor> IoContext::GetReactor() const
@@ -271,7 +346,7 @@ void IoContext::SetWakeupType(WakeupType Type)
     CurrentWakeupType = Type;
 }
 
-IoContext::WakeupStats IoContext::GetWakeupStats() const
+WakeupStats IoContext::GetWakeupStats() const
 {
     std::lock_guard<std::mutex> Lock(StatsMutex);
     WakeupStats Out{};
@@ -304,5 +379,295 @@ void IoContext::WakeupFromOtherThread()
         write(WakeupFd, &Value, sizeof(Value));
     }
 #endif
+}
+
+// 批处理配置方法实现
+void IoContext::SetTaskBatchConfig(const TaskBatchConfig& Config)
+{
+    std::lock_guard<std::mutex> lock(TaskBatchConfigMutex);
+    TaskBatchConfigData = Config;
+}
+
+TaskBatchConfig IoContext::GetTaskBatchConfig() const
+{
+    std::lock_guard<std::mutex> lock(TaskBatchConfigMutex);
+    return TaskBatchConfigData;
+}
+
+TaskBatchStats IoContext::GetTaskBatchStats() const
+{
+    std::lock_guard<std::mutex> lock(TaskBatchStatsMutex);
+    return TaskBatchStatsData;
+}
+
+void IoContext::ResetTaskBatchStats()
+{
+    std::lock_guard<std::mutex> lock(TaskBatchStatsMutex);
+    TaskBatchStatsData = TaskBatchStats{};
+}
+
+void IoContext::RunBatch()
+{
+    Running = true;
+    while (Running)
+    {
+        // 处理任务批处理
+        ProcessTaskBatch();
+        
+        // 处理延迟任务
+        ProcessDelayedTasks();
+        
+        // 计算下次延迟任务的时间
+        int64_t NextDelay = -1;
+        {
+            std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
+            if (!DelayedTaskQueue.empty()) {
+                auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count();
+                NextDelay = std::max<int64_t>(0, DelayedTaskQueue.front().ExecuteTime - Now);
+            }
+        }
+        
+        // 使用批处理轮询
+        int Timeout = (NextDelay >= 0) ? static_cast<int>(std::min<int64_t>(NextDelay, 10)) : 10;
+        
+        if (ProactorPtr) {
+            ProactorPtr->ProcessCompletions(Timeout);
+        }
+        if (ReactorPtr) {
+            // 使用批处理轮询
+            ReactorPtr->PollBatch(Timeout);
+        }
+    }
+}
+
+void IoContext::ProcessTaskBatch()
+{
+    auto StartTime = std::chrono::high_resolution_clock::now();
+    
+    // 计算批处理大小
+    size_t BatchSize = CalculateTaskBatchSize();
+    
+    std::vector<std::function<void()>> Tasks;
+    {
+        std::lock_guard<std::mutex> Lock(TaskQueueMutex);
+        
+        // 收集任务到批处理，同时记录延迟信息
+        size_t CollectedTasks = 0;
+        while (!TaskQueue.empty() && CollectedTasks < BatchSize) {
+            auto& Node = TaskQueue.front();
+            
+            // 计算延迟
+            auto NowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now().time_since_epoch())
+                             .count();
+            int64_t LatencyNs = NowNs - Node.EnqueueTimeNs;
+            int LatencyMs = static_cast<int>(LatencyNs / 1'000'000);
+            
+            // 更新唤醒延迟统计
+            bool IsSameThread = (Node.PostingThreadId == RunningThreadId);
+            UpdateWakeupStats(static_cast<double>(LatencyMs), IsSameThread);
+            
+            Tasks.push_back(std::move(Node.Task));
+            TaskQueue.pop();
+            CollectedTasks++;
+        }
+    }
+    
+    // 批量执行任务
+    for (auto& Task : Tasks) {
+        Task();
+    }
+    
+    // 更新批处理统计
+    if (!Tasks.empty()) {
+        auto EndTime = std::chrono::high_resolution_clock::now();
+        auto ProcessingTime = std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime);
+        UpdateTaskBatchStats(Tasks.size(), ProcessingTime.count() / 1000.0);
+    }
+}
+
+void IoContext::UpdateTaskBatchStats(size_t BatchSize, double ProcessingTimeMs)
+{
+    std::lock_guard<std::mutex> lock(TaskBatchStatsMutex);
+    
+    TaskBatchStatsData.TotalTasks += BatchSize;
+    TaskBatchStatsData.TotalBatches++;
+    
+    // 更新平均批处理大小
+    if (TaskBatchStatsData.TotalBatches > 0)
+    {
+        TaskBatchStatsData.AverageBatchSize = 
+            TaskBatchStatsData.TotalTasks / TaskBatchStatsData.TotalBatches;
+    }
+    
+    // 更新平均处理时间
+    if (TaskBatchStatsData.TotalBatches > 0)
+    {
+        double TotalTime = TaskBatchStatsData.AverageProcessingTimeMs * 
+                          (TaskBatchStatsData.TotalBatches - 1);
+        TaskBatchStatsData.AverageProcessingTimeMs = 
+            (TotalTime + ProcessingTimeMs) / TaskBatchStatsData.TotalBatches;
+    }
+    
+    // 更新最大/最小批处理大小
+    if (BatchSize > TaskBatchStatsData.MaxBatchSize)
+    {
+        TaskBatchStatsData.MaxBatchSize = BatchSize;
+    }
+    if (TaskBatchStatsData.MinBatchSize == 0 || BatchSize < TaskBatchStatsData.MinBatchSize)
+    {
+        TaskBatchStatsData.MinBatchSize = BatchSize;
+    }
+}
+
+size_t IoContext::CalculateTaskBatchSize() const
+{
+    std::lock_guard<std::mutex> Lock(TaskBatchConfigMutex);
+    
+    if (!TaskBatchConfigData.EnableTaskBatching)
+    {
+        return 1;  // 禁用批处理时返回1
+    }
+    
+    // 基于队列大小和配置计算批处理大小
+    std::lock_guard<std::mutex> QueueLock(TaskQueueMutex);
+    
+    size_t QueueSize = TaskQueue.size();
+    
+    // 如果队列很大，增加批处理大小
+    if (QueueSize > TaskBatchConfigData.MaxTaskBatchSize * 2)
+    {
+        return std::min(TaskBatchConfigData.MaxTaskBatchSize * 2, 
+                       static_cast<size_t>(128));
+    }
+    
+    // 如果队列较小，使用较小的批处理大小
+    if (QueueSize < TaskBatchConfigData.MinTaskBatchSize)
+    {
+        return std::min(QueueSize, TaskBatchConfigData.MinTaskBatchSize);
+    }
+    
+    return std::min(QueueSize, TaskBatchConfigData.MaxTaskBatchSize);
+}
+
+void IoContext::Wakeup()
+{
+    auto StartTime = std::chrono::high_resolution_clock::now();
+    
+    // 检查是否在同一线程
+    bool IsSameThread = false;
+    // TODO: 实现线程ID检查
+    
+    if (IsSameThread)
+    {
+        // 同线程唤醒，无需实际唤醒
+        UpdateWakeupStats(0.0, true);
+        return;
+    }
+    
+    // 跨线程唤醒
+    bool WakeupSuccess = false;
+    
+#if defined(_WIN32)
+    if (CurrentWakeupType == WakeupType::IOCP && WakeupIOCP != INVALID_HANDLE_VALUE)
+    {
+        // 使用 IOCP 唤醒
+        DWORD BytesTransferred = 0;
+        ULONG_PTR CompletionKey = 0;
+        LPOVERLAPPED Overlapped = nullptr;
+        
+        // 投递一个空完成包
+        if (PostQueuedCompletionStatus(WakeupIOCP, 0, 0, nullptr))
+        {
+            WakeupSuccess = true;
+        }
+    }
+    else if (CurrentWakeupType == WakeupType::WakeByAddress)
+    {
+        // 使用 WakeByAddressSingle
+        WakeByAddressSingle(&WakeupStatsData.TotalWakeups);
+        WakeupSuccess = true;
+    }
+    else if (WakeupEvent != INVALID_HANDLE_VALUE)
+    {
+        // 使用事件对象
+        if (SetEvent(WakeupEvent))
+        {
+            WakeupSuccess = true;
+        }
+    }
+#else
+    if (CurrentWakeupType == WakeupType::EventFd && WakeupFd >= 0)
+    {
+        // 使用 eventfd
+        uint64_t Value = 1;
+        if (write(WakeupFd, &Value, sizeof(Value)) == sizeof(Value))
+        {
+            WakeupSuccess = true;
+        }
+    }
+    else if (CurrentWakeupType == WakeupType::Pipe && WakeupPipe[1] >= 0)
+    {
+        // 使用管道
+        char Value = 1;
+        if (write(WakeupPipe[1], &Value, sizeof(Value)) == sizeof(Value))
+        {
+            WakeupSuccess = true;
+        }
+    }
+#endif
+    
+    // 计算唤醒延迟
+    auto EndTime = std::chrono::high_resolution_clock::now();
+    auto Latency = std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime);
+    double LatencyMs = Latency.count() / 1000.0;
+    
+    UpdateWakeupStats(LatencyMs, false);
+}
+
+void IoContext::UpdateWakeupStats(double LatencyMs, bool IsSameThread)
+{
+    std::lock_guard<std::mutex> Lock(StatsMutex);
+    
+    TotalWakeupsInternal++;
+    
+    if (IsSameThread)
+    {
+        SameThreadWakeupsInternal++;
+    }
+    else
+    {
+        CrossThreadWakeupsInternal++;
+    }
+    
+    // 更新延迟统计
+    SumWakeupLatencyMsInternal += LatencyMs;
+    if (static_cast<int>(LatencyMs) > MaxWakeupLatencyMsInternal)
+    {
+        MaxWakeupLatencyMsInternal = static_cast<int>(LatencyMs);
+    }
+}
+
+int IoContext::CalculateOptimalTimeout(int64_t NextDelay) const
+{
+    // 基础超时：10ms
+    int BaseTimeout = 10;
+    
+    // 如果有延迟任务，使用较小的超时
+    if (NextDelay >= 0) {
+        return static_cast<int>(std::min<int64_t>(NextDelay, BaseTimeout));
+    }
+    
+    // 检查任务队列状态，如果队列为空，可以增加超时以减少 CPU 使用
+    {
+        std::lock_guard<std::mutex> Lock(TaskQueueMutex);
+        if (TaskQueue.empty()) {
+            // 队列为空时，使用较长的超时以减少空转
+            return std::min(BaseTimeout * 2, 50); // 最大 50ms
+        }
+    }
+    
+    return BaseTimeout;
 }
 }  // namespace Helianthus::Network::Asio

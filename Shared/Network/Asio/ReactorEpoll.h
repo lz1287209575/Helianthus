@@ -56,6 +56,7 @@ namespace Helianthus::Network::Asio
         
         // 批处理辅助方法
         int ProcessBatchEvents(const std::vector<epoll_event>& Events, size_t Count);
+        int ProcessBatchEventsOptimized(const std::vector<epoll_event>& Events, size_t Count);
         void UpdatePerformanceStats(size_t BatchSize, double ProcessingTimeMs);
         size_t CalculateAdaptiveBatchSize() const;
     };

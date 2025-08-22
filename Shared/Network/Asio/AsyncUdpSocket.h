@@ -28,6 +28,7 @@ namespace Helianthus::Network::Asio
         std::shared_ptr<Reactor> ReactorPtr;
         Network::Sockets::UdpSocket Socket;
         ReceiveHandler PendingRecv;
+        SendHandler PendingSend;
     };
 }
 
