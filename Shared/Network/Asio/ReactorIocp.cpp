@@ -79,6 +79,43 @@ int ReactorIocp::PollOnce(int TimeoutMs)
     }
     return 0;
 }
+
+int ReactorIocp::PollBatch(int TimeoutMs, size_t MaxEvents)
+{
+    // 简化实现：调用PollOnce多次
+    int TotalEvents = 0;
+    for (size_t i = 0; i < MaxEvents; ++i)
+    {
+        int Events = PollOnce(TimeoutMs);
+        if (Events <= 0)
+            break;
+        TotalEvents += Events;
+    }
+    return TotalEvents;
+}
+
+void ReactorIocp::SetBatchConfig(const BatchConfig& Config)
+{
+    // 简化实现：暂时忽略配置
+    (void)Config;
+}
+
+BatchConfig ReactorIocp::GetBatchConfig() const
+{
+    // 返回默认配置
+    return BatchConfig{};
+}
+
+ReactorIocp::PerformanceStats ReactorIocp::GetPerformanceStats() const
+{
+    // 返回默认统计
+    return PerformanceStats{};
+}
+
+void ReactorIocp::ResetPerformanceStats()
+{
+    // 简化实现：暂时忽略
+}
 }  // namespace Helianthus::Network::Asio
 
 #endif  // _WIN32

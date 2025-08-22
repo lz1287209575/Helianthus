@@ -18,7 +18,6 @@ cc_library(
         "Asio/ErrorMapping.cpp",
         "Asio/BufferPool.cpp",
         "Asio/ZeroCopyBuffer.cpp",
-        "Asio/PerformanceMetrics.cpp",
     ],
     hdrs = [
         "INetworkSocket.h",
@@ -56,6 +55,7 @@ cc_library(
         "@bazel_tools//src/conditions:windows": [
             "/DEFAULTLIB:Ws2_32.lib",
             "/DEFAULTLIB:Mswsock.lib",
+            "/DEFAULTLIB:Synchronization.lib",
         ],
         "//conditions:default": [],
     }),

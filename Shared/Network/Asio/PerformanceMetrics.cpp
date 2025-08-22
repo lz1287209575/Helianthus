@@ -1,8 +1,11 @@
 #include "Shared/Network/Asio/PerformanceMetrics.h"
-#include "Common/LogCategories.h"
+#include "Common/LogCategory.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+
+// 创建本地日志类别实例
+H_DEFINE_LOG_CATEGORY(Perf, Helianthus::Common::LogVerbosity::Log);
 
 namespace Helianthus::Network::Asio
 {
@@ -16,7 +19,7 @@ namespace Helianthus::Network::Asio
     {
         std::lock_guard<std::mutex> Lock(SamplesMutex);
         Samples.push_back(LatencyNs);
-        
+
         // 保持样本数量在限制范围内
         if (Samples.size() > MaxSamples) {
             Samples.pop_front();

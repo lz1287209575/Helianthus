@@ -3,6 +3,15 @@
 #include "Common/Logger.h"
 #include "Common/LogCategory.h"
 
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+#endif
+
 #include "Shared/Network/Asio/Proactor.h"
 #include "Shared/Network/Asio/ProactorReactorAdapter.h"
 #include "Shared/Network/Asio/Reactor.h"
@@ -31,6 +40,9 @@ using Helianthus::Common::LogVerbosity;
 namespace Helianthus::Network::Asio
 {
 IoContext::IoContext() : Running(false), WakeupFd(-1)
+#if defined(_WIN32)
+    , WakeupEvent(INVALID_HANDLE_VALUE), WakeupIOCP(INVALID_HANDLE_VALUE)
+#endif
 {
 #if defined(_WIN32)
     ReactorPtr = std::make_shared<ReactorIocp>();

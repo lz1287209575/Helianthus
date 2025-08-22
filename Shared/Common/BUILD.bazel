@@ -30,5 +30,6 @@ cc_library(
             "-Wextra",
         ],
     }),
+
     visibility = ["//visibility:public"],
 )

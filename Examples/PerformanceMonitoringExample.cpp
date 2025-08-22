@@ -1,4 +1,5 @@
 #include "Shared/Network/Asio/PerformanceMetrics.h"
+#include "Common/LogCategories.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -9,6 +10,10 @@ using namespace Helianthus::Network::Asio;
 int main()
 {
     std::cout << "=== Helianthus 性能监控系统示例 ===\n\n";
+    
+    // 强制链接 Perf 日志类别
+    extern Helianthus::Common::LogCategory Perf;
+    (void)&Perf; // 防止未使用警告
     
     auto& Monitor = PerformanceMonitor::Instance();
     
