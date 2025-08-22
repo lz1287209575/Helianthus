@@ -33,6 +33,7 @@ cc_library(
         "Asio/ReactorEpoll.h",
         "Asio/ReactorIocp.h",
         "Asio/ReactorKqueue.h",
+        "Asio/IAsyncSocket.h",
         "Asio/AsyncUdpSocket.h",
         "Asio/AsyncTcpSocket.h",
         "Asio/AsyncTcpAcceptor.h",

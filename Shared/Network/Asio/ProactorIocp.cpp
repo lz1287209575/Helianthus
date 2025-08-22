@@ -482,6 +482,37 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
             }
             return;
         }
+        else if (Operation->Type == Op::OpType::UdpReceiveFrom)
+        {
+            // 完成 UDP 接收：提取发送方地址
+            Network::NetworkAddress FromAddress;
+            if (err == Network::NetworkError::NONE)
+            {
+                char IpStr[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &Operation->UdpSockAddr.sin_addr, IpStr, INET_ADDRSTRLEN);
+                FromAddress = Network::NetworkAddress(IpStr, ntohs(Operation->UdpSockAddr.sin_port));
+            }
+            
+            // 调用 UDP 接收完成回调
+            auto UdpReceiveCb = std::move(Operation->UdpReceiveCb);
+            delete Operation;
+            if (UdpReceiveCb)
+            {
+                UdpReceiveCb(err, ToReport, FromAddress);
+            }
+            return;
+        }
+        else if (Operation->Type == Op::OpType::UdpSendTo)
+        {
+            // 完成 UDP 发送：调用发送完成回调
+            auto UdpSendCb = std::move(Operation->UdpSendCb);
+            delete Operation;
+            if (UdpSendCb)
+            {
+                UdpSendCb(err, ToReport);
+            }
+            return;
+        }
     }
     if (Done)
     {
@@ -717,6 +748,113 @@ void ProactorIocp::OnAcceptExComplete(Op* AcceptOp, Network::NetworkError Error)
         {
             Manager->TargetConcurrentAccepts = std::max(Manager->TargetConcurrentAccepts - 1, Manager->MinConcurrentAccepts);
             Manager->ErrorCount = 0;  // 重置错误计数
+        }
+    }
+}
+
+// UDP 异步操作实现
+void ProactorIocp::AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, UdpReceiveHandler Handler)
+{
+    SOCKET Socket = static_cast<SOCKET>(Handle);
+    AssociateSocketIfNeeded(Socket);
+    
+    auto* op = new Op{};
+    memset(&op->Ov, 0, sizeof(op->Ov));
+    op->Socket = Socket;
+    op->Buffer = Buffer;
+    op->BufferSize = BufferSize;
+    op->ConstData = nullptr;
+    op->DataSize = 0;
+    op->Handler = nullptr;  // UDP 操作使用专门的回调
+    op->IsWrite = false;
+    op->Transferred = 0;
+    op->Type = Op::OpType::UdpReceiveFrom;
+    op->UdpReceiveCb = std::move(Handler);
+    
+    // 使用 WSARecvFrom 提交异步接收
+    WSABUF BufferDescriptor;
+    BufferDescriptor.buf = Buffer;
+    BufferDescriptor.len = static_cast<ULONG>(BufferSize);
+    DWORD Flags = 0;
+    DWORD Bytes = 0;
+    int SockAddrLen = sizeof(op->UdpSockAddr);
+    
+    int RecvResult = WSARecvFrom(Socket,
+                                 &BufferDescriptor,
+                                 1,
+                                 &Bytes,
+                                 &Flags,
+                                 reinterpret_cast<sockaddr*>(&op->UdpSockAddr),
+                                 &SockAddrLen,
+                                 &op->Ov,
+                                 nullptr);
+    
+    if (RecvResult == SOCKET_ERROR)
+    {
+        int ErrorCode = WSAGetLastError();
+        if (ErrorCode != WSA_IO_PENDING)
+        {
+            auto Completion = std::move(op->UdpReceiveCb);
+            delete op;
+            if (Completion)
+            {
+                Completion(ConvertWinSockError(ErrorCode, false), 0, Network::NetworkAddress{});
+            }
+        }
+    }
+}
+
+void ProactorIocp::AsyncSendTo(Fd Handle, const char* Data, size_t Size, const Network::NetworkAddress& Address, UdpSendHandler Handler)
+{
+    SOCKET Socket = static_cast<SOCKET>(Handle);
+    AssociateSocketIfNeeded(Socket);
+    
+    auto* op = new Op{};
+    memset(&op->Ov, 0, sizeof(op->Ov));
+    op->Socket = Socket;
+    op->Buffer = nullptr;
+    op->BufferSize = 0;
+    op->ConstData = Data;
+    op->DataSize = Size;
+    op->Handler = nullptr;  // UDP 操作使用专门的回调
+    op->IsWrite = true;
+    op->Transferred = 0;
+    op->Type = Op::OpType::UdpSendTo;
+    op->UdpSendCb = std::move(Handler);
+    op->UdpTargetAddr = Address;
+    
+    // 准备目标地址
+    op->UdpSockAddr.sin_family = AF_INET;
+    op->UdpSockAddr.sin_port = htons(Address.Port);
+    inet_pton(AF_INET, Address.Ip.c_str(), &op->UdpSockAddr.sin_addr);
+    
+    // 使用 WSASendTo 提交异步发送
+    WSABUF BufferDescriptor;
+    BufferDescriptor.buf = const_cast<char*>(Data);
+    BufferDescriptor.len = static_cast<ULONG>(Size);
+    DWORD Bytes = 0;
+    
+    int SendResult = WSASendTo(Socket,
+                               &BufferDescriptor,
+                               1,
+                               &Bytes,
+                               0,
+                               reinterpret_cast<sockaddr*>(&op->UdpSockAddr),
+                               sizeof(op->UdpSockAddr),
+                               &op->Ov,
+                               nullptr);
+    
+    if (SendResult == SOCKET_ERROR)
+    {
+        int ErrorCode = WSAGetLastError();
+        if (ErrorCode != WSA_IO_PENDING)
+        {
+            auto Completion = std::move(op->UdpSendCb);
+            delete op;
+            if (Completion)
+            {
+                Completion(ConvertWinSockError(ErrorCode, true), 0);
+            }
         }
     }
 }

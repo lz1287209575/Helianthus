@@ -25,12 +25,19 @@ public:
     ProactorIocp();
     ~ProactorIocp() override;
 
+    // TCP 异步操作
     void AsyncRead(Fd Handle, char* Buffer, size_t BufferSize, CompletionHandler Handler) override;
     void AsyncWrite(Fd Handle, const char* Data, size_t Size, CompletionHandler Handler) override;
     void AsyncConnect(Fd Handle, const Network::NetworkAddress& Address, ConnectHandler Handler) override;
+    void AsyncAccept(Fd ListenHandle, AcceptResultHandler Handler) override;
+    
+    // UDP 异步操作
+    void AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, UdpReceiveHandler Handler) override;
+    void AsyncSendTo(Fd Handle, const char* Data, size_t Size, const Network::NetworkAddress& Address, UdpSendHandler Handler) override;
+    
+    // 通用操作
     void ProcessCompletions(int TimeoutMs) override;
     void Cancel(Fd Handle) override;
-    void AsyncAccept(Fd ListenHandle, AcceptResultHandler Handler) override;
     
     // IOCP 唤醒机制
     void Wakeup() override;
@@ -59,7 +66,9 @@ private:
             Read,
             Write,
             Accept,
-            Connect
+            Connect,
+            UdpReceiveFrom,
+            UdpSendTo
         } Type;
         SOCKET ListenSocket;           // for Accept
         AcceptResultHandler AcceptCb;  // valid when Type==Accept
@@ -67,6 +76,12 @@ private:
         sockaddr_in RemoteAddr;        // for Accept
         Network::NetworkAddress ConnectAddr;  // for Connect
         ConnectHandler ConnectCb;      // valid when Type==Connect
+        
+        // UDP 操作相关字段
+        UdpReceiveHandler UdpReceiveCb;  // valid when Type==UdpReceiveFrom
+        UdpSendHandler UdpSendCb;        // valid when Type==UdpSendTo
+        Network::NetworkAddress UdpTargetAddr;  // for UdpSendTo
+        sockaddr_in UdpSockAddr;        // for UDP operations
     };
 
     // 已关联到 IOCP 的句柄集合，避免重复关联

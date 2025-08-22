@@ -51,7 +51,8 @@ enum class NetworkError
     CONNECTION_CLOSED = -16,
     SERIALIZATION_FAILED = -17,
     GROUP_NOT_FOUND = -18,
-    SERVER_ALREADY_RUNNING = -19
+    SERVER_ALREADY_RUNNING = -19,
+    OPERATION_CANCELLED = -20
 };
 
 // Network address structure

@@ -4,6 +4,7 @@
 #include "Shared/Network/Asio/Reactor.h"
 #include <iostream>
 #include <thread>
+#include <chrono>
 
 namespace Helianthus::Network::Asio
 {
@@ -27,7 +28,17 @@ Network::NetworkError AsyncTcpSocket::Connect(const Network::NetworkAddress& Add
     return Err;
 }
 
-void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address, std::function<void(Network::NetworkError)> Handler)
+Network::NetworkError AsyncTcpSocket::Bind(const Network::NetworkAddress& Address)
+{
+    auto Err = Socket.Bind(Address);
+    if (Err == Network::NetworkError::NONE)
+    {
+        Socket.SetBlocking(false);
+    }
+    return Err;
+}
+
+void AsyncTcpSocket::AsyncConnectLegacy(const Network::NetworkAddress& Address, std::function<void(Network::NetworkError)> Handler)
 {
     if (ClosedFlag)
     {
@@ -57,7 +68,7 @@ void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address, std::f
     }
 }
 
-void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandler Handler)
+void AsyncTcpSocket::AsyncReceiveLegacy(char* Buffer, size_t BufferSize, ReceiveHandler Handler)
 {
     if (ClosedFlag)
     {
@@ -190,7 +201,7 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, ReceiveHandle
     }
 }
 
-void AsyncTcpSocket::AsyncSend(const char* Data, size_t Size, SendHandler Handler)
+void AsyncTcpSocket::AsyncSendLegacy(const char* Data, size_t Size, SendHandler Handler)
 {
     const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
     // Windows 下优先使用 Proactor（IOCP）。非 Windows 统一走 Reactor。
@@ -296,5 +307,159 @@ void AsyncTcpSocket::Close()
     }
     
     Socket.Disconnect();
+}
+
+// 统一接口实现
+void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, AsyncReceiveHandler Handler,
+                                 CancelToken Token, uint32_t TimeoutMs)
+{
+    if (ClosedFlag)
+    {
+        if (Handler) Handler(Network::NetworkError::CONNECTION_CLOSED, 0, Network::NetworkAddress{});
+        return;
+    }
+
+    // 注册操作到取消跟踪
+    if (Token)
+    {
+        std::lock_guard<std::mutex> Lock(OperationsMutex);
+        ActiveOperations[Token] = true;
+    }
+
+    // 使用兼容性接口，然后转换回调
+    AsyncReceiveLegacy(Buffer, BufferSize, [this, Handler, Token](Network::NetworkError Error, size_t Bytes) {
+        // 检查是否被取消
+        if (Token && IsCancelled(Token))
+        {
+            if (Handler) Handler(Network::NetworkError::OPERATION_CANCELLED, 0, Network::NetworkAddress{});
+        }
+        else
+        {
+            if (Handler) Handler(Error, Bytes, Network::NetworkAddress{}); // TCP没有地址信息
+        }
+        
+        // 清理操作跟踪
+        if (Token)
+        {
+            std::lock_guard<std::mutex> Lock(OperationsMutex);
+            ActiveOperations.erase(Token);
+        }
+    });
+}
+
+void AsyncTcpSocket::AsyncSend(const char* Data, size_t Size, const Network::NetworkAddress& Address,
+                              AsyncSendHandler Handler, CancelToken Token, uint32_t TimeoutMs)
+{
+    if (ClosedFlag)
+    {
+        if (Handler) Handler(Network::NetworkError::CONNECTION_CLOSED, 0);
+        return;
+    }
+
+    // 注册操作到取消跟踪
+    if (Token)
+    {
+        std::lock_guard<std::mutex> Lock(OperationsMutex);
+        ActiveOperations[Token] = true;
+    }
+
+    // 使用兼容性接口，然后转换回调
+    AsyncSendLegacy(Data, Size, [this, Handler, Token](Network::NetworkError Error, size_t Bytes) {
+        // 检查是否被取消
+        if (Token && IsCancelled(Token))
+        {
+            if (Handler) Handler(Network::NetworkError::OPERATION_CANCELLED, 0);
+        }
+        else
+        {
+            if (Handler) Handler(Error, Bytes);
+        }
+        
+        // 清理操作跟踪
+        if (Token)
+        {
+            std::lock_guard<std::mutex> Lock(OperationsMutex);
+            ActiveOperations.erase(Token);
+        }
+    });
+}
+
+void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address, AsyncConnectHandler Handler,
+                                 CancelToken Token, uint32_t TimeoutMs)
+{
+    if (ClosedFlag)
+    {
+        if (Handler) Handler(Network::NetworkError::CONNECTION_CLOSED);
+        return;
+    }
+
+    // 注册操作到取消跟踪
+    if (Token)
+    {
+        std::lock_guard<std::mutex> Lock(OperationsMutex);
+        ActiveOperations[Token] = true;
+    }
+
+    // 使用兼容性接口，然后转换回调
+    AsyncConnectLegacy(Address, [this, Handler, Token](Network::NetworkError Error) {
+        // 检查是否被取消
+        if (Token && IsCancelled(Token))
+        {
+            if (Handler) Handler(Network::NetworkError::OPERATION_CANCELLED);
+        }
+        else
+        {
+            if (Handler) Handler(Error);
+        }
+        
+        // 清理操作跟踪
+        if (Token)
+        {
+            std::lock_guard<std::mutex> Lock(OperationsMutex);
+            ActiveOperations.erase(Token);
+        }
+    });
+}
+
+void AsyncTcpSocket::CancelOperation(CancelToken Token)
+{
+    if (Token)
+    {
+        CancelOperation(Token);
+        
+        // 从活动操作中移除
+        std::lock_guard<std::mutex> Lock(OperationsMutex);
+        ActiveOperations.erase(Token);
+    }
+}
+
+void AsyncTcpSocket::SetDefaultTimeout(uint32_t TimeoutMs)
+{
+    DefaultTimeoutMs = TimeoutMs;
+}
+
+uint32_t AsyncTcpSocket::GetDefaultTimeout() const
+{
+    return DefaultTimeoutMs;
+}
+
+bool AsyncTcpSocket::IsConnected() const
+{
+    return !ClosedFlag && Socket.IsConnected();
+}
+
+bool AsyncTcpSocket::IsClosed() const
+{
+    return ClosedFlag;
+}
+
+Network::NetworkAddress AsyncTcpSocket::GetLocalAddress() const
+{
+    return Socket.GetLocalAddress();
+}
+
+Network::NetworkAddress AsyncTcpSocket::GetRemoteAddress() const
+{
+    return Socket.GetRemoteAddress();
 }
 }  // namespace Helianthus::Network::Asio

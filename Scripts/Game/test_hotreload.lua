@@ -3,7 +3,7 @@
 
 local TestModule = {}
 
-TestModule.Version = "1.0.1"
+TestModule.Version = "1.0.0"
 TestModule.Counter = 0
 
 function TestModule.Hello()
