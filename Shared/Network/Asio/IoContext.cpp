@@ -196,7 +196,9 @@ void IoContext::ProcessDelayedTasks()
         // 使用批处理轮询，减少上下文切换
         if (ProactorPtr)
         {
-            ProactorPtr->ProcessCompletions(Timeout);
+            // 限制单次处理时间，避免长时间阻塞
+            int ProactorTimeout = std::min(Timeout, 100); // 最多100ms
+            ProactorPtr->ProcessCompletions(ProactorTimeout);
             // 检查是否在 ProcessCompletions 中收到了停止信号
             if (!Running)
             {
@@ -206,7 +208,8 @@ void IoContext::ProcessDelayedTasks()
         if (ReactorPtr)
         {
             // 使用批处理轮询，提高吞吐量
-            ReactorPtr->PollBatch(Timeout, 64);
+            int ReactorTimeout = std::min(Timeout, 100); // 最多100ms
+            ReactorPtr->PollBatch(ReactorTimeout, 64);
         }
         
         // 再次检查运行状态，确保能及时响应停止请求

@@ -41,6 +41,7 @@ public:
     virtual ~TcpSocket();
 
     NetworkError Connect(const NetworkAddress& Address) override;
+    NetworkError CheckConnectionStatus();
     NetworkError Bind(const NetworkAddress& Address) override;
     NetworkError Listen(uint32_t Backlog = 128) override;
     NetworkError Accept() override;

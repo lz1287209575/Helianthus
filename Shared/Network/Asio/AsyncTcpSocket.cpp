@@ -6,6 +6,15 @@
 #include <thread>
 #include <chrono>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
+
 namespace Helianthus::Network::Asio
 {
 AsyncTcpSocket::AsyncTcpSocket(std::shared_ptr<IoContext> CtxIn)
@@ -15,6 +24,14 @@ AsyncTcpSocket::AsyncTcpSocket(std::shared_ptr<IoContext> CtxIn)
       Socket(),
       PendingRecv()
 {
+    // 确保Socket正确初始化
+    // Socket的默认构造函数会创建一个有效的TcpSocket实例
+    // 但是我们需要确保套接字被正确创建
+    if (Socket.GetNativeHandle() == -1)
+    {
+        // 如果套接字没有创建，我们需要手动创建一个
+        // 这里我们暂时不创建，让Connect方法来处理
+    }
 }
 
 Network::NetworkError AsyncTcpSocket::Connect(const Network::NetworkAddress& Address)
@@ -49,22 +66,230 @@ void AsyncTcpSocket::AsyncConnectLegacy(const Network::NetworkAddress& Address, 
         return;
     }
 
-    const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
-    
-    // Windows 下优先使用 Proactor（IOCP）
+    // Windows 下暂时禁用 Proactor（IOCP），直接使用 Reactor
+    // 这样可以避免 ConnectEx 的复杂性
+    /*
 #ifdef _WIN32
     if (ProactorPtr)
     {
-        ProactorPtr->AsyncConnect(FdValue, Address, std::move(Handler));
-        return;
+        // 确保套接字已创建
+        if (Socket.GetNativeHandle() == -1)
+        {
+            // 先尝试连接以创建套接字
+            auto Err = Connect(Address);
+            if (Err == Network::NetworkError::NONE)
+            {
+                // 连接立即成功
+                if (Handler)
+                {
+                    Handler(Err);
+                }
+                return;
+            }
+            else if (Err != Network::NetworkError::CONNECTION_FAILED)
+            {
+                // 其他错误，直接返回
+                if (Handler)
+                {
+                    Handler(Err);
+                }
+                return;
+            }
+            // 如果返回CONNECTION_FAILED，说明套接字已创建但连接正在进行中
+        }
+        else
+        {
+            // 套接字已存在，检查连接状态
+            if (Socket.IsConnected())
+            {
+                // 已经连接
+                if (Handler)
+                {
+                    Handler(Network::NetworkError::NONE);
+                }
+                return;
+            }
+            else if (Socket.GetConnectionState() == ConnectionState::CONNECTING)
+            {
+                // 正在连接中，需要等待
+                // 继续执行下面的异步等待逻辑
+            }
+            else
+            {
+                // 套接字存在但状态异常，重新连接
+                Socket.Disconnect();
+                auto Err = Connect(Address);
+                if (Err == Network::NetworkError::NONE)
+                {
+                    if (Handler)
+                    {
+                        Handler(Err);
+                    }
+                    return;
+                }
+                else if (Err != Network::NetworkError::CONNECTION_FAILED)
+                {
+                    if (Handler)
+                    {
+                        Handler(Err);
+                    }
+                    return;
+                }
+            }
+        }
+        
+        const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
+        if (FdValue != -1)
+        {
+            // 对于ConnectEx，需要先绑定套接字到本地地址
+            // 绑定到任意可用端口
+            Network::NetworkAddress LocalAddr("127.0.0.1", 0);
+            auto BindErr = Socket.Bind(LocalAddr);
+            if (BindErr != Network::NetworkError::NONE)
+            {
+                if (Handler)
+                {
+                    Handler(BindErr);
+                }
+                return;
+            }
+            
+            ProactorPtr->AsyncConnect(FdValue, Address, std::move(Handler));
+            return;
+        }
     }
 #endif
+    */
 
-    // 非 Windows 或没有 Proactor 时，使用同步连接
-    auto Err = Connect(Address);
+    // 非 Windows 或没有 Proactor 时，使用 Reactor 实现异步连接
+    if (ReactorPtr)
+    {
+        // 确保套接字已创建
+        if (Socket.GetNativeHandle() == -1)
+        {
+            // 先尝试连接以创建套接字
+            auto Err = Connect(Address);
+            if (Err == Network::NetworkError::NONE)
+            {
+                // 连接立即成功
+                if (Handler)
+                {
+                    Handler(Err);
+                }
+                return;
+            }
+            else if (Err != Network::NetworkError::CONNECTION_FAILED)
+            {
+                // 其他错误，直接返回
+                if (Handler)
+                {
+                    Handler(Err);
+                }
+                return;
+            }
+            // 如果返回CONNECTION_FAILED，说明套接字已创建但连接正在进行中
+        }
+        else
+        {
+            // 套接字已存在，检查连接状态
+            if (Socket.IsConnected())
+            {
+                // 已经连接
+                if (Handler)
+                {
+                    Handler(Network::NetworkError::NONE);
+                }
+                return;
+            }
+            else if (Socket.GetConnectionState() == ConnectionState::CONNECTING)
+            {
+                // 正在连接中，需要等待
+                // 继续执行下面的异步等待逻辑
+            }
+            else
+            {
+                // 套接字存在但状态异常，重新连接
+                Socket.Disconnect();
+                auto Err = Connect(Address);
+                if (Err == Network::NetworkError::NONE)
+                {
+                    if (Handler)
+                    {
+                        Handler(Err);
+                    }
+                    return;
+                }
+                else if (Err != Network::NetworkError::CONNECTION_FAILED)
+                {
+                    if (Handler)
+                    {
+                        Handler(Err);
+                    }
+                    return;
+                }
+            }
+        }
+        
+        // 连接正在进行中，需要异步等待
+        const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
+        if (FdValue == -1)
+        {
+            // 套接字创建失败
+            if (Handler)
+            {
+                Handler(Network::NetworkError::SOCKET_CREATE_FAILED);
+            }
+            return;
+        }
+            
+            // 保存连接回调
+            PendingConnectCb = std::move(Handler);
+            PendingConnectAddr = Address;
+            
+            // 注册写事件，等待连接完成
+            if (ReactorPtr->Add(FdValue, EventMask::Write,
+                [this](EventMask Event) {
+                    if ((static_cast<uint32_t>(Event) & static_cast<uint32_t>(EventMask::Write)) == 0)
+                    {
+                        return;
+                    }
+                    
+                    // 检查连接状态
+                    auto ConnectErr = Socket.CheckConnectionStatus();
+                    
+                    // 移除注册
+                    const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
+                    ReactorPtr->Del(FdValue);
+                    ConnectRegistered = false;
+                    
+                    // 调用回调
+                    auto Cb = std::move(PendingConnectCb);
+                    PendingConnectCb = nullptr;
+                    if (Cb)
+                    {
+                        Cb(ConnectErr);
+                    }
+                }))
+            {
+                ConnectRegistered = true;
+                return;
+            }
+        }
+        else
+        {
+            // 其他错误，直接返回
+            if (Handler)
+            {
+                Handler(Err);
+            }
+            return;
+        }
+    }
+    
+    // 如果所有异步方法都失败，返回错误
     if (Handler)
     {
-        Handler(Err);
+        Handler(Network::NetworkError::CONNECTION_FAILED);
     }
 }
 
@@ -293,10 +518,23 @@ void AsyncTcpSocket::Close()
     }
     
     // 从 Reactor 移除
-    if (ReactorPtr && IsRegistered)
+    if (ReactorPtr)
     {
-        ReactorPtr->Del(Handle);
-        IsRegistered = false;
+        if (IsRegistered)
+        {
+            ReactorPtr->Del(Handle);
+            IsRegistered = false;
+        }
+        if (SendRegistered)
+        {
+            ReactorPtr->Del(Handle);
+            SendRegistered = false;
+        }
+        if (ConnectRegistered)
+        {
+            ReactorPtr->Del(Handle);
+            ConnectRegistered = false;
+        }
     }
     
     // 清理回调
@@ -304,6 +542,18 @@ void AsyncTcpSocket::Close()
     {
         PendingRecv(Network::NetworkError::CONNECTION_CLOSED, 0);
         PendingRecv = nullptr;
+    }
+    
+    if (PendingSendHandler)
+    {
+        PendingSendHandler(Network::NetworkError::CONNECTION_CLOSED, 0);
+        PendingSendHandler = nullptr;
+    }
+    
+    if (PendingConnectCb)
+    {
+        PendingConnectCb(Network::NetworkError::CONNECTION_CLOSED);
+        PendingConnectCb = nullptr;
     }
     
     Socket.Disconnect();

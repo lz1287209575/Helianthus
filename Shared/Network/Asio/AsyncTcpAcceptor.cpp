@@ -84,32 +84,30 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
             socklen_t Len = sizeof(ClientAddr);
             int ClientFd = ::accept(Socket.GetNativeHandle(), reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
             
-            auto Callback = PendingAccept;
-            PendingAccept = nullptr;
-            
-            // 移除注册
-            const auto ListenFd = static_cast<Fd>(Socket.GetNativeHandle());
-            if (ReactorPtr && IsRegistered)
+            if (ClientFd >= 0)
             {
-                ReactorPtr->Del(ListenFd);
-                IsRegistered = false;
-            }
-            
-            if (Callback)
-            {
-                if (ClientFd >= 0)
+                // 创建新的 AsyncTcpSocket 并采用接受的连接
+                auto NewSocket = std::make_shared<AsyncTcpSocket>(Ctx);
+                NetworkAddress ClientAddrObj(inet_ntoa(ClientAddr.sin_addr), ntohs(ClientAddr.sin_port));
+                NewSocket->Native().Adopt(ClientFd, Socket.GetLocalAddress(), ClientAddrObj, true);
+                
+                // 调用回调
+                if (PendingAccept)
                 {
-                    // 创建新的 AsyncTcpSocket 并采用接受的连接
-                    auto NewSocket = std::make_shared<AsyncTcpSocket>(Ctx);
-                    NetworkAddress ClientAddrObj(inet_ntoa(ClientAddr.sin_addr), ntohs(ClientAddr.sin_port));
-                    NewSocket->Native().Adopt(ClientFd, Socket.GetLocalAddress(), ClientAddrObj, true);
-                    Callback(Network::NetworkError::NONE, NewSocket);
-                }
-                else
-                {
-                    Callback(Network::NetworkError::ACCEPT_FAILED, nullptr);
+                    PendingAccept(Network::NetworkError::NONE, NewSocket);
                 }
             }
+            else
+            {
+                // 接受失败，调用回调
+                if (PendingAccept)
+                {
+                    PendingAccept(Network::NetworkError::ACCEPT_FAILED, nullptr);
+                }
+            }
+            
+            // 保持注册，继续接受后续连接
+            // 注意：不要移除注册，这样服务器可以持续接受连接
         });
     if (AddResult)
     {

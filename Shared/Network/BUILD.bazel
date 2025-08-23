@@ -19,6 +19,7 @@ cc_library(
         "Asio/BufferPool.cpp",
         "Asio/ZeroCopyBuffer.cpp",
         "Asio/MemoryMappedFile.cpp",
+        "Asio/PerformanceMetrics.cpp",
     ],
     hdrs = [
         "INetworkSocket.h",

@@ -40,3 +40,6 @@
 [submodule "ThirdParty/lua"]
 	path = ThirdParty/lua
 	url = https://gitee.com/mirrors/lua.git
+[submodule "ThirdParty/openssl"]
+	path = ThirdParty/openssl
+	url = https://gitee.com/mirrors/openssl.git

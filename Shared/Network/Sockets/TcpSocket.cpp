@@ -87,7 +87,16 @@ NetworkError TcpSocket::Connect(const NetworkAddress& Address)
     std::lock_guard<std::mutex> Lock(Mutex);
     if (SockImpl->Fd != -1)
     {
-        return NetworkError::NONE;
+        // 如果套接字已存在，检查连接状态
+        if (SockImpl->State == ConnectionState::CONNECTED)
+        {
+            return NetworkError::NONE;
+        }
+        else
+        {
+            // 如果套接字存在但未连接，先关闭再重新连接
+            Disconnect();
+        }
     }
 
 #ifdef _WIN32
@@ -97,11 +106,32 @@ NetworkError TcpSocket::Connect(const NetworkAddress& Address)
         return NetworkError::SOCKET_CREATE_FAILED;
     }
 
+    // 设置为非阻塞模式
+    u_long Mode = 1;
+    if (ioctlsocket(Fd, FIONBIO, &Mode) == SOCKET_ERROR)
+    {
+        closesocket(Fd);
+        return NetworkError::SOCKET_CREATE_FAILED;
+    }
+
     sockaddr_in Addr = MakeSockaddr(Address);
     if (::connect(Fd, reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) == SOCKET_ERROR)
     {
-        closesocket(Fd);
-        return NetworkError::CONNECTION_FAILED;
+        int WsaError = WSAGetLastError();
+        if (WsaError == WSAEWOULDBLOCK || WsaError == WSAEINPROGRESS)
+        {
+            // 连接正在进行中，这是正常的异步连接状态
+            SockImpl->Fd = Fd;
+            SockImpl->State = ConnectionState::CONNECTING;
+            SockImpl->Remote = Address;
+            SockImpl->IsServer = false;
+            return NetworkError::CONNECTION_FAILED; // 表示需要异步等待
+        }
+        else
+        {
+            closesocket(Fd);
+            return NetworkError::CONNECTION_FAILED;
+        }
     }
 #else
     int Fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -110,12 +140,37 @@ NetworkError TcpSocket::Connect(const NetworkAddress& Address)
         return NetworkError::SOCKET_CREATE_FAILED;
     }
 
+    // 设置为非阻塞模式
+    int Flags = fcntl(Fd, F_GETFL, 0);
+    if (fcntl(Fd, F_SETFL, Flags | O_NONBLOCK) < 0)
+    {
+        closesocket(Fd);
+        return NetworkError::SOCKET_CREATE_FAILED;
+    }
+
     sockaddr_in Addr = MakeSockaddr(Address);
     if (::connect(Fd, reinterpret_cast<sockaddr*>(&Addr), sizeof(Addr)) < 0)
     {
         int Err = errno;
-        closesocket(Fd);
-        return Err == ETIMEDOUT ? NetworkError::TIMEOUT : NetworkError::CONNECTION_FAILED;
+        if (Err == EINPROGRESS || Err == EAGAIN || Err == EWOULDBLOCK)
+        {
+            // 连接正在进行中，这是正常的异步连接状态
+            SockImpl->Fd = Fd;
+            SockImpl->State = ConnectionState::CONNECTING;
+            SockImpl->Remote = Address;
+            SockImpl->IsServer = false;
+            return NetworkError::CONNECTION_FAILED; // 表示需要异步等待
+        }
+        else if (Err == ETIMEDOUT)
+        {
+            closesocket(Fd);
+            return NetworkError::TIMEOUT;
+        }
+        else
+        {
+            closesocket(Fd);
+            return NetworkError::CONNECTION_FAILED;
+        }
     }
 #endif
 
@@ -128,6 +183,76 @@ NetworkError TcpSocket::Connect(const NetworkAddress& Address)
         SockImpl->OnConnected(SockImpl->Id);
     }
     return NetworkError::NONE;
+}
+
+NetworkError TcpSocket::CheckConnectionStatus()
+{
+    std::lock_guard<std::mutex> Lock(Mutex);
+    if (SockImpl->Fd == -1 || SockImpl->State != ConnectionState::CONNECTING)
+    {
+        return NetworkError::CONNECTION_NOT_FOUND;
+    }
+
+#ifdef _WIN32
+    SOCKET Socket = static_cast<SOCKET>(SockImpl->Fd);
+    int Error = 0;
+    int ErrorLen = sizeof(Error);
+    if (getsockopt(Socket, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&Error), &ErrorLen) == 0)
+    {
+        if (Error == 0)
+        {
+            // 连接成功
+            SockImpl->State = ConnectionState::CONNECTED;
+            if (SockImpl->OnConnected)
+            {
+                SockImpl->OnConnected(SockImpl->Id);
+            }
+            return NetworkError::NONE;
+        }
+        else
+        {
+            // 连接失败
+            SockImpl->State = ConnectionState::DISCONNECTED;
+            closesocket(Socket);
+            SockImpl->Fd = -1;
+            return NetworkError::CONNECTION_FAILED;
+        }
+    }
+    else
+    {
+        // getsockopt失败，连接可能还在进行中
+        return NetworkError::CONNECTION_FAILED;
+    }
+#else
+    int Error = 0;
+    socklen_t ErrorLen = sizeof(Error);
+    if (getsockopt(SockImpl->Fd, SOL_SOCKET, SO_ERROR, &Error, &ErrorLen) == 0)
+    {
+        if (Error == 0)
+        {
+            // 连接成功
+            SockImpl->State = ConnectionState::CONNECTED;
+            if (SockImpl->OnConnected)
+            {
+                SockImpl->OnConnected(SockImpl->Id);
+            }
+            return NetworkError::NONE;
+        }
+        else
+        {
+            // 连接失败
+            SockImpl->State = ConnectionState::DISCONNECTED;
+            closesocket(SockImpl->Fd);
+            SockImpl->Fd = -1;
+            return NetworkError::CONNECTION_FAILED;
+        }
+    }
+    else
+    {
+        // getsockopt失败，连接可能还在进行中
+        return NetworkError::CONNECTION_FAILED;
+    }
+#endif
 }
 
 NetworkError TcpSocket::Bind(const NetworkAddress& Address)

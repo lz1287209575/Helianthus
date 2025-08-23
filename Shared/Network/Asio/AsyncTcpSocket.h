@@ -73,6 +73,11 @@ private:
     bool ClosedFlag = false;
     bool IsRegistered = false;
     
+    // 异步连接支持
+    std::function<void(Network::NetworkError)> PendingConnectCb;
+    Network::NetworkAddress PendingConnectAddr;
+    bool ConnectRegistered = false;
+    
     // 统一接口支持
     uint32_t DefaultTimeoutMs = 30000; // 默认30秒超时
     std::unordered_map<CancelToken, bool> ActiveOperations;

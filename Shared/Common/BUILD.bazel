@@ -4,6 +4,7 @@ cc_library(
         "Logger.cpp",
         "LogCategories.cpp",
         "TCMallocWrapper.cpp",
+        "StructuredLogger.cpp",
     ],
     hdrs = [
         "Logger.h",
@@ -11,6 +12,7 @@ cc_library(
         "LogCategories.h",
         "Types.h",
         "TCMallocWrapper.h",
+        "StructuredLogger.h",
     ],
     strip_include_prefix = ".",
     include_prefix = "Common",
