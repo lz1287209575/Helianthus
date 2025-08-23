@@ -97,6 +97,7 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
                     auto EchoData = MessageProtocol::EncodeMessage(Message);
                     ServerSocket->AsyncSend(EchoData.data(),
                                             EchoData.size(),
+                                            NetworkAddress{},
                                             [](NetworkError, size_t)
                                             {
                                                 // 发送完成
@@ -110,7 +111,7 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
                 auto Buffer = std::make_shared<std::vector<char>>(1024);
                 ServerSocket->AsyncReceive(Buffer->data(),
                                           1024,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
                                           {
                                               if (Err == NetworkError::NONE && Bytes > 0)
                                               {
@@ -144,6 +145,7 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
     auto MessageData = MessageProtocol::EncodeMessage(TestMessage);
     ClientSocket->AsyncSend(MessageData.data(),
                             MessageData.size(),
+                            NetworkAddress{},
                             [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
 
     // 开始接收回显（使用 shared_ptr 递归闭包）
@@ -154,7 +156,7 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
         ClientSocket->AsyncReceive(
             Buffer->data(),
             1024,
-            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes)
+            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
             {
                 if (Err == NetworkError::NONE && Bytes > 0)
                 {
@@ -213,7 +215,7 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
                 auto Buffer = std::make_shared<std::vector<char>>(16);  // 小缓冲区模拟分片
                 ServerSocket->AsyncReceive(Buffer->data(),
                                           16,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
                                           {
                                               if (Err == NetworkError::NONE && Bytes > 0)
                                               {
@@ -260,6 +262,7 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
         size_t CurrentChunkSize = std::min(ChunkSize, BytesToSend - Offset);
         ClientSocket->AsyncSend(CombinedData.data() + Offset,
                                 CurrentChunkSize,
+                                NetworkAddress{},
                                 [&Offset, CurrentChunkSize, SendNextChunk](NetworkError Err, size_t)
                                 {
                                     EXPECT_EQ(Err, NetworkError::NONE);
@@ -321,6 +324,7 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
                     auto EchoData = MessageProtocol::EncodeMessage(Message);
                     ServerSocket->AsyncSend(EchoData.data(),
                                             EchoData.size(),
+                                            NetworkAddress{},
                                             [](NetworkError, size_t)
                                             {
                                                 // 发送完成
@@ -334,7 +338,7 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
                 auto Buffer = std::make_shared<std::vector<char>>(8192); // 更大的缓冲区
                 ServerSocket->AsyncReceive(Buffer->data(),
                                           8192,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
                                           {
                                               if (Err == NetworkError::NONE && Bytes > 0)
                                               {
@@ -369,6 +373,7 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
     auto MessageData = MessageProtocol::EncodeMessage(LargeMessage);
     ClientSocket->AsyncSend(MessageData.data(),
                             MessageData.size(),
+                            NetworkAddress{},
                             [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
 
     // 开始接收回显
@@ -379,7 +384,7 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
         ClientSocket->AsyncReceive(
             Buffer->data(),
             8192,
-            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes)
+            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
             {
                 if (Err == NetworkError::NONE && Bytes > 0)
                 {
@@ -438,6 +443,7 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
                         auto EchoData = MessageProtocol::EncodeMessage(Message);
                         ServerSocket->AsyncSend(EchoData.data(),
                                                 EchoData.size(),
+                                                NetworkAddress{},
                                                 [](NetworkError, size_t)
                                                 {
                                                     // 发送完成
@@ -451,7 +457,7 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
                     auto Buffer = std::make_shared<std::vector<char>>(1024);
                     ServerSocket->AsyncReceive(Buffer->data(),
                                               1024,
-                                              [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                              [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
                                               {
                                                   if (Err == NetworkError::NONE && Bytes > 0)
                                                   {
@@ -500,6 +506,7 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
         auto MessageData = MessageProtocol::EncodeMessage(TestMessage);
         ClientSocket->AsyncSend(MessageData.data(),
                                 MessageData.size(),
+                                NetworkAddress{},
                                 [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
 
         // 开始接收回显
@@ -510,7 +517,7 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
             ClientSocket->AsyncReceive(
                 Buffer->data(),
                 1024,
-                [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes)
+                [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
                 {
                     if (Err == NetworkError::NONE && Bytes > 0)
                     {
@@ -572,6 +579,7 @@ TEST_F(TcpAsyncEchoTest, StressTest)
                     auto EchoData = MessageProtocol::EncodeMessage(Message);
                     ServerSocket->AsyncSend(EchoData.data(),
                                             EchoData.size(),
+                                            NetworkAddress{},
                                             [](NetworkError, size_t)
                                             {
                                                 // 发送完成
@@ -585,7 +593,7 @@ TEST_F(TcpAsyncEchoTest, StressTest)
                 auto Buffer = std::make_shared<std::vector<char>>(1024);
                 ServerSocket->AsyncReceive(Buffer->data(),
                                           1024,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
                                           {
                                               if (Err == NetworkError::NONE && Bytes > 0)
                                               {
@@ -621,6 +629,7 @@ TEST_F(TcpAsyncEchoTest, StressTest)
         auto MessageData = MessageProtocol::EncodeMessage(TestMessage);
         ClientSocket->AsyncSend(MessageData.data(),
                                 MessageData.size(),
+                                NetworkAddress{},
                                 [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
     }
 
@@ -632,7 +641,7 @@ TEST_F(TcpAsyncEchoTest, StressTest)
         ClientSocket->AsyncReceive(
             Buffer->data(),
             1024,
-            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes)
+            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
             {
                 if (Err == NetworkError::NONE && Bytes > 0)
                 {

@@ -38,7 +38,7 @@ void ReadExact(std::shared_ptr<ReadState> State,
     State->Socket->AsyncReceive(
         State->Buffer->data() + State->BytesRead,
         Remaining,
-        [State, OnDone](NetworkError Err, size_t Bytes) {
+        [State, OnDone](NetworkError Err, size_t Bytes, NetworkAddress) {
             if (Err != NetworkError::NONE) { OnDone(Err); return; }
             State->BytesRead += Bytes;
             if (State->BytesRead < State->TargetSize) {
@@ -117,9 +117,9 @@ TEST_F(LengthPrefixEchoTest, SingleMessage)
                 uint32_t NetLenOut = htonl(static_cast<uint32_t>(BodyState->TargetSize));
                 char HeaderOut[4];
                 std::memcpy(HeaderOut, &NetLenOut, 4);
-                ServerSocket->AsyncSend(HeaderOut, 4, [ServerSocket, BodyState, &Done](NetworkError Err4, size_t){
+                ServerSocket->AsyncSend(HeaderOut, 4, NetworkAddress{}, [ServerSocket, BodyState, &Done](NetworkError Err4, size_t){
                     ASSERT_EQ(Err4, NetworkError::NONE);
-                    ServerSocket->AsyncSend(BodyState->Buffer->data(), BodyState->TargetSize,
+                    ServerSocket->AsyncSend(BodyState->Buffer->data(), BodyState->TargetSize, NetworkAddress{},
                         [&Done](NetworkError Err5, size_t){
                             ASSERT_EQ(Err5, NetworkError::NONE);
                             Done = true;
@@ -140,9 +140,9 @@ TEST_F(LengthPrefixEchoTest, SingleMessage)
 
     // Send header + body
     std::atomic<bool> ClientDone = false;
-    Client->AsyncSend(Header, 4, [Client, &Message, &ClientDone](NetworkError Err, size_t){
+    Client->AsyncSend(Header, 4, NetworkAddress{}, [Client, &Message, &ClientDone](NetworkError Err, size_t){
         ASSERT_EQ(Err, NetworkError::NONE);
-        Client->AsyncSend(Message.data(), Message.size(), [Client, &ClientDone](NetworkError Err2, size_t){
+        Client->AsyncSend(Message.data(), Message.size(), NetworkAddress{}, [Client, &ClientDone](NetworkError Err2, size_t){
             ASSERT_EQ(Err2, NetworkError::NONE);
             ClientDone = true;
         });
@@ -220,9 +220,9 @@ TEST_F(LengthPrefixEchoTest, FragmentedMessage)
                 ASSERT_EQ(Err3, NetworkError::NONE);
                 uint32_t NetLenOut = htonl(static_cast<uint32_t>(BodyState->TargetSize));
                 char HeaderOut[4]; std::memcpy(HeaderOut, &NetLenOut, 4);
-                ServerSocket->AsyncSend(HeaderOut, 4, [ServerSocket, BodyState, &Done](NetworkError Err4, size_t){
+                ServerSocket->AsyncSend(HeaderOut, 4, NetworkAddress{}, [ServerSocket, BodyState, &Done](NetworkError Err4, size_t){
                     ASSERT_EQ(Err4, NetworkError::NONE);
-                    ServerSocket->AsyncSend(BodyState->Buffer->data(), BodyState->TargetSize,
+                    ServerSocket->AsyncSend(BodyState->Buffer->data(), BodyState->TargetSize, NetworkAddress{},
                         [&Done](NetworkError Err5, size_t){ ASSERT_EQ(Err5, NetworkError::NONE); Done = true; });
                 });
             });
@@ -239,15 +239,15 @@ TEST_F(LengthPrefixEchoTest, FragmentedMessage)
 
     std::atomic<bool> ClientDone = false;
     // Send header in two fragments
-    Client->AsyncSend(Header, 2, [Client, Header, &Message, &ClientDone](NetworkError Err, size_t){
+    Client->AsyncSend(Header, 2, NetworkAddress{}, [Client, Header, &Message, &ClientDone](NetworkError Err, size_t){
         ASSERT_EQ(Err, NetworkError::NONE);
-        Client->AsyncSend(Header + 2, 2, [Client, &Message, &ClientDone](NetworkError Err2, size_t){
+        Client->AsyncSend(Header + 2, 2, NetworkAddress{}, [Client, &Message, &ClientDone](NetworkError Err2, size_t){
             ASSERT_EQ(Err2, NetworkError::NONE);
             // Send body in two fragments as well
             size_t Half = Message.size() / 2;
-            Client->AsyncSend(Message.data(), Half, [Client, &Message, Half, &ClientDone](NetworkError Err3, size_t){
+            Client->AsyncSend(Message.data(), Half, NetworkAddress{}, [Client, &Message, Half, &ClientDone](NetworkError Err3, size_t){
                 ASSERT_EQ(Err3, NetworkError::NONE);
-                Client->AsyncSend(Message.data() + Half, Message.size() - Half, [&ClientDone](NetworkError Err4, size_t){
+                Client->AsyncSend(Message.data() + Half, Message.size() - Half, NetworkAddress{}, [&ClientDone](NetworkError Err4, size_t){
                     ASSERT_EQ(Err4, NetworkError::NONE);
                     ClientDone = true;
                 });

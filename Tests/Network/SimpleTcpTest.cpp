@@ -131,7 +131,7 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
             this->ServerRecvBuffer = std::make_shared<std::vector<char>>(1024);
             ServerSocket->AsyncReceive(this->ServerRecvBuffer->data(),
                                       1024,
-                                      [this, MessageReceived = std::ref(MessageReceived), ReceivedMessage = std::ref(ReceivedMessage)](NetworkError Err, size_t Bytes)
+                                      [this, MessageReceived = std::ref(MessageReceived), ReceivedMessage = std::ref(ReceivedMessage)](NetworkError Err, size_t Bytes, NetworkAddress)
                                       {
                                           std::cout << "AsyncReceive callback called with error: " << static_cast<int>(Err) << ", bytes: " << Bytes << std::endl;
                                           if (Err == NetworkError::NONE && Bytes > 0)
@@ -158,6 +158,7 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
     std::string TestMessage = "Hello, Server!";
     ClientSocket->AsyncSend(TestMessage.data(),
                             TestMessage.size(),
+                            ServerAddr,
                             [](NetworkError Err, size_t Bytes) { EXPECT_EQ(Err, NetworkError::NONE); });
     
     // 立即等待一小段时间确保数据传输

@@ -25,7 +25,7 @@ static void ReadExact(std::shared_ptr<ReadState> st,
 {
     const size_t remain = st->Target - st->Read;
     st->Socket->AsyncReceive(st->Buf + st->Read, remain,
-        [st, onDone](NetworkError e, size_t n){
+        [st, onDone](NetworkError e, size_t n, NetworkAddress){
             if (e != NetworkError::NONE) { onDone(e); return; }
             st->Read += n;
             if (st->Read < st->Target) { ReadExact(st, onDone); }
@@ -94,10 +94,10 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
                 bs->Read = 0;
                 ReadExact(bs, [&, Body, ServerSocket](NetworkError e2){
                     if (e2 != NetworkError::NONE) { ServerOk = false; Done = true; return; }
-                    ServerSocket->AsyncSend(Header, 4,
+                    ServerSocket->AsyncSend(Header, 4, NetworkAddress{},
                         [&, Body, ServerSocket](NetworkError e3, size_t){
                             if (e3 != NetworkError::NONE) { ServerOk = false; Done = true; Ctx->Post([&](){ Ctx->Stop(); }); return; }
-                            ServerSocket->AsyncSend(Body->data(), Body->size(),
+                            ServerSocket->AsyncSend(Body->data(), Body->size(), NetworkAddress{},
                                 [&, Body](NetworkError e4, size_t){ if (e4 != NetworkError::NONE) ServerOk = false; Done = true; Ctx->Post([&](){ Ctx->Stop(); }); });
                         });
                 });
@@ -110,17 +110,17 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
     // 先发起连接，确保服务端已注册 accept
     ASSERT_EQ(Client.Connect({"127.0.0.1", Bound.Port}), NetworkError::NONE);
     // send header in two parts
-    Client.AsyncSend(Header, 2,
+    Client.AsyncSend(Header, 2, NetworkAddress{},
         [&](NetworkError e, size_t){
             ASSERT_EQ(e, NetworkError::NONE);
-            Client.AsyncSend(Header + 2, 2,
+            Client.AsyncSend(Header + 2, 2, NetworkAddress{},
                 [&](NetworkError e2, size_t){
                     ASSERT_EQ(e2, NetworkError::NONE);
                     // send body in two parts
-                    Client.AsyncSend(Payload.data(), 3,
+                    Client.AsyncSend(Payload.data(), 3, NetworkAddress{},
                         [&](NetworkError e3, size_t){
                             ASSERT_EQ(e3, NetworkError::NONE);
-                            Client.AsyncSend(Payload.data() + 3, Payload.size() - 3,
+                            Client.AsyncSend(Payload.data() + 3, Payload.size() - 3, NetworkAddress{},
                                 [&](NetworkError e4, size_t){ ASSERT_EQ(e4, NetworkError::NONE); });
                         });
                 });
@@ -194,7 +194,7 @@ TEST(TcpEchoAsyncTest, TimeoutAndCancel)
     NetworkError CancelErr = NetworkError::NONE;
     Client.AsyncReceive(BigBuf.data(),
                         BigBuf.size(),
-                        [&](NetworkError e, size_t)
+                        [&](NetworkError e, size_t, NetworkAddress)
                         {
                             CanceledCalled = true;
                             CancelErr = e;

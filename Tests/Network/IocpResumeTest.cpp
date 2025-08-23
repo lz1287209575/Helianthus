@@ -61,15 +61,15 @@ TEST_F(IocpResumeTest, IocpAsyncWriteResume)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     // 连接到本地回环地址
-    Network::NetworkAddress ServerAddr("127.0.0.1", 12345);
+    Helianthus::Network::NetworkAddress ServerAddr("127.0.0.1", 12345);
     auto ConnectResult = AsyncSocket->Connect(ServerAddr);
     
     // 由于没有实际的服务器，连接会失败，但我们仍然可以测试续传逻辑
     // 在实际应用中，这里应该有一个服务器在监听
     if (ConnectResult == Helianthus::Network::NetworkError::NONE) {
         // 模拟 AsyncWrite 续传
-        ContextPtr->Post([ContextPtr, &LargeData, &WriteCompleted, &TotalWritten, &WriteError, AsyncSocket]() {
-            AsyncSocket->AsyncSend(LargeData.data(), LargeData.size(), 
+        ContextPtr->Post([ContextPtr, &LargeData, &WriteCompleted, &TotalWritten, &WriteError, AsyncSocket, ServerAddr]() {
+            AsyncSocket->AsyncSend(LargeData.data(), LargeData.size(), ServerAddr,
                 [&WriteCompleted, &TotalWritten, &WriteError](Helianthus::Network::NetworkError Error, size_t Bytes) {
                     WriteError = Error;
                     TotalWritten.store(Bytes);
@@ -137,15 +137,15 @@ TEST_F(IocpResumeTest, IocpAsyncReadResume)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     // 连接到本地回环地址
-    Network::NetworkAddress ServerAddr("127.0.0.1", 12346);
+    Helianthus::Network::NetworkAddress ServerAddr("127.0.0.1", 12346);
     auto ConnectResult = AsyncSocket->Connect(ServerAddr);
     
     // 由于没有实际的服务器，连接会失败，但我们仍然可以测试续传逻辑
     if (ConnectResult == Helianthus::Network::NetworkError::NONE) {
         // 模拟 AsyncRead 续传
-        ContextPtr->Post([ContextPtr, &ReadBuffer, &ReadCompleted, &TotalRead, &ReadError, AsyncSocket]() {
+        ContextPtr->Post([ContextPtr, &ReadBuffer, &ReadCompleted, &TotalRead, &ReadError, AsyncSocket, ServerAddr]() {
             AsyncSocket->AsyncReceive(ReadBuffer.data(), ReadBuffer.size(), 
-                [&ReadCompleted, &TotalRead, &ReadError](Helianthus::Network::NetworkError Error, size_t Bytes) {
+                [&ReadCompleted, &TotalRead, &ReadError](Helianthus::Network::NetworkError Error, size_t Bytes, Helianthus::Network::NetworkAddress) {
                     ReadError = Error;
                     TotalRead.store(Bytes);
                     ReadCompleted.store(true);

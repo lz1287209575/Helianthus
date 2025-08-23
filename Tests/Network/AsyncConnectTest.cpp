@@ -164,7 +164,7 @@ TEST_F(AsyncConnectTest, AsyncConnectWithIO)
     
     ContextPtr->Post([ContextPtr, &ServerAddr, &ConnectCompleted, &ConnectError, AsyncSocket]() {
         AsyncSocket->AsyncConnect(ServerAddr, 
-            [&ConnectCompleted, &ConnectError, AsyncSocket](Helianthus::Network::NetworkError Error) {
+            [&ConnectCompleted, &ConnectError, AsyncSocket, ServerAddr](Helianthus::Network::NetworkError Error) {
                 ConnectError = Error;
                 ConnectCompleted.store(true);
                 std::cout << "AsyncConnect 完成，错误: " << static_cast<int>(Error) << std::endl;
@@ -172,7 +172,7 @@ TEST_F(AsyncConnectTest, AsyncConnectWithIO)
                 // 如果连接成功，尝试发送数据
                 if (Error == Helianthus::Network::NetworkError::NONE) {
                     std::string TestData = "Hello, AsyncConnect!";
-                    AsyncSocket->AsyncSend(TestData.data(), TestData.size(),
+                    AsyncSocket->AsyncSend(TestData.data(), TestData.size(), ServerAddr,
                         [](Helianthus::Network::NetworkError SendError, size_t Bytes) {
                             std::cout << "AsyncSend 完成，错误: " << static_cast<int>(SendError) 
                                      << "，字节: " << Bytes << std::endl;
