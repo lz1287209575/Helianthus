@@ -30,6 +30,14 @@
 - [x] 取消与超时集成测试
 - [x] Bazel 目标统一链接 `Ws2_32.lib`、`Mswsock.lib`，MSVC 使用 `/std:c++20` 与 `/utf-8`
 
+### 统一API接口与示例程序
+- [x] **编译问题修复**：修复 `AsyncUdpSocket.cpp` 中的命名空间限定符缺失问题
+- [x] **方法名错误修复**：将 `Socket.Close()` 改为 `Socket.Disconnect()`
+- [x] **阻塞问题解决**：将 `IoContext::Run()` 运行在后台线程，避免主线程阻塞
+- [x] **超时机制改进**：添加原子变量跟踪操作完成状态，实现合理的超时等待
+- [x] **错误处理优化**：预期网络操作失败，正确处理错误情况
+- [x] **统一API示例程序**：`UnifiedApiExample.cpp` 完整演示TCP/UDP异步操作、超时、取消功能
+
 ## 🔧 核心功能完善
 
 ### 完善 IOCP 重叠 I/O（Windows）
@@ -43,7 +51,7 @@
 ### Proactor/Async API 能力完善（全平台）
 - [x] 为 UDP 提供 Proactor 路径（Windows: `WSARecvFrom/WSASendTo`，POSIX: 使用 Reactor 适配 Proactor），保持与 TCP 一致的接口与语义
 - [ ] `AsyncTcpSocket`/`AsyncUdpSocket` 写路径：处理部分写、写队列、背压（backpressure），基于写就绪事件或完成回调进行续写与排队
-- [ ] 统一取消与超时语义（支持操作级取消 token、超时参数）
+- [x] 统一取消与超时语义（支持操作级取消 token、超时参数）
 - [ ] 丰富回调错误语义（超时/取消/连接重置/网络不可达等）
 
 ### Reactor 细化（Linux/BSD/macOS）
@@ -64,7 +72,7 @@
 
 ### 接口与结构统一
 - [x] 统一 `NativeHandle`/`Fd` 类型（`uintptr_t` 已对齐），严禁平台专有类型外泄到头文件公共接口
-- [ ] 统一 `Async*` API：`AsyncReceive`/`AsyncReceiveFrom`/`AsyncSend`/`AsyncSendTo` 的参数与回调签名；提供取消/超时可选参数
+- [x] 统一 `Async*` API：`AsyncReceive`/`AsyncReceiveFrom`/`AsyncSend`/`AsyncSendTo` 的参数与回调签名；提供取消/超时可选参数
 - [x] 命名规范：`Asio` 目录内临时/局部变量已统一 PascalCase；持续在 `Shared/Network` 其他子目录推进
 
 ## 🧪 测试与 CI
@@ -84,6 +92,10 @@
   - [x] `CancelTimeoutTest.cpp` - 取消与超时测试
 - [x] **UDP Proactor 功能测试**：
   - [x] `UdpProactorTest.cpp` - UDP 异步接收/发送、并发操作、错误处理
+- [x] **统一API示例程序测试**：
+  - [x] `UnifiedApiExample.cpp` - TCP/UDP异步操作、超时、取消功能演示
+  - [x] 验证异步操作不阻塞主线程
+  - [x] 验证超时和取消机制正常工作
 
 ### 待办测试
 - [ ] `IoContext.Run()` 驱动下的 TCP 异步回环（长度前缀，覆盖半包/粘包与读满语义）
@@ -92,6 +104,7 @@
 
 ### Bazel/Windows 构建
 - [x] 为需要的目标统一链接 `Ws2_32.lib`、`Mswsock.lib`（使用 `select()`），并在 MSVC 下补齐 `/utf-8`
+- [x] 修复编译错误：命名空间限定符、方法名错误等
 
 ## ⚡ 性能与可靠性
 
@@ -187,6 +200,9 @@
 8. **性能监控系统**：完整的性能指标收集和Prometheus导出
 9. **批处理优化**：任务批处理和Reactor批处理，自适应批处理大小调整
 10. **API统一化**：统一的异步Socket接口，支持取消令牌和超时控制
+11. **编译问题修复**：解决命名空间限定符缺失、方法名错误等编译问题
+12. **阻塞问题解决**：IoContext运行在后台线程，避免主线程阻塞
+13. **统一API示例程序**：完整的TCP/UDP异步操作演示
 
 ### 🎯 当前重点
 1. **安全功能**：TLS/DTLS集成，脚本沙箱
@@ -200,4 +216,4 @@
 3. **生产就绪**：监控、配置、部署工具
 4. **性能基准**：跨平台性能对比和优化
 
-> 注：IOCP核心功能、UDP Proactor、性能监控、批处理优化、API统一化均已完成，项目已具备生产环境的基础能力。当前重点转向安全功能、可观测性和配置系统完善。
+> 注：IOCP核心功能、UDP Proactor、性能监控、批处理优化、API统一化、编译问题修复、阻塞问题解决均已完成，项目已具备生产环境的基础能力。当前重点转向安全功能、可观测性和配置系统完善。
