@@ -90,20 +90,11 @@ namespace Helianthus::Common
     Helianthus::Common::LogCategory CategoryName##Impl{#CategoryName, DefaultVerbosity}; \
     Helianthus::Common::LogCategory& CategoryName = *Helianthus::Common::LogCategory::Register(#CategoryName, &CategoryName##Impl)
 
-// H_LOG(Category, Level, Fmt, ...): 输出到主logger与已配置的分类文件logger
+// H_LOG(Category, Level, Fmt, ...): 仅输出到分类logger（控制台/分类文件）
 #define H_LOG(Category, Level, Fmt, ...)                                                                                  \
     do {                                                                                                                  \
         if (static_cast<int>(Level) <= static_cast<int>((Category).GetMinVerbosity())) {                                  \
-            /* 主Logger（含控制台与全局滚动文件） */                                                                      \
-            if (Level == Helianthus::Common::LogVerbosity::Warning) {                                                     \
-                Helianthus::Common::Logger::Warn("[{}] " Fmt, (Category).GetName(), ##__VA_ARGS__);                     \
-            } else if (Level == Helianthus::Common::LogVerbosity::Error || Level == Helianthus::Common::LogVerbosity::Fatal) { \
-                Helianthus::Common::Logger::Error("[{}] " Fmt, (Category).GetName(), ##__VA_ARGS__);                    \
-            } else {                                                                                                      \
-                Helianthus::Common::Logger::Info("[{}] " Fmt, (Category).GetName(), ##__VA_ARGS__);                      \
-            }                                                                                                             \
-            /* 分类专用文件logger（如已配置） */                                                                           \
             Helianthus::Common::Logger::CategoryLog((Category).GetName(), Helianthus::Common::ToSpdLevel(Level),          \
-                                                    "[{}] " Fmt, (Category).GetName(), ##__VA_ARGS__);                   \
+                                                    Fmt, ##__VA_ARGS__);                                                  \
         }                                                                                                                 \
     } while (0)

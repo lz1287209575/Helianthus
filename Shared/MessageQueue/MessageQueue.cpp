@@ -1,4 +1,6 @@
 #include "MessageQueue.h"
+#include "Shared/Common/LogCategory.h"
+#include "Shared/Common/LogCategories.h"
 
 #include <algorithm>
 #include <future>
@@ -98,7 +100,7 @@ MessageQueue::ScheduledMessage::ScheduledMessage(MessagePtr Msg,
 MessageQueue::MessageQueue()
     : Initialized(false), ShuttingDown(false), NextMessageId(1), StopConsumerThreads(false)
 {
-    std::cout << "[MessageQueue] 创建消息队列实例" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "创建消息队列实例");
 }
 
 MessageQueue::~MessageQueue()
@@ -113,10 +115,22 @@ QueueResult MessageQueue::Initialize()
         return QueueResult::SUCCESS;
     }
 
-    std::cout << "[MessageQueue] 开始初始化" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "开始初始化消息队列系统");
 
     ShuttingDown = false;
     StopConsumerThreads = false;
+
+    // 初始化持久化管理器
+    PersistenceMgr = std::make_unique<PersistenceManager>();
+    PersistenceSettings.Type = PersistenceType::FILE_BASED;
+    PersistenceSettings.DataDirectory = "./message_queue_data";
+    
+    auto PersistenceResult = PersistenceMgr->Initialize(PersistenceSettings);
+    if (PersistenceResult != QueueResult::SUCCESS)
+    {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "持久化管理器初始化失败，将使用内存模式, code={}", static_cast<int>(PersistenceResult));
+        // 继续初始化，但不使用持久化功能
+    }
 
     // 启动调度器线程
     SchedulerThread = std::thread(&MessageQueue::ProcessScheduledMessages, this);
@@ -131,7 +145,7 @@ QueueResult MessageQueue::Initialize()
     }
 
     Initialized = true;
-    std::cout << "[MessageQueue] Initialize successfully" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "消息队列系统初始化成功");
 
     return QueueResult::SUCCESS;
 }
@@ -143,7 +157,7 @@ void MessageQueue::Shutdown()
         return;
     }
 
-    std::cout << "[MessageQueue] Start Shutdown" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "开始关闭消息队列系统");
 
     ShuttingDown = true;
     StopConsumerThreads = true;
@@ -180,8 +194,15 @@ void MessageQueue::Shutdown()
         Topics.clear();
     }
 
+    // 关闭持久化管理器
+    if (PersistenceMgr)
+    {
+        PersistenceMgr->Shutdown();
+        PersistenceMgr.reset();
+    }
+
     Initialized = false;
-    std::cout << "[MessageQueue] 关闭完成" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "消息队列系统关闭完成");
 }
 
 bool MessageQueue::IsInitialized() const
@@ -211,7 +232,7 @@ QueueResult MessageQueue::CreateQueue(const QueueConfig& Config)
     auto QueueData = std::make_unique<MessageQueue::QueueData>(Config);
     Queues[Config.Name] = std::move(QueueData);
 
-    std::cout << "[MessageQueue] 创建队列: " << Config.Name << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "创建队列: {}", Config.Name);
     NotifyEvent(Config.Name, "QueueCreated", "Queue created successfully");
 
     return QueueResult::SUCCESS;
@@ -236,7 +257,7 @@ QueueResult MessageQueue::DeleteQueue(const std::string& QueueName)
     It->second->NotifyCondition.notify_all();
     Queues.erase(It);
 
-    std::cout << "[MessageQueue] 删除队列: " << QueueName << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "删除队列: {}", QueueName);
     NotifyEvent(QueueName, "QueueDeleted", "Queue deleted successfully");
 
     return QueueResult::SUCCESS;
@@ -265,7 +286,7 @@ QueueResult MessageQueue::PurgeQueue(const std::string& QueueName)
     Queue->PendingAcknowledgments.clear();
     Queue->Stats.PendingMessages = 0;
 
-    std::cout << "[MessageQueue] 清空队列: " << QueueName << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "清空队列: {}", QueueName);
     NotifyEvent(QueueName, "QueuePurged", "Queue purged successfully");
 
     return QueueResult::SUCCESS;
@@ -362,6 +383,19 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     auto RouteResult = RouteMessage(QueueName, Message);
 
     Lock.unlock();
+
+    // 如果启用了持久化，保存消息到磁盘
+    if (PersistenceMgr && Queue->Config.Persistence != PersistenceMode::MEMORY_ONLY)
+    {
+        auto PersistenceResult = PersistenceMgr->SaveMessage(QueueName, Message);
+        if (PersistenceResult != QueueResult::SUCCESS)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                 "持久化消息失败，继续处理 queue={} id={} code={}",
+                 QueueName, static_cast<uint64_t>(Message->Header.Id), static_cast<int>(PersistenceResult));
+            // 继续处理，不因为持久化失败而阻塞消息发送
+        }
+    }
 
     // 通知等待的消费者
     Queue->NotifyCondition.notify_one();
@@ -521,8 +555,7 @@ QueueResult MessageQueue::Subscribe(const std::string& TopicName,
     Topic->Subscribers[SubscriberId] = Handler;
     Topic->Stats.ActiveSubscribers++;
 
-    std::cout << "[MessageQueue] 订阅主题: " << TopicName << ", 订阅者: " << SubscriberId
-              << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "订阅主题: {} 订阅者: {}", TopicName, SubscriberId);
     return QueueResult::SUCCESS;
 }
 
@@ -620,7 +653,7 @@ QueueResult MessageQueue::DeliverMessageToSubscribers(const std::string& TopicNa
                     }
                     catch (const std::exception& e)
                     {
-                        std::cerr << "[MessageQueue] 订阅者处理异常: " << e.what() << std::endl;
+                        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "订阅者处理异常: {}", e.what());
                     }
                 })
                 .detach();
@@ -699,7 +732,7 @@ void MessageQueue::NotifyError(QueueResult Result, const std::string& ErrorMessa
 
 void MessageQueue::ProcessScheduledMessages()
 {
-    std::cout << "[MessageQueue] 启动消息调度线程" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "启动消息调度线程");
 
     while (!ShuttingDown.load())
     {
@@ -751,7 +784,7 @@ void MessageQueue::ProcessScheduledMessages()
         }
     }
 
-    std::cout << "[MessageQueue] Stopped" << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "调度线程停止");
 }
 
 // 实现剩余的必要方法的简化版本
@@ -994,10 +1027,79 @@ std::vector<MessagePtr> MessageQueue::GetPendingMessages(const std::string& Queu
 }
 QueueResult MessageQueue::SaveToDisk()
 {
+    if (!Initialized.load() || !PersistenceMgr)
+    {
+        return QueueResult::INTERNAL_ERROR;
+    }
+
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "开始保存消息队列数据到磁盘");
+
+    // 保存所有队列数据
+    {
+        std::shared_lock<std::shared_mutex> Lock(QueuesMutex);
+        for (const auto& [QueueName, QueueData] : Queues)
+        {
+            auto Result = PersistenceMgr->SaveQueue(QueueName, QueueData->Config, QueueData->Stats);
+            if (Result != QueueResult::SUCCESS)
+            {
+                H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "保存队列失败 queue={} code={}", QueueName, static_cast<int>(Result));
+                return Result;
+            }
+        }
+    }
+
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "消息队列数据保存到磁盘完成");
     return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::LoadFromDisk()
 {
+    if (!Initialized.load() || !PersistenceMgr)
+    {
+        return QueueResult::INTERNAL_ERROR;
+    }
+
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "开始从磁盘加载消息队列数据");
+
+    // 获取所有持久化的队列
+    auto PersistedQueues = PersistenceMgr->ListPersistedQueues();
+    
+    for (const auto& QueueName : PersistedQueues)
+    {
+        QueueConfig Config;
+        QueueStats Stats;
+        
+        auto Result = PersistenceMgr->LoadQueue(QueueName, Config, Stats);
+        if (Result != QueueResult::SUCCESS)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "加载队列失败 queue={} code={}", QueueName, static_cast<int>(Result));
+            continue;
+        }
+
+        // 创建队列
+        Result = CreateQueue(Config);
+        if (Result != QueueResult::SUCCESS)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "创建队列失败 queue={} code={}", QueueName, static_cast<int>(Result));
+            continue;
+        }
+
+        // 加载队列中的所有消息
+        std::vector<MessagePtr> Messages;
+        Result = PersistenceMgr->LoadAllMessages(QueueName, Messages);
+        if (Result == QueueResult::SUCCESS)
+        {
+            auto QueueData = GetQueueData(QueueName);
+            if (QueueData)
+            {
+                for (const auto& Message : Messages)
+                {
+                    QueueData->AddMessage(Message);
+                }
+            }
+        }
+    }
+
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "从磁盘加载消息队列数据完成");
     return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::EnablePersistence(const std::string& QueueName, PersistenceMode Mode)

@@ -174,7 +174,7 @@ TEST_F(ZeroCopyOptimizationTest, LargeFileTransferOptimizer)
     EXPECT_TRUE(LargeConfig.UseMemoryMapping);
     
     // 测试创建优化片段
-    auto Fragments = LargeFileTransferOptimizer::CreateOptimizedFragments(LargeFilePath);
+    auto Fragments = LargeFileTransferOptimizer::CreateOptimizedFragments(LargeFilePath, LargeConfig);
     EXPECT_GT(Fragments.size(), 0);
     
     // 验证片段

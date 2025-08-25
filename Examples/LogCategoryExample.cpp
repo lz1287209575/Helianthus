@@ -24,3 +24,4 @@ int main()
     Logger::Shutdown();
     return 0;
 }
+

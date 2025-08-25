@@ -8,11 +8,15 @@
 #include <iostream>
 #include <vector>
 #include <string>
+
+#ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#endif
 
 using namespace Helianthus::Network::Asio;
 
+#ifdef _WIN32
 class AcceptExConcurrencyTest : public ::testing::Test
 {
 protected:
@@ -29,6 +33,15 @@ protected:
         WSACleanup();
     }
 };
+#else
+// 在非Windows平台上跳过这些测试
+class AcceptExConcurrencyTest : public ::testing::Test
+{
+protected:
+    void SetUp() override {}
+    void TearDown() override {}
+};
+#endif
 
 // 测试 AcceptEx 基本并发功能
 TEST_F(AcceptExConcurrencyTest, AcceptExBasicConcurrency)

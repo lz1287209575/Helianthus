@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 #include "IMessageQueue.h"
+#include "MessagePersistence.h"
 
 namespace Helianthus::MessageQueue
 {
@@ -272,6 +273,10 @@ private:
     // 统计信息
     QueueStats GlobalStats;
     mutable std::shared_mutex StatsMutex;
+
+    // 持久化管理器
+    std::unique_ptr<PersistenceManager> PersistenceMgr;
+    PersistenceConfig PersistenceSettings;
 
     // 内部方法
     MessageId GenerateMessageId();

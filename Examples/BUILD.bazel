@@ -166,6 +166,47 @@ cc_binary(
 )
 
 cc_binary(
+    name = "message_queue_persistence_example",
+    srcs = ["MessageQueuePersistenceExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "simple_persistence_example",
+    srcs = ["SimplePersistenceExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "logging_test_example",
+    srcs = ["LoggingTestExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
     name = "reflection_example",
     srcs = ["ReflectionExample.cpp"],
     copts = select({
@@ -208,26 +249,14 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
-cc_binary(
-    name = "ue_style_reflection_example",
-    srcs = ["UEStyleReflectionExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:ue_style_reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
+
 
 cc_binary(
     name = "helianthus_reflection_example",
     srcs = ["HelianthusReflectionExample.cpp"],
     copts = select({
         "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std:c++20"],
+        "//conditions:default": ["-std=c++20"],
     }),
     deps = [
         "//Shared/Reflection:helianthus_reflection",

@@ -24,21 +24,7 @@ cc_library(
     }),
 )
 
-cc_library(
-    name = "ue_style_reflection",
-    visibility = ["//visibility:public"],
-    hdrs = [
-        "UE_Style_Reflection.h",
-        "UE_Style_CodeGenerator.h",
-    ],
-    deps = [
-        ":reflection",
-    ],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20", "-fPIC"],
-    }),
-)
+
 
 cc_library(
     name = "helianthus_reflection",

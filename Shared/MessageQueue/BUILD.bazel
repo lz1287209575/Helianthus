@@ -6,11 +6,13 @@ cc_library(
     name = "message_queue",
     srcs = [
         "MessageQueue.cpp",
+        "MessagePersistence.cpp",
     ],
     hdrs = [
         "MessageTypes.h",
         "IMessageQueue.h", 
         "MessageQueue.h",
+        "MessagePersistence.h",
     ],
     deps = [
         "//Shared/Common:common",

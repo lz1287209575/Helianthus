@@ -9,47 +9,7 @@
 
 namespace Helianthus::Reflection
 {
-    // Helianthus风格的反射基类
-    class HelianthusObject
-    {
-    public:
-        virtual ~HelianthusObject() = default;
-        
-        // 获取类信息
-        virtual const ClassInfo* GetClass() const = 0;
-        
-        // 获取类名
-        virtual const std::string& GetClassName() const = 0;
-        
-        // 是否是某个类的实例
-        template<typename T>
-        bool IsA() const
-        {
-            return GetClass()->IsChildOf(T::StaticClass());
-        }
-        
-        // 动态转换
-        template<typename T>
-        T* Cast()
-        {
-            if (IsA<T>())
-            {
-                return static_cast<T*>(this);
-            }
-            return nullptr;
-        }
-        
-        template<typename T>
-        const T* Cast() const
-        {
-            if (IsA<T>())
-            {
-                return static_cast<const T*>(this);
-            }
-            return nullptr;
-        }
-    };
-
+    
     // Helianthus风格的类信息
     struct HelianthusClassInfo : public ClassInfo
     {
@@ -87,6 +47,47 @@ namespace Helianthus::Reflection
             }
             AllMethods.insert(AllMethods.end(), Methods.begin(), Methods.end());
             return AllMethods;
+        }
+    };
+
+    // Helianthus风格的反射基类
+    class HelianthusObject
+    {
+    public:
+        virtual ~HelianthusObject() = default;
+        
+        // 获取类信息
+        virtual const HelianthusClassInfo* GetClass() const = 0;
+        
+        // 获取类名
+        virtual const std::string& GetClassName() const = 0;
+        
+        // 是否是某个类的实例
+        template<typename T>
+        bool IsA() const
+        {
+            return GetClass()->IsChildOf(T::StaticClass());
+        }
+        
+        // 动态转换
+        template<typename T>
+        T* Cast()
+        {
+            if (IsA<T>())
+            {
+                return static_cast<T*>(this);
+            }
+            return nullptr;
+        }
+        
+        template<typename T>
+        const T* Cast() const
+        {
+            if (IsA<T>())
+            {
+                return static_cast<const T*>(this);
+            }
+            return nullptr;
         }
     };
 
@@ -143,7 +144,7 @@ namespace Helianthus::Reflection
         {
             if (Object)
             {
-                const ClassInfo* ClassInfo = Object->GetClass();
+                const HelianthusClassInfo* ClassInfo = Object->GetClass();
                 if (ClassInfo && ClassInfo->Destructor)
                 {
                     ClassInfo->Destructor(Object);
@@ -162,7 +163,7 @@ namespace Helianthus::Reflection
         { \
         public: \
             static HelianthusClassInfo* StaticClass(); \
-            virtual const ClassInfo* GetClass() const override { return StaticClass(); } \
+            virtual const HelianthusClassInfo* GetClass() const override { return StaticClass(); } \
             virtual const std::string& GetClassName() const override { static std::string Name = #ClassName; return Name; } \
             HELIANTHUS_GENERATED_BODY() \
         private: \

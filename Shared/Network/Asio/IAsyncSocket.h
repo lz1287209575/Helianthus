@@ -3,6 +3,7 @@
 #include "Shared/Network/NetworkTypes.h"
 #include <functional>
 #include <memory>
+#include <atomic>
 
 namespace Helianthus::Network::Asio
 {

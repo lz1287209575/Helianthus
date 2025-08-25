@@ -18,6 +18,8 @@ std::shared_ptr<spdlog::logger> Logger::LoggerInstance;
 Logger::LoggerConfig Logger::CurrentConfig;
 bool Logger::IsInitializedFlag = false;
 std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> Logger::CategoryLoggers;
+std::atomic<bool> Logger::ShuttingDownFlag{false};
+std::string Logger::ProcessName;
 
 static std::string Trim(const std::string& S)
 {
@@ -55,7 +57,21 @@ void Logger::Initialize(const LoggerConfig& Config)
 {
     if (IsInitializedFlag)
         return;
+    ShuttingDownFlag.store(false, std::memory_order_release);
     CurrentConfig = Config;
+    ProcessName = [](){
+#ifdef __linux__
+        char Buf[256] = {0};
+        ssize_t n = ::readlink("/proc/self/exe", Buf, sizeof(Buf)-1);
+        if (n > 0)
+        {
+            std::string Path(Buf, static_cast<size_t>(n));
+            auto pos = Path.find_last_of('/');
+            return pos == std::string::npos ? Path : Path.substr(pos+1);
+        }
+#endif
+        return std::string("helianthus");
+    }();
 
     // async thread pool
     if (Config.UseAsync)
@@ -67,6 +83,7 @@ void Logger::Initialize(const LoggerConfig& Config)
     if (Config.EnableConsole)
     {
         auto ConsoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        ConsoleSink->set_level(spdlog::level::trace);
         Sinks.push_back(ConsoleSink);
     }
     if (Config.EnableFile)
@@ -90,7 +107,9 @@ void Logger::Initialize(const LoggerConfig& Config)
     }
 
     LoggerInstance->set_level(ConvertLogLevel(Config.Level));
-    LoggerInstance->set_pattern(Config.Pattern);
+    std::string Pattern = "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%P-%t--] [" + ProcessName + "] [%n] [%s:%#] %v";
+    LoggerInstance->set_pattern(Pattern);
+    LoggerInstance->flush_on(spdlog::level::info);
 
     LoadCategoryFromEnv();
 
@@ -99,6 +118,7 @@ void Logger::Initialize(const LoggerConfig& Config)
 
 void Logger::Shutdown()
 {
+    ShuttingDownFlag.store(true, std::memory_order_release);
     for (auto& [Name, CatLogger] : CategoryLoggers)
     {
         if (CatLogger)
@@ -117,6 +137,7 @@ void Logger::Shutdown()
     }
     if (CurrentConfig.UseAsync)
     {
+        // 确保线程池安全退出
         spdlog::shutdown();
     }
     IsInitializedFlag = false;
@@ -125,6 +146,47 @@ void Logger::Shutdown()
 bool Logger::IsInitialized()
 {
     return IsInitializedFlag;
+}
+
+bool Logger::IsShuttingDown()
+{
+    return ShuttingDownFlag.load(std::memory_order_acquire);
+}
+
+std::shared_ptr<spdlog::logger> Logger::GetOrCreateCategory(const std::string& CategoryName)
+{
+    auto It = CategoryLoggers.find(CategoryName);
+    if (It != CategoryLoggers.end()) return It->second;
+
+    std::vector<spdlog::sink_ptr> Sinks;
+    if (CurrentConfig.EnableConsole)
+    {
+        auto ConsoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        ConsoleSink->set_level(spdlog::level::trace);
+        Sinks.push_back(ConsoleSink);
+    }
+    if (CurrentConfig.EnableFile)
+    {
+        auto Path = std::string("logs/") + CategoryName + ".log";
+        auto FileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(Path, CurrentConfig.MaxFileSize, CurrentConfig.MaxFiles);
+        Sinks.push_back(FileSink);
+    }
+
+    std::shared_ptr<spdlog::logger> CatLogger;
+    if (CurrentConfig.UseAsync)
+    {
+        CatLogger = std::make_shared<spdlog::async_logger>(CategoryName, begin(Sinks), end(Sinks), spdlog::thread_pool(), spdlog::async_overflow_policy::block);
+    }
+    else
+    {
+        CatLogger = std::make_shared<spdlog::logger>(CategoryName, begin(Sinks), end(Sinks));
+    }
+    CatLogger->set_level(ConvertLogLevel(CurrentConfig.Level));
+    std::string Pattern = "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%P-%t--] [" + ProcessName + "] [%n] [%s:%#] %v";
+    CatLogger->set_pattern(Pattern);
+    spdlog::register_logger(CatLogger);
+    CategoryLoggers[CategoryName] = CatLogger;
+    return CatLogger;
 }
 
 void Logger::ConfigureCategoryFile(const std::string& CategoryName,

@@ -142,7 +142,7 @@ public:
     // 为大文件传输创建优化的缓冲区片段
     static std::vector<MemoryMappedBufferFragment> CreateOptimizedFragments(
         const std::string& FilePath, 
-        const TransferConfig& Config = {});
+        const TransferConfig& Config);
 
     // 检查文件是否适合内存映射
     static bool ShouldUseMemoryMapping(size_t FileSize);

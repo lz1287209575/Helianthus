@@ -25,12 +25,19 @@ public:
     void SetName(const std::string& name) { Name = name; }
     
     // 反射接口实现
-    virtual const ClassInfo* GetClass() const override { 
-        // 返回一个静态的类信息对象
-        static ClassInfo ClassInfo;
-        ClassInfo.Name = "HelianthusBaseObject";
-        ClassInfo.FullName = "HelianthusBaseObject";
-        return &ClassInfo;
+    virtual const HelianthusClassInfo* GetClass() const override { 
+        return StaticClass();
+    }
+    
+    static HelianthusClassInfo* StaticClass() {
+        static HelianthusClassInfo* ClassInfo = nullptr;
+        if (!ClassInfo) {
+            ClassInfo = new HelianthusClassInfo();
+            ClassInfo->Name = "HelianthusBaseObject";
+            ClassInfo->FullName = "HelianthusBaseObject";
+            ClassInfo->TypeIndex = std::type_index(typeid(HelianthusBaseObject));
+        }
+        return ClassInfo;
     }
     virtual const std::string& GetClassName() const override { 
         static const std::string ClassName = "HelianthusBaseObject"; 
@@ -71,12 +78,20 @@ public:
     bool IsPlayerAlive() const { return IsAlive; }
     
     // 反射接口实现
-    virtual const ClassInfo* GetClass() const override { 
-        // 返回一个静态的类信息对象
-        static ClassInfo ClassInfo;
-        ClassInfo.Name = "HelianthusPlayer";
-        ClassInfo.FullName = "HelianthusPlayer";
-        return &ClassInfo;
+    virtual const HelianthusClassInfo* GetClass() const override { 
+        return StaticClass();
+    }
+    
+    static HelianthusClassInfo* StaticClass() {
+        static HelianthusClassInfo* ClassInfo = nullptr;
+        if (!ClassInfo) {
+            ClassInfo = new HelianthusClassInfo();
+            ClassInfo->Name = "HelianthusPlayer";
+            ClassInfo->FullName = "HelianthusPlayer";
+            ClassInfo->TypeIndex = std::type_index(typeid(HelianthusPlayer));
+            ClassInfo->SuperClass = HelianthusBaseObject::StaticClass();
+        }
+        return ClassInfo;
     }
     virtual const std::string& GetClassName() const override { 
         static const std::string ClassName = "HelianthusPlayer"; 
@@ -106,12 +121,20 @@ public:
     }
     
     // 反射接口实现
-    virtual const ClassInfo* GetClass() const override { 
-        // 返回一个静态的类信息对象
-        static ClassInfo ClassInfo;
-        ClassInfo.Name = "HelianthusWeapon";
-        ClassInfo.FullName = "HelianthusWeapon";
-        return &ClassInfo;
+    virtual const HelianthusClassInfo* GetClass() const override { 
+        return StaticClass();
+    }
+    
+    static HelianthusClassInfo* StaticClass() {
+        static HelianthusClassInfo* ClassInfo = nullptr;
+        if (!ClassInfo) {
+            ClassInfo = new HelianthusClassInfo();
+            ClassInfo->Name = "HelianthusWeapon";
+            ClassInfo->FullName = "HelianthusWeapon";
+            ClassInfo->TypeIndex = std::type_index(typeid(HelianthusWeapon));
+            ClassInfo->SuperClass = HelianthusBaseObject::StaticClass();
+        }
+        return ClassInfo;
     }
     virtual const std::string& GetClassName() const override { 
         static const std::string ClassName = "HelianthusWeapon"; 

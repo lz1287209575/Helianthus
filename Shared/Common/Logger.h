@@ -42,7 +42,7 @@ public:
               FilePath("logs/helianthus.log"),
               MaxFileSize(50 * 1024 * 1024),
               MaxFiles(5),
-              Pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v"),
+              Pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%P-%t-–] [%n] [%-:%#] %v"),
               UseAsync(true),
               QueueSize(8192),
               WorkerThreads(1)
@@ -53,6 +53,7 @@ public:
     static void Initialize(const LoggerConfig& Config = LoggerConfig());
     static void Shutdown();
     static bool IsInitialized();
+    static bool IsShuttingDown();
 
     // Category file configuration
     static void ConfigureCategoryFile(const std::string& CategoryName,
@@ -71,29 +72,37 @@ public:
     template <typename... Args>
     static void Debug(fmt::format_string<Args...> Format, Args&&... Arguments)
     {
-        if (LoggerInstance)
-            LoggerInstance->debug(Format, std::forward<Args>(Arguments)...);
+        if (LoggerInstance && !ShuttingDownFlag.load(std::memory_order_acquire))
+            LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                                 spdlog::level::debug,
+                                 Format, std::forward<Args>(Arguments)...);
     }
 
     template <typename... Args>
     static void Info(fmt::format_string<Args...> Format, Args&&... Arguments)
     {
-        if (LoggerInstance)
-            LoggerInstance->info(Format, std::forward<Args>(Arguments)...);
+        if (LoggerInstance && !ShuttingDownFlag.load(std::memory_order_acquire))
+            LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                                 spdlog::level::info,
+                                 Format, std::forward<Args>(Arguments)...);
     }
 
     template <typename... Args>
     static void Warn(fmt::format_string<Args...> Format, Args&&... Arguments)
     {
-        if (LoggerInstance)
-            LoggerInstance->warn(Format, std::forward<Args>(Arguments)...);
+        if (LoggerInstance && !ShuttingDownFlag.load(std::memory_order_acquire))
+            LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                                 spdlog::level::warn,
+                                 Format, std::forward<Args>(Arguments)...);
     }
 
     template <typename... Args>
     static void Error(fmt::format_string<Args...> Format, Args&&... Arguments)
     {
-        if (LoggerInstance)
-            LoggerInstance->error(Format, std::forward<Args>(Arguments)...);
+        if (LoggerInstance && !ShuttingDownFlag.load(std::memory_order_acquire))
+            LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                                 spdlog::level::err,
+                                 Format, std::forward<Args>(Arguments)...);
     }
 
     // Category logging API (called by macros)
@@ -103,10 +112,12 @@ public:
                             fmt::format_string<Args...> Format,
                             Args&&... Arguments)
     {
-        auto It = CategoryLoggers.find(CategoryName);
-        if (It != CategoryLoggers.end() && It->second)
+        if (ShuttingDownFlag.load(std::memory_order_acquire)) return;
+        auto LoggerPtr = GetOrCreateCategory(CategoryName);
+        if (LoggerPtr)
         {
-            It->second->log(Level, Format, std::forward<Args>(Arguments)...);
+            LoggerPtr->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                           Level, Format, std::forward<Args>(Arguments)...);
         }
     }
 
@@ -120,6 +131,14 @@ private:
     static LoggerConfig CurrentConfig;
     static bool IsInitializedFlag;
     static std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> CategoryLoggers;
+    static std::atomic<bool> ShuttingDownFlag;
+
+    // 获取或创建分类logger（控制台+可选分类文件 logs/<Category>.log）
+    static std::shared_ptr<spdlog::logger> GetOrCreateCategory(const std::string& CategoryName);
+
+    // 进程名缓存
+    static std::string ProcessName;
+    static std::string DetectProcessName();
 
     static spdlog::level::level_enum ConvertLogLevel(LogLevel Level);
     static LogLevel ConvertLogLevel(spdlog::level::level_enum Level);

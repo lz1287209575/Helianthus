@@ -122,7 +122,10 @@ enum class QueueResult : uint8_t
     NETWORK_ERROR = 10,
     STORAGE_ERROR = 11,
     INVALID_PARAMETER = 12,
-    INTERNAL_ERROR = 13
+    INTERNAL_ERROR = 13,
+    MESSAGE_NOT_FOUND = 14,
+    NOT_IMPLEMENTED = 15,
+    INVALID_CONFIG = 16
 };
 
 // 消息头信息
@@ -193,6 +196,31 @@ struct MessagePayload
         Data.clear();
         Size = 0;
     }
+    
+    // 获取数据大小
+    size_t GetSize() const
+    {
+        return Data.size();
+    }
+    
+    // 设置字符串内容
+    void SetString(const std::string& Text)
+    {
+        Data.assign(Text.begin(), Text.end());
+        Size = static_cast<MessageSize>(Text.size());
+        ContentType = "text/plain";
+        Encoding = "utf-8";
+    }
+    
+    // 设置二进制数据
+    void SetData(const void* NewData, size_t NewSize)
+    {
+        Data.assign(static_cast<const char*>(NewData), 
+                   static_cast<const char*>(NewData) + NewSize);
+        Size = static_cast<MessageSize>(NewSize);
+        ContentType = "application/octet-stream";
+        Encoding = "binary";
+    }
 };
 
 // 完整消息结构
@@ -233,7 +261,7 @@ struct Message
         auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
                        .count();
-        return Now > Header.ExpireTime;
+        return static_cast<MessageTimestamp>(Now) > Header.ExpireTime;
     }
 
     bool CanRetry() const

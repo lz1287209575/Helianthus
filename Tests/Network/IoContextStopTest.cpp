@@ -8,8 +8,10 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#endif
 
 using namespace Helianthus::Network::Asio;
 
@@ -18,15 +20,19 @@ class IoContextStopTest : public ::testing::Test
 protected:
     void SetUp() override
     {
+#ifdef _WIN32
         // 初始化 WinSock
         WSADATA WsaData;
         int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
         ASSERT_EQ(Result, 0) << "WSAStartup failed";
+#endif
     }
 
     void TearDown() override
     {
+#ifdef _WIN32
         WSACleanup();
+#endif
     }
 };
 

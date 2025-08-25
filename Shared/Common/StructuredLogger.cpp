@@ -198,24 +198,8 @@ namespace Helianthus::Common
                 Message << "}";
             }
             
-            // 通过现有Logger模块输出
-            switch (Record.Level)
-            {
-                case StructuredLogLevel::TRACE:
-                case StructuredLogLevel::DEBUG_LEVEL:
-                    Logger::CategoryLog("STRUCTURED", static_cast<spdlog::level::level_enum>(0), "{}", Message.str());
-                    break;
-                case StructuredLogLevel::INFO:
-                    Logger::CategoryLog("STRUCTURED", static_cast<spdlog::level::level_enum>(1), "{}", Message.str());
-                    break;
-                case StructuredLogLevel::WARN:
-                    Logger::CategoryLog("STRUCTURED", static_cast<spdlog::level::level_enum>(2), "{}", Message.str());
-                    break;
-                case StructuredLogLevel::ERROR:
-                case StructuredLogLevel::FATAL:
-                    Logger::CategoryLog("STRUCTURED", static_cast<spdlog::level::level_enum>(3), "{}", Message.str());
-                    break;
-            }
+            // 使用项目包装的 Logger，避免异步日志问题
+            Logger::Info("{}", Message.str());
         }
 
         void Flush() override
@@ -275,14 +259,14 @@ namespace Helianthus::Common
 
         Instance = std::unique_ptr<StructuredLogger>(new StructuredLogger(Config));
         
-        // 添加通过现有Logger模块的输出端
+        // 添加控制台输出端
         Instance->AddSink(std::make_shared<LoggerBasedSink>());
         
         if (Config.EnableFile)
         {
-            // 配置结构化日志的分类文件
-            Logger::ConfigureCategoryFile("STRUCTURED", Config.FilePath, 
-                                        Config.MaxFileSize, Config.MaxFiles);
+            // 暂时禁用文件输出，避免异步日志问题
+            // Logger::ConfigureCategoryFile("STRUCTURED", Config.FilePath, 
+            //                             Config.MaxFileSize, Config.MaxFiles);
         }
     }
 
@@ -302,7 +286,7 @@ namespace Helianthus::Common
             }
             
             // 清理结构化日志的分类文件配置
-            Logger::RemoveCategoryFile("STRUCTURED");
+            // Logger::RemoveCategoryFile("STRUCTURED");
             
             Instance.reset();
         }
