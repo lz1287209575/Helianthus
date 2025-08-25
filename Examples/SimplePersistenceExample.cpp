@@ -1,5 +1,6 @@
 #include <memory>
 #include <string>
+#include <iostream>
 
 #include "Shared/MessageQueue/MessageQueue.h"
 #include "Shared/MessageQueue/MessageTypes.h"
@@ -18,11 +19,21 @@ int main()
     logCfg.EnableFile = false;
     logCfg.UseAsync = false;
     Helianthus::Common::Logger::Initialize(logCfg);
+    
+    // 直接测试 Logger::Info
+    Helianthus::Common::Logger::Info("直接 Logger::Info 测试");
+    
+    // 测试 H_LOG
+    std::cout << "DEBUG: 准备调用 H_LOG" << std::endl;
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "Logger initialized (console sync)");
+    std::cout << "DEBUG: 第一个 H_LOG 调用完成" << std::endl;
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "H_LOG smoke test");
+    std::cout << "DEBUG: 第二个 H_LOG 调用完成" << std::endl;
+    
     // 放宽 MQ 分类最小级别，确保 H_LOG 可见
     Helianthus::Common::LogCategory::SetCategoryMinVerbosity("MQ", Helianthus::Common::LogVerbosity::VeryVerbose);
     H_LOG(MQ, Helianthus::Common::LogVerbosity::VeryVerbose, "H_LOG after set min verbosity");
+    
     // 分类日志验证：应看到 [MQ]
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "分类日志验证：MQ 分类可见");
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "=== Helianthus 消息队列持久化简单示例 ===");

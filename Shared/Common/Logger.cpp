@@ -182,8 +182,7 @@ std::shared_ptr<spdlog::logger> Logger::GetOrCreateCategory(const std::string& C
         CatLogger = std::make_shared<spdlog::logger>(CategoryName, begin(Sinks), end(Sinks));
     }
     CatLogger->set_level(ConvertLogLevel(CurrentConfig.Level));
-    std::string Pattern = "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%P-%t--] [" + ProcessName + "] [%n] [%s:%#] %v";
-    CatLogger->set_pattern(Pattern);
+    CatLogger->set_pattern(CurrentConfig.Pattern);
     spdlog::register_logger(CatLogger);
     CategoryLoggers[CategoryName] = CatLogger;
     return CatLogger;

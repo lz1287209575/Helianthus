@@ -54,3 +54,4 @@ connection_avg_latency_ms{connection_id="db_connection",remote_address="127.0.0.
 - 分位延迟基于滑动样本（默认1万样本窗口），在流量极低时可能偏差。
 - 吞吐依赖 `LastResetTime` 时间窗口，极短时间段内可能为 0。
 - 若需直方图类型，可在 `PrometheusExporter::FormatHistogram` 基础上按桶导出，自行扩展。
+

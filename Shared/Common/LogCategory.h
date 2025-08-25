@@ -91,10 +91,14 @@ namespace Helianthus::Common
     Helianthus::Common::LogCategory& CategoryName = *Helianthus::Common::LogCategory::Register(#CategoryName, &CategoryName##Impl)
 
 // H_LOG(Category, Level, Fmt, ...): 仅输出到分类logger（控制台/分类文件）
-#define H_LOG(Category, Level, Fmt, ...)                                                                                  \
-    do {                                                                                                                  \
-        if (static_cast<int>(Level) <= static_cast<int>((Category).GetMinVerbosity())) {                                  \
-            Helianthus::Common::Logger::CategoryLog((Category).GetName(), Helianthus::Common::ToSpdLevel(Level),          \
-                                                    Fmt, ##__VA_ARGS__);                                                  \
-        }                                                                                                                 \
-    } while (0)
+#if HELIANTHUS_ENABLE_LOGGING
+    #define H_LOG(Category, Level, Fmt, ...)                                                                                  \
+        do {                                                                                                                  \
+            if (static_cast<int>(Level) <= static_cast<int>((Category).GetMinVerbosity())) {                                  \
+                Helianthus::Common::Logger::CategoryLog((Category).GetName(), Helianthus::Common::ToSpdLevel(Level),          \
+                                                        Fmt, ##__VA_ARGS__);                                                  \
+            }                                                                                                                 \
+        } while (0)
+#else
+    #define H_LOG(Category, Level, Fmt, ...) do {} while (0)
+#endif

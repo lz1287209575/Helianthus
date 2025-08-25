@@ -113,6 +113,14 @@ public:
                             Args&&... Arguments)
     {
         if (ShuttingDownFlag.load(std::memory_order_acquire)) return;
+        
+        // 调试：直接输出到主logger
+        if (LoggerInstance)
+        {
+            LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                               Level, "[{}] {}", CategoryName, fmt::format(Format, std::forward<Args>(Arguments)...));
+        }
+        
         auto LoggerPtr = GetOrCreateCategory(CategoryName);
         if (LoggerPtr)
         {
