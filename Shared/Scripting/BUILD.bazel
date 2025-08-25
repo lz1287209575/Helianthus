@@ -5,17 +5,24 @@ config_setting(
 	values = {"define": "ENABLE_LUA_SCRIPTING=1"},
 )
 
+config_setting(
+	name = "enable_python",
+	values = {"define": "ENABLE_PYTHON_SCRIPTING=1"},
+)
+
 cc_library(
 	name = "scripting",
 	visibility = ["//visibility:public"],
 	hdrs = [
 		"IScriptEngine.h",
 		"LuaScriptEngine.h",
+		"PythonScriptEngine.h",
 		"ScriptingTypes.h",
 		"HotReloadManager.h",
 	],
 	srcs = [
 		"LuaScriptEngine.cpp",
+		"PythonScriptEngine.cpp",
 		"HotReloadManager.cpp",
 	],
 	deps = select({
@@ -28,6 +35,7 @@ cc_library(
 	}),
 	defines = select({
 		":enable_lua": ["ENABLE_LUA_SCRIPTING"],
+		":enable_python": ["ENABLE_PYTHON_SCRIPTING"],
 		"//conditions:default": [],
 	}),
 )

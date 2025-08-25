@@ -105,3 +105,133 @@ cc_binary(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_binary(
+    name = "config_system_example",
+    srcs = ["ConfigSystemExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Config:config",
+        "//Shared/Common:common",
+        "//Shared/Network:network",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "rpc_example",
+    srcs = ["RpcExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/RPC:rpc",
+        "//Shared/Common:common",
+        "//Shared/Network:network",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "discovery_example",
+    srcs = ["DiscoveryExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Discovery:discovery",
+        "//Shared/Common:common",
+        "//Shared/Network:network",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "message_queue_example",
+    srcs = ["MessageQueueExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "reflection_example",
+    srcs = ["ReflectionExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Reflection:reflection",
+        "//Shared/Scripting:scripting",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "multi_language_scripting_example",
+    srcs = ["MultiLanguageScriptingExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Scripting:scripting",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "smart_reflection_example",
+    srcs = ["SmartReflectionExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Reflection:reflection",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "ue_style_reflection_example",
+    srcs = ["UEStyleReflectionExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Reflection:ue_style_reflection",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "helianthus_reflection_example",
+    srcs = ["HelianthusReflectionExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std:c++20"],
+    }),
+    deps = [
+        "//Shared/Reflection:helianthus_reflection",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)

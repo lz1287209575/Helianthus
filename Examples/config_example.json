@@ -1,0 +1,59 @@
+{
+    "server": {
+        "host": "127.0.0.1",
+        "port": 8080,
+        "max_connections": 1000,
+        "enable_ssl": false,
+        "ssl_cert_path": "/path/to/cert.pem",
+        "ssl_key_path": "/path/to/key.pem"
+    },
+    "database": {
+        "type": "mysql",
+        "host": "localhost",
+        "port": 3306,
+        "username": "root",
+        "password": "",
+        "database_name": "helianthus",
+        "max_pool_size": 20,
+        "connection_timeout": 30
+    },
+    "logging": {
+        "level": "info",
+        "enable_console": true,
+        "enable_file": true,
+        "file_path": "logs/helianthus.log",
+        "max_file_size": 52428800,
+        "max_files": 5,
+        "enable_structured": true
+    },
+    "network": {
+        "io_threads": 4,
+        "buffer_size": 8192,
+        "enable_tcp_nodelay": true,
+        "enable_keep_alive": true,
+        "keep_alive_timeout": 300
+    },
+    "scripting": {
+        "enable_lua": true,
+        "script_directory": "Scripts",
+        "enable_hot_reload": true,
+        "hot_reload_interval": 1000,
+        "memory_limit": 134217728,
+        "execution_timeout": 5000
+    },
+    "security": {
+        "enable_authentication": true,
+        "jwt_secret": "your-secret-key-here",
+        "jwt_expiration": 3600,
+        "enable_rate_limiting": true,
+        "rate_limit_requests": 100,
+        "rate_limit_window": 60
+    },
+    "performance": {
+        "enable_metrics": true,
+        "metrics_port": 9090,
+        "enable_profiling": false,
+        "profile_port": 6060,
+        "enable_tcmalloc": true
+    }
+}

@@ -1,0 +1,15 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "reflection_test",
+    srcs = ["BasicTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std:c++20", "-fPIC"],
+    }),
+    deps = [
+        "//Shared/Scripting:scripting",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)

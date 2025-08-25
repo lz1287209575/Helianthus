@@ -1,0 +1,19 @@
+{
+    "server": {
+        "host": "192.168.1.100",
+        "port": 9000,
+        "max_connections": 500,
+        "enable_ssl": true
+    },
+    "database": {
+        "type": "postgresql",
+        "host": "db.example.com",
+        "port": 5432,
+        "max_pool_size": 15
+    },
+    "logging": {
+        "level": "debug",
+        "enable_console": true,
+        "enable_file": false
+    }
+}

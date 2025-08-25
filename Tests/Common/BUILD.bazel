@@ -25,3 +25,17 @@ cc_test(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_test(
+    name = "command_line_parser_test",
+    srcs = ["CommandLineParserTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+        "@googletest//:gtest_main",
+    ],
+    visibility = ["//visibility:public"],
+)

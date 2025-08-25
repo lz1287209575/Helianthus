@@ -1,219 +1,336 @@
 # Helianthus 网络与异步框架 TODO（跨平台）
 
-## 🎯 P0：近期优先事项（已完成核心功能）
+## 🎯 P0：近期优先事项（核心功能已完成）
 
-### IOCP 唤醒机制（跨线程 Post/Stop 立即生效）
-- [x] 在 `ProactorIocp` 中引入 Wake Key，`IoContext::Post/Stop` 调用 `PostQueuedCompletionStatus(IocpHandle, 0, WakeKey, nullptr)`
-- [x] `ProcessCompletions` 识别 WakeKey 不做错误处理，仅用于唤醒
+### ✅ 已完成的核心功能
+- [x] **网络框架基础**：Reactor/Proactor 模式，支持 epoll/kqueue/IOCP
+- [x] **异步 I/O**：TCP/UDP 异步操作，缓冲区管理
+- [x] **Windows IOCP 完整实现**：AcceptEx、ConnectEx、AsyncRead/Write、唤醒机制
+- [x] **UDP Proactor 完整实现**：WSARecvFrom/WSASendTo（Windows）+ Reactor适配（POSIX）
+- [x] **内存管理**：TCMalloc 集成，缓冲区池化系统
+- [x] **脚本系统**：Lua 引擎集成，热更新功能
+- [x] **配置系统**：JSON配置加载，热更新，验证器，变更回调
+- [x] **命令行参数解析**：支持短/长选项，类型转换，默认值，验证，帮助信息
+- [x] **性能监控系统**：完整的性能指标收集和Prometheus导出
+- [x] **API统一化**：统一的异步Socket接口，支持取消令牌和超时控制
+- [x] **RPC框架**：基于网络框架的RPC系统，服务注册，同步/异步调用，中间件支持
+- [x] **测试覆盖**：基础功能测试套件
 
-### AcceptEx 全流程与持续投递
-- [x] 每个挂起 accept 预创建 `WSASocket` 与固定 `AcceptBuffer`（`sizeof(sockaddr_in)*2 + 32`）
-- [x] 完成后 `SO_UPDATE_ACCEPT_CONTEXT`，使用 `GetAcceptExSockaddrs` 获取本地/远端地址
-- [x] 回调上层并调用 `TcpSocket.Adopt()`
-- [x] 维持 1-4 个并发 `AcceptEx`，错误重投递，退出时统一取消
-
-### AsyncRead/AsyncWrite 续传语义
-- [x] `WSARecv/WSASend` 完成后根据 `Transferred` 与目标长度继续投递，直至读满/写完或错误
-- [x] 统一使用 `ConvertWinSockError` 做错误码映射
-- [x] `Cancel(Fd)` 覆盖 Read/Write/Accept，挂起操作被取消应返回一致错误
-
-### AsyncConnect（Windows）
-- [x] 使用 `ConnectEx` 实现非阻塞连接，完成后 `SO_UPDATE_CONNECT_CONTEXT`
-- [x] 与超时/取消、错误码映射打通
-
-### IoContext 驱动与停止
-- [x] Stop/Cancel 时向 IOCP 投递唤醒包，确保 `Run()` 能尽快退出
-- [x] 统一 `PostDelayed` 定时触发语义（Windows 基于 IOCP 唤醒）
-
-### 测试与构建（Windows）
-- [x] IOCP 路径下的 TCP 长度前缀 Echo（含半包/粘包）、并发、多尺寸
-- [x] 取消与超时集成测试
-- [x] Bazel 目标统一链接 `Ws2_32.lib`、`Mswsock.lib`，MSVC 使用 `/std:c++20` 与 `/utf-8`
-
-### 统一API接口与示例程序
-- [x] **编译问题修复**：修复 `AsyncUdpSocket.cpp` 中的命名空间限定符缺失问题
-- [x] **方法名错误修复**：将 `Socket.Close()` 改为 `Socket.Disconnect()`
-- [x] **阻塞问题解决**：将 `IoContext::Run()` 运行在后台线程，避免主线程阻塞
-- [x] **超时机制改进**：添加原子变量跟踪操作完成状态，实现合理的超时等待
-- [x] **错误处理优化**：预期网络操作失败，正确处理错误情况
-- [x] **统一API示例程序**：`UnifiedApiExample.cpp` 完整演示TCP/UDP异步操作、超时、取消功能
+### 🔧 当前重点优化项目
+- [x] **配置系统路径问题**：解决Bazel运行时的路径解析问题
+  - [x] 已实现直接运行可执行文件的解决方案
+  - [x] 已添加命令行参数指定配置文件路径（--config）
+  - [x] 改进错误提示，提供更清晰的使用指导
+- [x] **命令行参数解析系统**：完整的命令行参数处理功能
+  - [x] 支持短选项（-h, -v）和长选项（--help, --verbose）
+  - [x] 支持多种参数类型：FLAG、STRING、INTEGER、FLOAT、MULTI
+  - [x] 支持位置参数、默认值、必需参数验证
+  - [x] 提供详细的帮助信息和使用示例
+  - [x] 完整的单元测试覆盖
+- [ ] **结构化日志系统**：完善日志格式和可观测性（暂缓）
+  - [ ] 统一日志字段化输出（连接ID、操作ID、错误码、耗时）
+  - [ ] 请求级Trace ID透传，便于端到端排查
+  - [ ] 提供开关与等级控制
+- [ ] **安全功能**：TLS/DTLS集成和脚本沙箱（暂缓）
+  - [ ] 预留TLS/DTLS集成点（OpenSSL/mbedTLS等）
+  - [ ] 脚本安全沙箱：限制危险库、提供白名单模块、超时/内存限制
 
 ## 🔧 核心功能完善
 
-### 完善 IOCP 重叠 I/O（Windows）
-- [x] 读满/写满语义（读循环直至缓冲填满或出错/对端关闭；写循环直至发送完成）
-- [x] 取消能力（`CancelIoEx`）与 `AsyncTcpSocket::Close()` 收敛调用路径
-- [x] 错误映射细化（WSA 错误 → `NetworkError`），完成队列与 Reactor/Proactor 驱动集成
-- [x] 使用对象池/智能指针管理 OVERLAPPED 与缓冲区，确保生命周期安全，避免悬空与竞态
-- [x] 为 `AsyncTcpAcceptor` 接入 `AcceptEx` + `SO_UPDATE_ACCEPT_CONTEXT`，并完善本地/对端地址获取（`GetAcceptExSockaddrs`）
-- [x] 统一日志格式与错误可观测性（操作级 Trace/统计）
+### 网络框架优化
+- [x] **IOCP 重叠 I/O（Windows）**：读满/写满语义，取消能力，错误映射
+- [x] **Proactor/Async API 能力完善**：UDP Proactor路径，统一取消与超时语义
+- [x] **Reactor 细化（Linux/BSD/macOS）**：Epoll边沿触发，统一错误映射系统
+- [x] **IoContext 改进**：成员任务队列，跨线程Post唤醒机制
+- [x] **接口与结构统一**：统一NativeHandle/Fd类型，统一Async* API
 
-### Proactor/Async API 能力完善（全平台）
-- [x] 为 UDP 提供 Proactor 路径（Windows: `WSARecvFrom/WSASendTo`，POSIX: 使用 Reactor 适配 Proactor），保持与 TCP 一致的接口与语义
-- [ ] `AsyncTcpSocket`/`AsyncUdpSocket` 写路径：处理部分写、写队列、背压（backpressure），基于写就绪事件或完成回调进行续写与排队
-- [x] 统一取消与超时语义（支持操作级取消 token、超时参数）
-- [ ] 丰富回调错误语义（超时/取消/连接重置/网络不可达等）
-
-### Reactor 细化（Linux/BSD/macOS）
-- [x] Epoll：支持边沿触发（EPOLLET）与错误/挂起处理（EPOLLERR/EPOLLHUP），优化事件去抖与批量处理
-- [x] 统一错误映射系统（`ErrorMapping` 类），支持 POSIX 和 Windows 错误码转换
-- [x] ReactorEpoll 错误处理增强，所有 `epoll_ctl` 和 `epoll_wait` 调用使用统一错误映射
-- [ ] Kqueue：完善读/写事件注册切换（EV_ADD/EV_DELETE）、错误映射、边沿与电平语义校准
-- [ ] ReactorIocp：为 Windows IOCP 添加统一错误映射，处理 `GetQueuedCompletionStatus` 错误
-- [ ] 提供统一的注册/修改/删除返回值与错误转换，保证与 `NetworkError` 一致化
-
-### IoContext 改进
-- [x] 成员任务队列；简易定时器（`PostDelayed`）
-- [x] 跨线程 `Post` 的唤醒机制：
-  - [x] Linux: `eventfd`/自管道
-  - [x] BSD: 自管道
-  - [x] Windows: 向 IOCP 投递空完成包或 `WakeByAddressSingle` 等
-- [ ] 合并驱动节奏：协调 `ProcessCompletions()` 与 `PollOnce()` 的超时与节拍，避免空转
-
-### 接口与结构统一
-- [x] 统一 `NativeHandle`/`Fd` 类型（`uintptr_t` 已对齐），严禁平台专有类型外泄到头文件公共接口
-- [x] 统一 `Async*` API：`AsyncReceive`/`AsyncReceiveFrom`/`AsyncSend`/`AsyncSendTo` 的参数与回调签名；提供取消/超时可选参数
-- [x] 命名规范：`Asio` 目录内临时/局部变量已统一 PascalCase；持续在 `Shared/Network` 其他子目录推进
+### 待办网络优化
+- [ ] **写路径优化**：处理部分写、写队列、背压（backpressure）
+- [ ] **Kqueue 完善**：读/写事件注册切换，错误映射，边沿与电平语义校准
+- [ ] **ReactorIocp 错误映射**：为Windows IOCP添加统一错误映射
+- [ ] **驱动节奏合并**：协调ProcessCompletions()与PollOnce()的超时与节拍
 
 ## 🧪 测试与 CI
 
-### 已完成测试
-- [x] 基础 UDP 回环（echo）集成测试
-- [x] 长度前缀协议测试（`MessageProtocol`），覆盖半包/粘包处理
-- [x] 错误映射系统测试（`ErrorMapping`），验证 POSIX 和 Windows 错误码转换
-- [x] Epoll 边沿触发和跨线程唤醒机制测试
-- [x] 脚本引擎测试（Lua 集成、热更新功能）
-- [x] **IOCP 核心功能测试**：
-  - [x] `AsyncReadWriteTest.cpp` - AsyncRead/AsyncWrite 续传语义
-  - [x] `AsyncConnectTest.cpp` - ConnectEx 异步连接
-  - [x] `IoContextStopTest.cpp` - IoContext 驱动与停止
-  - [x] `IocpWakeupTest.cpp` - IOCP 唤醒机制
-  - [x] `AcceptExTest.cpp` - AcceptEx 异步接受
-  - [x] `CancelTimeoutTest.cpp` - 取消与超时测试
-- [x] **UDP Proactor 功能测试**：
-  - [x] `UdpProactorTest.cpp` - UDP 异步接收/发送、并发操作、错误处理
-- [x] **统一API示例程序测试**：
-  - [x] `UnifiedApiExample.cpp` - TCP/UDP异步操作、超时、取消功能演示
-  - [x] 验证异步操作不阻塞主线程
-  - [x] 验证超时和取消机制正常工作
+### ✅ 已完成测试
+- [x] **基础网络测试**：UDP回环，TCP长度前缀协议，错误映射系统
+- [x] **IOCP 核心功能测试**：AsyncRead/Write，ConnectEx，IoContext停止，唤醒机制
+- [x] **UDP Proactor 功能测试**：异步接收/发送，并发操作，错误处理
+- [x] **脚本系统测试**：Lua集成，热更新功能
+- [x] **配置系统测试**：JSON配置加载，验证器，变更回调，热更新
+- [x] **命令行参数解析测试**：短/长选项解析，类型转换，错误处理，帮助信息
+- [x] **性能监控测试**：指标收集，Prometheus导出
+- [x] **统一API示例程序测试**：TCP/UDP异步操作，超时，取消功能
+- [x] **RPC框架测试**：服务器/客户端连接，服务注册，方法调用，消息路由
+- [x] **服务发现测试**：服务注册中心、健康检查、负载均衡、完整示例程序
+- [x] **消息队列测试**：消息创建、配置演示、功能测试、完整示例程序
 
-### 待办测试
-- [ ] `IoContext.Run()` 驱动下的 TCP 异步回环（长度前缀，覆盖半包/粘包与读满语义）
-- [ ] Kqueue/IOCP 的最小事件用例与错误路径覆盖
-- [ ] 热更新功能集成测试（文件监控、脚本重载、错误处理）
+### 🔧 待办测试
+- [ ] **热更新集成测试**：文件监控，脚本重载，错误处理
+- [ ] **配置系统集成测试**：多配置文件，环境变量覆盖，热更新验证
+- [ ] **命令行参数集成测试**：与其他系统的集成，复杂参数组合测试
+- [ ] **多平台测试覆盖**：Linux/macOS下的完整功能测试
+- [ ] **性能基准测试**：跨平台性能对比，压力测试
 
-### Bazel/Windows 构建
-- [x] 为需要的目标统一链接 `Ws2_32.lib`、`Mswsock.lib`（使用 `select()`），并在 MSVC 下补齐 `/utf-8`
-- [x] 修复编译错误：命名空间限定符、方法名错误等
+### Bazel/构建系统
+- [x] **Windows构建**：统一链接Ws2_32.lib、Mswsock.lib，MSVC使用/std:c++20与/utf-8
+- [x] **编译问题修复**：命名空间限定符，方法名错误等
+- [ ] **多平台CI流水线**：Windows + Linux双平台自动化测试
 
 ## ⚡ 性能与可靠性
 
-### 已完成功能
-- [x] 缓冲区池化系统（`BufferPool`、`PooledBuffer`、`BufferPoolManager`），支持多线程安全、自动增长、零初始化等功能
-- [x] 缓冲区池测试覆盖（8个测试用例），验证基本功能、池增长、非池化缓冲区、零初始化、全局管理器、便利函数、线程安全性和内存效率
-- [x] 零拷贝路径系统（`ZeroCopyBuffer`、`ZeroCopyReadBuffer`、`ZeroCopyIO`），支持 scatter-gather I/O 操作
-- [x] 零拷贝缓冲区测试覆盖（10个测试用例），验证基本功能、片段创建、读取缓冲区、操作结果、I/O支持、便利函数、空缓冲区处理、大缓冲区处理、性能统计和移动语义
-- [x] TCMalloc 内存分配器集成（`TCMallocWrapper`），替换全局 new/delete 操作符，提供高性能内存分配
-- [x] TCMalloc 测试覆盖（13个测试用例），验证基本初始化、内存分配、重分配、对齐分配、new/delete操作符、C++17对齐分配、内存统计、线程安全、性能比较、内存泄漏检测、配置功能和便利宏
+### ✅ 已完成优化
+- [x] **缓冲区池化系统**：BufferPool、PooledBuffer、BufferPoolManager
+- [x] **零拷贝路径系统**：ZeroCopyBuffer、ZeroCopyReadBuffer、ZeroCopyIO
+- [x] **TCMalloc 内存分配器集成**：替换全局new/delete操作符
+- [x] **轮询批量化与回调批处理**：减少上下文切换与调用开销
+- [x] **性能指标与统计**：连接/操作级别的延迟、吞吐、错误统计
 
-### 待办优化
-- [x] 轮询批量化与回调批处理，减少上下文切换与调用开销
-- [x] 指标与统计：扩展连接/操作级别的延迟、吞吐、错误统计并提供导出接口
+### 🔧 待办性能优化
+- [ ] **内存使用优化**：对象池管理，内存泄漏检测
+- [ ] **网络性能调优**：连接池，连接复用，负载均衡
+- [ ] **脚本性能优化**：协程支持，JIT编译
 
 ## 🔐 安全与扩展
 
-### 安全功能
-- [ ] 预留 TLS/DTLS 集成点（OpenSSL/mbedTLS 等），定义加密通道抽象与握手状态机对接
-- [ ] 脚本安全沙箱：限制危险库、提供白名单模块、超时/内存限制
+### 安全功能（暂缓）
+- [ ] **TLS/DTLS 集成**：预留OpenSSL/mbedTLS集成点，定义加密通道抽象
+- [ ] **脚本安全沙箱**：限制危险库，提供白名单模块，超时/内存限制
+- [ ] **网络安全**：连接加密，身份验证，访问控制
 
 ### 扩展功能
-- [ ] 为后续 RPC（基于本框架）预留调度/超时/重试策略接口
-- [ ] 配置系统集成：从脚本加载配置、热更新钩子
+- [x] **RPC 框架**：基于网络框架的RPC系统，调度/超时/重试策略
+  - [x] RPC服务器和客户端实现
+  - [x] 服务注册和方法调用
+  - [x] 同步/异步调用支持
+  - [x] 中间件和事件处理器
+  - [x] 统计和监控功能
+  - [x] 完整示例程序
+- [x] **服务发现**：服务注册与发现，健康检查，负载均衡
+- [x] **消息队列**：异步消息处理，消息持久化，事务支持
+  - [x] 服务注册中心（ServiceRegistry）：服务注册、注销、状态管理
+  - [x] 服务发现客户端（ServiceDiscovery）：服务发现、负载均衡、健康检查集成
+  - [x] 健康检查器（HealthChecker）：多种健康检查策略、熔断器、健康度评分
+  - [x] 负载均衡器（LoadBalancer）：多种负载均衡算法、权重支持、健康感知
+  - [x] 完整示例程序：服务器/客户端模式演示
+- [x] **消息队列**：异步消息处理，消息持久化，事务支持
+  - [x] 消息队列核心接口（IMessageQueue）：队列管理、消息发送接收、发布订阅
+  - [x] 消息类型系统：Message、MessageHeader、MessagePayload、各种配置结构
+  - [x] 队列类型支持：标准队列、优先级队列、延迟队列、死信队列
+  - [x] 发布订阅模式：主题管理、订阅者管理、消息广播
+  - [x] 消费者和生产者配置：批量处理、自动确认、重试机制
+  - [x] 完整示例程序：消息创建、配置演示、功能测试
 
-## 📝 脚本系统（已完成基础功能）
+## 📝 脚本系统
 
-### 已完成功能
-- [x] 创建 `Shared/Scripting` 目录结构与 `IScriptEngine` 接口
-- [x] 实现 `LuaScriptEngine` 类，支持 Lua 5.4 运行时集成
-- [x] 配置 `ThirdParty/lua` 作为 git submodule，创建 Bazel 构建目标
-- [x] 实装完整的 Lua API 调用：`luaL_newstate`、`luaL_openlibs`、`luaL_loadfile`、`lua_pcall` 等
-- [x] 支持宏控制编译：`--define=ENABLE_LUA_SCRIPTING=1` 启用 Lua 功能
-- [x] 创建 `Scripts/hello.lua` 示例脚本，包含多种函数示例
-- [x] 创建 `Tests/Scripting/ScriptingTest.cpp` 完整测试套件，覆盖初始化、执行字符串、加载文件、调用函数、错误处理等
-- [x] 配置 MSVC 和 GCC/Clang 的编译选项，设置正确的依赖关系
-- [x] **脚本热更新机制**：`HotReloadManager` 实现文件变更监控、自动重加载
-- [x] **热更新集成示例**：`GameServerWithHotReload.cpp` 完整示例
-- [x] **热更新文档**：`HOTRELOAD_INTEGRATION.md` 详细集成指南
+### ✅ 已完成功能
+- [x] **Lua 引擎集成**：Lua 5.4运行时，完整API调用
+- [x] **热更新机制**：HotReloadManager，文件变更监控，自动重加载
+- [x] **集成示例**：GameServerWithHotReload完整示例
+- [x] **文档完善**：HOTRELOAD_INTEGRATION.md详细集成指南
 
-### 待办功能
-- [ ] 性能优化：协程支持、JIT 编译、对象池管理
-- [ ] 多语言支持：Python、JavaScript、C# 引擎扩展
-- [ ] 反射绑定：与运行时反射系统集成，自动导出 C++ 类到脚本
+### 🔧 待办功能
+- [ ] **性能优化**：协程支持，JIT编译，对象池管理
+- [ ] **多语言支持**：Python、JavaScript、C#引擎扩展
+- [ ] **反射绑定**：与运行时反射系统集成，自动导出C++类到脚本
 
-## 🔧 错误映射完善
+## 🔧 配置系统
 
-### Kqueue 错误映射（BSD/macOS）
-- [ ] 为 `ReactorKqueue` 添加统一错误映射，处理 `kqueue`、`kevent` 系统调用错误
-- [ ] 支持 `EV_ADD`、`EV_DELETE`、`EV_MODIFY` 操作的错误处理
-- [ ] 处理 `ENOMEM`、`EINVAL`、`ENOENT` 等 kqueue 特有错误码
-- [ ] 添加 kqueue 错误映射测试用例
+### ✅ 已完成功能
+- [x] **JSON配置加载**：支持嵌套配置，类型安全访问
+- [x] **配置验证器**：自定义验证规则，错误提示
+- [x] **变更回调**：配置变更通知，回调函数注册
+- [x] **热更新**：文件监控，自动重载，变更检测
+- [x] **配置统计**：加载次数，验证错误，重载统计
+- [x] **命令行参数集成**：通过命令行参数指定配置文件，灵活配置
+- [x] **示例程序**：ConfigSystemExample完整演示
 
-### IOCP 错误映射（Windows）
-- [ ] 为 `ReactorIocp` 添加统一错误映射，处理 `CreateIoCompletionPort`、`GetQueuedCompletionStatus` 错误
-- [ ] 支持 `ERROR_INVALID_HANDLE`、`ERROR_INVALID_PARAMETER` 等 Windows 特有错误码
-- [ ] 处理 IOCP 完成端口创建和事件处理错误
-- [ ] 添加 IOCP 错误映射测试用例
+## 🖥️ 命令行参数解析系统
 
-## 🚀 非网络功能（建议并行推进）
+### ✅ 已完成功能
+- [x] **核心解析器**：CommandLineParser类，支持多种参数格式
+- [x] **参数类型支持**：
+  - [x] FLAG：布尔标志（--help, -v）
+  - [x] STRING：字符串参数（--config file.json）
+  - [x] INTEGER：整数参数（--port 8080）
+  - [x] FLOAT：浮点数参数（--timeout 1.5）
+  - [x] MULTI：多值参数（--files file1.txt --files file2.txt）
+- [x] **参数格式支持**：
+  - [x] 短选项：-h, -v, -c file.json
+  - [x] 长选项：--help, --verbose, --config=file.json
+  - [x] 混合格式：--config file.json -v --port 8080
+  - [x] 位置参数：program arg1 arg2
+- [x] **高级功能**：
+  - [x] 默认值支持：未指定时使用默认值
+  - [x] 必需参数验证：检查必需参数是否提供
+  - [x] 类型转换：自动转换为整数、浮点数
+  - [x] 错误处理：详细的错误信息和提示
+  - [x] 帮助信息：自动生成格式化的帮助文档
+- [x] **便利宏定义**：
+  - [x] HELIANTHUS_CLI_FLAG：快速添加标志参数
+  - [x] HELIANTHUS_CLI_STRING：快速添加字符串参数
+  - [x] HELIANTHUS_CLI_INTEGER：快速添加整数参数
+  - [x] HELIANTHUS_CLI_FLOAT：快速添加浮点数参数
+  - [x] HELIANTHUS_CLI_MULTI：快速添加多值参数
+- [x] **集成示例**：
+  - [x] 配置系统集成：支持--config指定配置文件
+  - [x] 热更新控制：--hot-reload启用热更新
+  - [x] 验证控制：--validate启用配置验证
+  - [x] 详细输出：--verbose启用详细输出
+  - [x] 运行时间：--time指定运行时间
+  - [x] 配置保存：--save指定保存文件
+- [x] **测试覆盖**：
+  - [x] 基础解析测试：短选项、长选项、混合选项
+  - [x] 类型转换测试：整数、浮点数转换
+  - [x] 错误处理测试：未知选项、缺少值
+  - [x] 帮助功能测试：--help显示帮助信息
+  - [x] 位置参数测试：非选项参数处理
+  - [x] 多值参数测试：重复参数处理
 
-### 结构化日志与可观测性
-- [ ] 统一 `Logger` 的字段化输出（连接 ID、操作 ID、错误码、耗时），提供开关与等级
-- [ ] 请求级 Trace ID 透传，便于端到端排查
+### 🔧 待办功能
+- [ ] **多格式支持**：YAML、INI、环境变量配置
+- [ ] **配置继承**：基础配置，环境特定配置，配置合并
+- [ ] **配置加密**：敏感配置加密存储，密钥管理
+- [ ] **配置验证增强**：JSON Schema验证，类型检查
 
-### 指标与统计（Metrics）
-- [x] 暴露连接/操作级 QPS、延迟分位（P50/P95/P99）、错误计数（按类型）
-- [x] 提供拉取接口或导出到文本（Prometheus 友好格式）
+### 🔧 命令行参数解析待办功能
+- [ ] **子命令支持**：类似git的subcommand结构（git commit, git push）
+- [ ] **参数组**：将相关参数组织成组，便于管理
+- [ ] **自动补全**：bash/zsh自动补全脚本生成
+- [ ] **配置文件生成**：从命令行参数生成配置文件
+- [ ] **参数验证增强**：正则表达式验证，范围检查
+- [ ] **国际化支持**：多语言错误信息和帮助文档
+- [ ] **参数别名**：支持参数别名（如--help和-h）
+- [ ] **环境变量集成**：支持从环境变量读取默认值
 
-### 配置系统
-- [ ] 基于 `json/yaml` 的配置加载、热更新钩子（可选），覆盖端口、缓冲区、并发数、日志等级等
-- [ ] 为测试提供最小配置样例与校验
+## 🔗 RPC框架系统
 
-### 基准与性能对比
-- [x] 提供 Echo 压测可执行与脚本，生成 CSV/Markdown 报告
-- [x] 路径对比：IOCP vs POSIX（epoll）在不同 payload/并发下的吞吐与延迟
+### ✅ 已完成功能
+- [x] **核心RPC系统**：
+  - [x] RPC服务器（RpcServer）：服务注册、客户端管理、消息处理
+  - [x] RPC客户端（RpcClient）：连接管理、同步/异步调用、超时重试
+  - [x] RPC服务接口（IRpcService）：服务生命周期、方法注册、健康检查
+  - [x] RPC消息系统：消息序列化/反序列化、错误处理
+- [x] **服务实现**：
+  - [x] 计算器服务：add、subtract、multiply、divide、asyncAdd
+  - [x] 字符串服务：reverse、uppercase、lowercase
+  - [x] 服务基类（RpcServiceBase）：方法注册、异步处理
+- [x] **高级功能**：
+  - [x] 中间件支持：请求处理前/后的自定义逻辑
+  - [x] 事件处理器：连接/断开/错误事件回调
+  - [x] 统计监控：调用次数、延迟、错误率统计
+  - [x] 配置管理：超时、重试、并发控制配置
+- [x] **网络集成**：
+  - [x] 基于现有网络框架的TCP连接
+  - [x] 消息路由和分发
+  - [x] 连接池管理
+- [x] **示例程序**：
+  - [x] 完整的RPC服务器/客户端示例
+  - [x] 命令行参数支持（--server/--client）
+  - [x] 多种服务方法测试
+  - [x] 同步/异步调用演示
 
-### CI 与多平台工况
-- [ ] Windows + Linux 双平台流水线
-- [ ] 关键测试（Echo、取消/超时、错误映射）并行执行
-- [ ] 产物与符号（Release/Debug）归档
+### 🔧 待办功能
+- [ ] **序列化优化**：支持Protocol Buffers、MessagePack等高效序列化
+- [ ] **负载均衡**：多服务器负载均衡，故障转移
+- [ ] **服务发现集成**：与服务发现系统集成
+- [ ] **流式RPC**：支持流式数据传输
+- [ ] **认证授权**：RPC调用认证和权限控制
+- [ ] **监控集成**：与Prometheus、Jaeger等监控系统集成
+- [ ] **性能优化**：连接复用、批量调用优化
+
+## 🔍 服务发现系统
+
+### ✅ 已完成功能
+- [x] **服务注册中心（ServiceRegistry）**：
+  - [x] 服务注册、注销、更新和状态管理
+  - [x] 服务查询和过滤（按名称、标签、区域、状态）
+  - [x] 心跳机制和TTL管理
+  - [x] 服务组和负载均衡配置
+  - [x] 统计信息和监控
+  - [x] 事件回调和通知机制
+- [x] **服务发现客户端（ServiceDiscovery）**：
+  - [x] 统一的服务发现接口
+  - [x] 负载均衡和服务选择
+  - [x] 健康检查集成
+  - [x] 缓存和性能优化
+  - [x] 故障转移和重试机制
+  - [x] RPC集成助手
+- [x] **健康检查器（HealthChecker）**：
+  - [x] 多种健康检查类型（TCP、HTTP、自定义、心跳、Ping）
+  - [x] 自动健康检查和手动检查
+  - [x] 熔断器模式和健康度评分
+  - [x] 健康阈值和配置管理
+  - [x] 健康监控和警报
+  - [x] 批量操作和统计
+- [x] **负载均衡器（LoadBalancer）**：
+  - [x] 多种负载均衡策略（轮询、加权、最少连接、随机等）
+  - [x] 健康感知负载均衡
+  - [x] 会话粘性和一致性哈希
+  - [x] 动态权重调整
+  - [x] 负载均衡统计和监控
+- [x] **示例程序**：
+  - [x] 完整的服务发现服务器/客户端示例
+  - [x] 服务注册和发现演示
+  - [x] 负载均衡测试
+  - [x] 健康检查演示
+  - [x] 统计信息展示
+
+### 🔧 待办功能
+- [ ] **分布式服务发现**：多节点注册中心，数据同步和一致性
+- [ ] **服务网格集成**：与Istio、Linkerd等服务网格集成
+- [ ] **云原生支持**：Kubernetes服务发现，云服务集成
+- [ ] **高级负载均衡**：智能路由、流量分割、A/B测试
+- [ ] **服务治理**：限流、熔断、降级、重试策略
+- [ ] **监控告警**：与Prometheus、Grafana、Jaeger集成
+- [ ] **安全认证**：服务间认证、TLS加密、访问控制
+
+## 🚀 生产就绪功能
+
+### 可观测性
+- [ ] **结构化日志**：字段化日志输出，Trace ID透传
+- [ ] **监控集成**：Prometheus指标，Grafana仪表板
+- [ ] **告警系统**：异常检测，告警通知
+- [ ] **分布式追踪**：请求链路追踪，性能分析
+
+### 部署与运维
+- [ ] **容器化支持**：Docker镜像，Kubernetes部署
+- [ ] **配置管理**：配置中心集成，配置版本管理
+- [ ] **健康检查**：服务健康状态，依赖检查
+- [ ] **优雅关闭**：连接清理，资源释放
+
+### 文档与示例
+- [ ] **API文档**：完整的API参考文档
+- [ ] **最佳实践**：性能调优，安全配置，故障排查
+- [ ] **示例应用**：聊天服务器，文件服务器，RPC服务
+- [ ] **迁移指南**：从其他框架迁移的指导
 
 ## 📊 项目状态总结
 
 ### ✅ 已完成主要功能
-1. **网络框架基础**：Reactor/Proactor 模式，支持 epoll/kqueue/IOCP
-2. **异步 I/O**：TCP/UDP 异步操作，缓冲区管理
-3. **内存管理**：TCMalloc 集成，缓冲区池化系统
-4. **脚本系统**：Lua 引擎集成，热更新功能
-5. **测试覆盖**：基础功能测试套件
-6. **Windows IOCP 完整实现**：AcceptEx、ConnectEx、AsyncRead/Write、唤醒机制
-7. **UDP Proactor 完整实现**：WSARecvFrom/WSASendTo（Windows）+ Reactor适配（POSIX）
-8. **性能监控系统**：完整的性能指标收集和Prometheus导出
-9. **批处理优化**：任务批处理和Reactor批处理，自适应批处理大小调整
-10. **API统一化**：统一的异步Socket接口，支持取消令牌和超时控制
-11. **编译问题修复**：解决命名空间限定符缺失、方法名错误等编译问题
-12. **阻塞问题解决**：IoContext运行在后台线程，避免主线程阻塞
-13. **统一API示例程序**：完整的TCP/UDP异步操作演示
+1. **网络框架基础**：Reactor/Proactor模式，跨平台支持
+2. **异步I/O系统**：TCP/UDP异步操作，缓冲区管理
+3. **内存管理系统**：TCMalloc集成，缓冲区池化
+4. **脚本系统**：Lua引擎，热更新功能
+5. **配置系统**：JSON配置，验证器，热更新，命令行参数集成
+6. **命令行参数解析**：完整的命令行参数处理系统
+7. **RPC框架**：基于网络框架的RPC系统，服务注册，同步/异步调用
+8. **服务发现系统**：服务注册中心、健康检查、负载均衡、服务发现
+9. **性能监控**：指标收集，Prometheus导出
+10. **测试覆盖**：基础功能测试套件
+11. **构建系统**：Bazel构建，多平台支持
 
 ### 🎯 当前重点
-1. **安全功能**：TLS/DTLS集成，脚本沙箱
-2. **结构化日志**：字段化日志输出，Trace ID透传
-3. **配置系统**：JSON/YAML配置加载，热更新钩子
-4. **测试完善**：热更新集成测试，多平台测试覆盖
+1. **配置系统完善**：多格式支持，配置继承，加密存储
+2. **命令行参数扩展**：子命令支持，参数组，自动补全
+3. **网络框架优化**：写路径优化，Kqueue完善，错误映射改进
+4. **消息队列**：异步消息处理，消息持久化，事务支持
+5. **生产就绪**：监控告警，部署运维
 
 ### 🔮 长期规划
-1. **多语言脚本支持**：Python、JavaScript、C#
-2. **RPC 框架**：基于网络框架的 RPC 系统
-3. **生产就绪**：监控、配置、部署工具
-4. **性能基准**：跨平台性能对比和优化
+1. **消息队列**：异步消息处理，消息持久化，事务支持
+2. **服务网格**：服务发现，负载均衡，熔断降级
+3. **云原生**：Kubernetes集成，云服务适配
+4. **生态建设**：社区贡献，第三方集成
 
-> 注：IOCP核心功能、UDP Proactor、性能监控、批处理优化、API统一化、编译问题修复、阻塞问题解决均已完成，项目已具备生产环境的基础能力。当前重点转向安全功能、可观测性和配置系统完善。
+> 注：项目已具备生产环境的基础能力，核心网络框架、脚本系统、配置系统、命令行参数解析、RPC框架、服务发现系统、性能监控等主要功能均已完成。当前重点转向消息队列、可观测性和生产就绪功能的完善。
