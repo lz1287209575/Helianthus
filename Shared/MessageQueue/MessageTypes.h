@@ -467,6 +467,57 @@ using AcknowledgeHandler = std::function<void(MessageId MessageId, bool Success)
 using QueueEventHandler = std::function<void(
     const std::string& QueueName, const std::string& Event, const std::string& Details)>;
 
+// 集群/分片/副本 基础类型
+using ShardId = uint32_t;
+
+enum class ReplicaRole : uint8_t
+{
+    LEADER = 0,
+    FOLLOWER = 1,
+    CANDIDATE = 2,
+    UNKNOWN = 255
+};
+
+struct ClusterNode
+{
+    std::string NodeId;           // 唯一节点ID
+    std::string Host;             // 节点地址
+    uint16_t Port = 0;            // 服务端口
+    bool IsLocal = false;         // 是否为本地节点（单进程模拟时为true）
+};
+
+struct ReplicaInfo
+{
+    std::string NodeId;           // 副本所在节点
+    ReplicaRole Role = ReplicaRole::FOLLOWER;
+    bool Healthy = true;          // 健康状态（占位）
+};
+
+struct ShardInfo
+{
+    ShardId Id = 0;                               // 分片ID
+    std::vector<ReplicaInfo> Replicas;            // 副本列表（第一个可约定为Leader）
+};
+
+// 分片分配与集群配置
+struct ShardAssignment
+{
+    // 简化映射：队列名 -> 分片ID（后续可扩展为范围/一致性哈希）
+    std::unordered_map<std::string, ShardId> QueueToShard;
+};
+
+struct ClusterConfig
+{
+    std::vector<ClusterNode> Nodes;               // 节点列表
+    std::vector<ShardInfo> Shards;                // 分片与副本布局
+    ShardAssignment Assignment;                   // 分配表
+    uint32_t ReplicationFactor = 1;               // 副本因子（含Leader）
+};
+
+// HA回调
+using LeaderChangeHandler = std::function<void(ShardId Shard, const std::string& OldLeader, const std::string& NewLeader)>;
+using FailoverHandler = std::function<void(ShardId Shard, const std::string& FailedLeader, const std::string& TakeoverNode)>;
+
 // 队列监控指标
 struct QueueMetrics
 {

@@ -79,12 +79,12 @@ int main()
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "=== Helianthus DLQ监控测试 ===");
     
     // 创建消息队列实例
-    auto queue = std::make_unique<MessageQueue>();
+    auto Queue = std::make_unique<MessageQueue>();
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "创建消息队列实例");
     
     // 初始化消息队列
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "开始初始化消息队列...");
-    auto initResult = queue->Initialize();
+    auto initResult = Queue->Initialize();
     if (initResult != QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "消息队列初始化失败: {}", static_cast<int>(initResult));
@@ -92,11 +92,34 @@ int main()
     }
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "消息队列初始化成功");
 
+    // 配置集群分片/副本，便于演示健康波动与状态导出
+    {
+        ClusterConfig Cluster;
+        // 两个分片，每个分片两个副本（node-a / node-b）
+        ShardInfo Shard0; Shard0.Id = 0; Shard0.Replicas = { {"node-a", ReplicaRole::LEADER, true}, {"node-b", ReplicaRole::FOLLOWER, true} };
+        ShardInfo Shard1; Shard1.Id = 1; Shard1.Replicas = { {"node-b", ReplicaRole::LEADER, true}, {"node-a", ReplicaRole::FOLLOWER, true} };
+        Cluster.Shards = { Shard0, Shard1 };
+        Queue->SetClusterConfig(Cluster);
+        // 注册HA事件回调
+        Queue->SetLeaderChangeHandler([](ShardId Shard, const std::string& OldLeader, const std::string& NewLeader){
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+                  "Leader变更: shard={}, old={}, new={}", Shard, OldLeader, NewLeader);
+        });
+        Queue->SetFailoverHandler([](ShardId Shard, const std::string& FailedLeader, const std::string& TakeoverNode){
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                  "Failover发生: shard={}, failed_leader={}, takeover={} ", Shard, FailedLeader, TakeoverNode);
+        });
+    }
+
     // 配置指标输出间隔为2秒
-    queue->SetGlobalConfig("metrics.interval.ms", "2000");
+    Queue->SetGlobalConfig("metrics.interval.ms", "2000");
     // 配置窗口时长与时延样本容量
-    queue->SetGlobalConfig("metrics.window.ms", "60000");
-    queue->SetGlobalConfig("metrics.latency.capacity", "1024");
+    Queue->SetGlobalConfig("metrics.window.ms", "60000");
+    Queue->SetGlobalConfig("metrics.latency.capacity", "1024");
+    // 提高心跳波动概率，便于演示主从切换
+    Queue->SetGlobalConfig("cluster.heartbeat.flap.prob", "0.3");
+    // 复制占位配置：至少1个Follower ACK
+    Queue->SetGlobalConfig("replication.min.acks", "1");
     
     // 创建队列配置
     QueueConfig config;
@@ -118,7 +141,7 @@ int main()
     
     // 创建队列
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "创建队列: {}", config.Name);
-    auto createResult = queue->CreateQueue(config);
+    auto createResult = Queue->CreateQueue(config);
     if (createResult != QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "创建队列失败: {}", static_cast<int>(createResult));
@@ -129,7 +152,7 @@ int main()
     // 获取一次队列指标进行验证
     {
         QueueMetrics m;
-        if (queue->GetQueueMetrics(config.Name, m) == QueueResult::SUCCESS)
+        if (Queue->GetQueueMetrics(config.Name, m) == QueueResult::SUCCESS)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
                   "初始指标: queue={}, pending={}, total={}, processed={}, dlq={}, retried={}, enq_rate={:.2f}/s, deq_rate={:.2f}/s, p50={:.2f}ms, p95={:.2f}ms",
@@ -140,8 +163,8 @@ int main()
     }
     
     // 设置DLQ告警处理器
-    queue->SetDeadLetterAlertHandler(OnDeadLetterAlert);
-    queue->SetDeadLetterStatsHandler(OnDeadLetterStats);
+    Queue->SetDeadLetterAlertHandler(OnDeadLetterAlert);
+    Queue->SetDeadLetterStatsHandler(OnDeadLetterStats);
     
     // 设置DLQ告警配置
     DeadLetterAlertConfig alertConfig;
@@ -152,7 +175,7 @@ int main()
     alertConfig.EnableDeadLetterCountAlert = true;
     alertConfig.EnableDeadLetterTrendAlert = true;
     
-    auto alertResult = queue->SetDeadLetterAlertConfig(config.Name, alertConfig);
+    auto alertResult = Queue->SetDeadLetterAlertConfig(config.Name, alertConfig);
     if (alertResult != QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "设置DLQ告警配置失败: {}", static_cast<int>(alertResult));
@@ -169,7 +192,7 @@ int main()
         message->Header.Priority = MessagePriority::NORMAL;
         message->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
         
-        auto sendResult = queue->SendMessage(config.Name, message);
+        auto sendResult = Queue->SendMessage(config.Name, message);
         if (sendResult == QueueResult::SUCCESS)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "发送正常消息成功 id={}", message->Header.Id);
@@ -182,7 +205,7 @@ int main()
     
     // 检查DLQ统计
     DeadLetterQueueStats stats;
-    auto statsResult = queue->GetDeadLetterQueueStats(config.Name, stats);
+    auto statsResult = Queue->GetDeadLetterQueueStats(config.Name, stats);
     if (statsResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
@@ -202,7 +225,7 @@ int main()
         expiredMessage->Header.ExpireTime = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count() + 1000;  // 1秒后过期
         
-        auto sendResult = queue->SendMessage(config.Name, expiredMessage);
+        auto sendResult = Queue->SendMessage(config.Name, expiredMessage);
         if (sendResult == QueueResult::SUCCESS)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "发送过期消息成功 id={}", expiredMessage->Header.Id);
@@ -222,7 +245,7 @@ int main()
     for (int i = 0; i < 10; ++i)
     {
         MessagePtr receivedMessage;
-        auto receiveResult = queue->ReceiveMessage(config.Name, receivedMessage, 100);
+        auto receiveResult = Queue->ReceiveMessage(config.Name, receivedMessage, 100);
         if (receiveResult == QueueResult::TIMEOUT)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "接收超时，可能消息已过期");
@@ -234,7 +257,7 @@ int main()
     }
     
     // 检查DLQ统计
-    statsResult = queue->GetDeadLetterQueueStats(config.Name, stats);
+    statsResult = Queue->GetDeadLetterQueueStats(config.Name, stats);
     if (statsResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
@@ -248,7 +271,7 @@ int main()
     for (int i = 0; i < 10; ++i)
     {
         MessagePtr receivedMessage;
-        auto receiveResult = queue->ReceiveMessage(config.Name, receivedMessage, 100);
+        auto receiveResult = Queue->ReceiveMessage(config.Name, receivedMessage, 100);
         if (receiveResult == QueueResult::TIMEOUT)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "接收超时");
@@ -260,7 +283,7 @@ int main()
     }
     
     // 再次检查DLQ统计
-    statsResult = queue->GetDeadLetterQueueStats(config.Name, stats);
+    statsResult = Queue->GetDeadLetterQueueStats(config.Name, stats);
     if (statsResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
@@ -273,7 +296,7 @@ int main()
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "=== 测试3：检查活跃告警 ===");
     
     std::vector<DeadLetterAlert> alerts;
-    auto alertsResult = queue->GetActiveDeadLetterAlerts(config.Name, alerts);
+    auto alertsResult = Queue->GetActiveDeadLetterAlerts(config.Name, alerts);
     if (alertsResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "活跃告警数量: {}", alerts.size());
@@ -289,7 +312,7 @@ int main()
     // 测试4：清除告警
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "=== 测试4：清除告警 ===");
     
-    auto clearResult = queue->ClearAllDeadLetterAlerts(config.Name);
+    auto clearResult = Queue->ClearAllDeadLetterAlerts(config.Name);
     if (clearResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "所有告警已清除");
@@ -297,7 +320,7 @@ int main()
     
     // 再次检查告警
     alerts.clear();
-    alertsResult = queue->GetActiveDeadLetterAlerts(config.Name, alerts);
+    alertsResult = Queue->GetActiveDeadLetterAlerts(config.Name, alerts);
     if (alertsResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "清除后活跃告警数量: {}", alerts.size());
@@ -307,7 +330,7 @@ int main()
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "=== 测试5：获取所有DLQ统计 ===");
     
     std::vector<DeadLetterQueueStats> allStats;
-    auto allStatsResult = queue->GetAllDeadLetterQueueStats(allStats);
+    auto allStatsResult = Queue->GetAllDeadLetterQueueStats(allStats);
     if (allStatsResult == QueueResult::SUCCESS)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "所有DLQ统计数量: {}", allStats.size());
@@ -320,12 +343,33 @@ int main()
         }
     }
     
+    // 打印一次分片状态
+    {
+        std::vector<ShardInfo> Shards;
+        if (Queue->GetClusterShardStatuses(Shards) == QueueResult::SUCCESS)
+        {
+            for (const auto& Shard : Shards)
+            {
+                std::string LeaderNode;
+                int HealthyFollowers = 0;
+                for (const auto& Replica : Shard.Replicas)
+                {
+                    if (Replica.Role == ReplicaRole::LEADER) LeaderNode = Replica.NodeId;
+                    else if (Replica.Healthy) HealthyFollowers++;
+                }
+                H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+                      "分片状态: shard={}, leader={}, healthy_followers={}",
+                      Shard.Id, LeaderNode, HealthyFollowers);
+            }
+        }
+    }
+
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "=== DLQ监控测试完成 ===");
 
     // 获取最终一次队列指标
     {
         QueueMetrics m;
-        if (queue->GetQueueMetrics(config.Name, m) == QueueResult::SUCCESS)
+        if (Queue->GetQueueMetrics(config.Name, m) == QueueResult::SUCCESS)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
                   "最终指标: queue={}, pending={}, total={}, processed={}, dlq={}, retried={}, enq_rate={:.2f}/s, deq_rate={:.2f}/s, p50={:.2f}ms, p95={:.2f}ms",

@@ -9,6 +9,7 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <map>
 
 #include "IMessageQueue.h"
 #include "MessagePersistence.h"
@@ -202,7 +203,75 @@ public:
     virtual QueueResult GetQueueMetrics(const std::string& QueueName, QueueMetrics& OutMetrics) const override;
     virtual QueueResult GetAllQueueMetrics(std::vector<QueueMetrics>& OutMetrics) const override;
 
+    // 集群/分片/副本接口
+    QueueResult SetClusterConfig(const ClusterConfig& Config) override;
+    QueueResult GetClusterConfig(ClusterConfig& OutConfig) const override;
+    QueueResult GetShardForKey(const std::string& Key, ShardId& OutShardId, std::string& OutNodeId) const override;
+    QueueResult GetShardReplicas(ShardId Shard, std::vector<ReplicaInfo>& OutReplicas) const override;
+    QueueResult SetNodeHealth(const std::string& NodeId, bool Healthy) override;
+    // 分片状态查询（导出每分片详细状态）
+    QueueResult GetClusterShardStatuses(std::vector<ShardInfo>& OutShards) const override;
+
+    // 基础HA：主选举/降级/查询/回调
+    QueueResult PromoteToLeader(ShardId Shard, const std::string& NodeId) override;
+    QueueResult DemoteToFollower(ShardId Shard, const std::string& NodeId) override;
+    QueueResult GetCurrentLeader(ShardId Shard, std::string& OutNodeId) const override;
+    void SetLeaderChangeHandler(LeaderChangeHandler Handler) override;
+    void SetFailoverHandler(FailoverHandler Handler) override;
+
 private:
+    // 一致性哈希分片路由
+    class ConsistentHashRing
+    {
+    public:
+        void Clear() { Ring.clear(); }
+        void AddNode(const std::string& NodeId, uint32_t VirtualNodes)
+        {
+            for (uint32_t i = 0; i < VirtualNodes; ++i)
+            {
+                std::string VirtualNodeKey = NodeId + "#" + std::to_string(i);
+                uint32_t Hash = static_cast<uint32_t>(std::hash<std::string>{}(VirtualNodeKey));
+                Ring.emplace(Hash, NodeId);
+            }
+        }
+        std::string GetNode(const std::string& Key) const
+        {
+            if (Ring.empty()) return {};
+            uint32_t Hash = static_cast<uint32_t>(std::hash<std::string>{}(Key));
+            auto It = Ring.lower_bound(Hash);
+            if (It == Ring.end()) return Ring.begin()->second;
+            return It->second;
+        }
+        size_t Size() const { return Ring.size(); }
+    private:
+        std::map<uint32_t, std::string> Ring;
+    };
+
+    void RebuildShardRing();
+
+    ConsistentHashRing ShardRing;
+    uint32_t ShardCount = 1;
+    uint32_t ShardVirtualNodes = 128;
+
+    // 集群配置与元数据
+    ClusterConfig Cluster;
+    mutable std::shared_mutex ClusterMutex;
+
+    // WAL 占位：每分片一份日志与Follower位点
+    struct WalEntry
+    {
+        uint64_t Index = 0;
+        MessageId Id = 0;
+        std::string Queue;
+        MessageTimestamp Timestamp = 0;
+    };
+    struct ShardWal
+    {
+        std::vector<WalEntry> Entries;
+        std::unordered_map<std::string, uint64_t> FollowerAppliedIndex; // NodeId -> last applied
+    };
+    std::vector<ShardWal> WalPerShard;
+
     // 内部数据结构
     struct QueueData
     {
@@ -310,7 +379,18 @@ private:
     std::condition_variable MetricsMonitorCondition;
     mutable std::mutex MetricsMonitorMutex;
     uint32_t MetricsIntervalMs = 5000; // 默认5秒
-    uint32_t MetricsWindowMs = 60000; // 60秒窗口（可配置）
+
+    // 轻量心跳占位线程
+    std::thread HeartbeatThread;
+    std::atomic<bool> StopHeartbeat{false};
+    std::condition_variable HeartbeatCondition;
+    mutable std::mutex HeartbeatMutex;
+    uint32_t HeartbeatIntervalMs = 3000; // 默认3秒
+    double HeartbeatFlapProbability = 0.30; // 提高至30%几率模拟健康波动（演示）
+
+    // HA回调
+    LeaderChangeHandler LeaderChangedCb;
+    FailoverHandler FailoverCb;
 
     // 全局配置
     std::unordered_map<std::string, std::string> GlobalConfig;
@@ -352,6 +432,7 @@ private:
     void UpdateGlobalStats(bool MessageProcessed, bool MessageFailed = false);
 
     // 指标窗口统计辅助
+    uint32_t MetricsWindowMs = 60000; // 60秒窗口（可配置）
     void RecordEnqueueEvent(QueueData* Queue);
     void RecordDequeueEvent(QueueData* Queue);
     void RecordLatencySample(QueueData* Queue, double Ms);
@@ -374,6 +455,16 @@ private:
 
     // 指标监控内部方法
     void ProcessMetricsMonitoring();
+
+    // 心跳占位内部方法
+    void ProcessHeartbeat();
+    // 模拟副本复制（占位）：Leader 将消息复制到 Followers，返回获得的ACK数量
+    uint32_t SimulateReplication(uint32_t ShardIndex, MessageId Id);
+    // 最小复制ACK数（占位，可通过全局配置调整）
+    uint32_t MinReplicationAcks = 0;
+    // 复制统计（占位）
+    std::atomic<uint64_t> ReplicationEvents{0};
+    std::atomic<uint64_t> ReplicationAcksTotal{0};
 
     bool EvaluateMessageFilter(const std::string& Filter, MessagePtr Message);
     QueueResult RouteMessage(const std::string& SourceQueue, MessagePtr Message);

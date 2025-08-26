@@ -192,6 +192,24 @@ public:
     virtual std::string GetQueueInfo() const = 0;
     virtual std::vector<std::string> GetQueueDiagnostics(const std::string& QueueName) const = 0;
     virtual QueueResult ValidateQueue(const std::string& QueueName) = 0;
+
+    // 集群/分片/副本接口
+    virtual QueueResult SetClusterConfig(const ClusterConfig& Config) = 0;
+    virtual QueueResult GetClusterConfig(ClusterConfig& OutConfig) const = 0;
+    virtual QueueResult GetShardForKey(const std::string& Key, ShardId& OutShardId, std::string& OutNodeId) const = 0;
+    virtual QueueResult GetShardReplicas(ShardId Shard, std::vector<ReplicaInfo>& OutReplicas) const = 0;
+    virtual QueueResult SetNodeHealth(const std::string& NodeId, bool Healthy) = 0;
+    // 导出每分片详细状态（shard_id、leader、followers健康）
+    virtual QueueResult GetClusterShardStatuses(std::vector<ShardInfo>& OutShards) const = 0;
+
+    // 基础HA：主选举/降级/查询
+    virtual QueueResult PromoteToLeader(ShardId Shard, const std::string& NodeId) = 0;
+    virtual QueueResult DemoteToFollower(ShardId Shard, const std::string& NodeId) = 0;
+    virtual QueueResult GetCurrentLeader(ShardId Shard, std::string& OutNodeId) const = 0;
+
+    // 事件回调
+    virtual void SetLeaderChangeHandler(LeaderChangeHandler Handler) = 0;
+    virtual void SetFailoverHandler(FailoverHandler Handler) = 0;
 };
 
 /**

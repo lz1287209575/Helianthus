@@ -133,6 +133,21 @@ QueueResult MessageQueue::Initialize()
     ShuttingDown = false;
     StopConsumerThreads = false;
 
+    // 从配置读取分片参数（可选）
+    {
+        std::shared_lock<std::shared_mutex> Lock(ConfigMutex);
+        auto ItShards = GlobalConfig.find("cluster.shards");
+        if (ItShards != GlobalConfig.end())
+        {
+            try { ShardCount = static_cast<uint32_t>(std::stoul(ItShards->second)); } catch (...) {}
+        }
+        auto ItVnodes = GlobalConfig.find("cluster.shard.vnodes");
+        if (ItVnodes != GlobalConfig.end())
+        {
+            try { ShardVirtualNodes = static_cast<uint32_t>(std::stoul(ItVnodes->second)); } catch (...) {}
+        }
+    }
+
     // 初始化持久化管理器
     PersistenceMgr = std::make_unique<PersistenceManager>();
     PersistenceSettings.Type = PersistenceType::FILE_BASED;
@@ -145,6 +160,30 @@ QueueResult MessageQueue::Initialize()
         // 继续初始化，但不使用持久化功能
     }
 
+    // 构建一致性哈希环（单进程：使用本地节点ID）
+    RebuildShardRing();
+
+    // 初始化 WAL 每分片容器
+    {
+        std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
+        WalPerShard.clear();
+        WalPerShard.resize(std::max(ShardCount, 1u));
+        for (uint32_t I = 0; I < WalPerShard.size(); ++I)
+        {
+            // 初始化Follower位点
+            if (I < Cluster.Shards.size())
+            {
+                for (const auto& R : Cluster.Shards[I].Replicas)
+                {
+                    if (R.Role == ReplicaRole::FOLLOWER)
+                    {
+                        WalPerShard[I].FollowerAppliedIndex[R.NodeId] = 0;
+                    }
+                }
+            }
+        }
+    }
+
     // 启动调度器线程
     SchedulerThread = std::thread(&MessageQueue::ProcessScheduledMessages, this);
 
@@ -155,6 +194,10 @@ QueueResult MessageQueue::Initialize()
     // 启动指标监控线程
     StopMetricsMonitor = false;
     MetricsMonitorThread = std::thread(&MessageQueue::ProcessMetricsMonitoring, this);
+
+    // 启动心跳线程
+    StopHeartbeat = false;
+    HeartbeatThread = std::thread(&MessageQueue::ProcessHeartbeat, this);
 
     // 初始化全局统计
     {
@@ -203,6 +246,18 @@ void MessageQueue::Shutdown()
     if (MetricsMonitorThread.joinable())
     {
         MetricsMonitorThread.join();
+    }
+
+    // 停止心跳线程
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "停止心跳线程");
+    {
+        std::lock_guard<std::mutex> Lock(HeartbeatMutex);
+        StopHeartbeat = true;
+    }
+    HeartbeatCondition.notify_all();
+    if (HeartbeatThread.joinable())
+    {
+        HeartbeatThread.join();
     }
 
     // 停止调度器线程
@@ -468,6 +523,78 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
 
     // 如果启用了消息路由，尝试路由消息
     auto RouteResult = RouteMessage(QueueName, Message);
+
+    // 模拟复制：根据路由信息尝试复制到副本（占位）
+    {
+        int ShardIndex = -1;
+        auto ItShard = Message->Header.Properties.find("routed_shard");
+        if (ItShard != Message->Header.Properties.end())
+        {
+            try { ShardIndex = std::stoi(ItShard->second); } catch (...) { ShardIndex = -1; }
+        }
+        if (ShardIndex >= 0 && MinReplicationAcks > 0)
+        {
+            // 追加 WAL 占位
+            {
+                std::unique_lock<std::shared_mutex> Lk(ClusterMutex);
+                if (static_cast<size_t>(ShardIndex) < WalPerShard.size())
+                {
+                    auto& Wal = WalPerShard[static_cast<size_t>(ShardIndex)];
+                    WalEntry E;
+                    E.Index = Wal.Entries.size() + 1;
+                    E.Id = Message->Header.Id;
+                    E.Queue = QueueName;
+                    E.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    Wal.Entries.push_back(std::move(E));
+                }
+            }
+
+            uint32_t Acks = SimulateReplication(static_cast<uint32_t>(ShardIndex), Message->Header.Id);
+            ReplicationEvents.fetch_add(1, std::memory_order_relaxed);
+            ReplicationAcksTotal.fetch_add(Acks, std::memory_order_relaxed);
+            Helianthus::Common::LogFields F;
+            F.AddField("queue", QueueName);
+            F.AddField("message_id", static_cast<uint64_t>(Message->Header.Id));
+            F.AddField("shard", ShardIndex);
+            F.AddField("replication_min_acks", MinReplicationAcks);
+            F.AddField("replication_acks", Acks);
+            // 滞后度占位（健康Follower数 - ACK数）
+            uint32_t HealthyFollowers = 0;
+            {
+                std::shared_lock<std::shared_mutex> Lk(ClusterMutex);
+                if (static_cast<size_t>(ShardIndex) < Cluster.Shards.size())
+                {
+                    for (const auto& R : Cluster.Shards[static_cast<size_t>(ShardIndex)].Replicas)
+                    {
+                        if (R.Role == ReplicaRole::FOLLOWER && R.Healthy) HealthyFollowers++;
+                    }
+                }
+            }
+            const int32_t Lag = static_cast<int32_t>(HealthyFollowers) - static_cast<int32_t>(Acks);
+            F.AddField("replication_lag", Lag);
+            // 导出Follower已应用位点占位（第一位Follower）
+            {
+                std::shared_lock<std::shared_mutex> Lk(ClusterMutex);
+                if (static_cast<size_t>(ShardIndex) < WalPerShard.size())
+                {
+                    uint64_t AnyFollowerIndex = 0;
+                    for (const auto& P : WalPerShard[static_cast<size_t>(ShardIndex)].FollowerAppliedIndex)
+                    {
+                        AnyFollowerIndex = std::max(AnyFollowerIndex, P.second);
+                    }
+                    F.AddField("follower_applied_index", static_cast<uint64_t>(AnyFollowerIndex));
+                    F.AddField("leader_log_len", static_cast<uint64_t>(WalPerShard[static_cast<size_t>(ShardIndex)].Entries.size()));
+                }
+            }
+            Helianthus::Common::StructuredLogger::Log(
+                Helianthus::Common::StructuredLogLevel::INFO,
+                "MQ",
+                "Replication simulated",
+                F,
+                __FILE__, __LINE__, SPDLOG_FUNCTION);
+        }
+    }
 
     Lock.unlock();
 
@@ -1618,6 +1745,44 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
             return QueueResult::INVALID_PARAMETER;
         }
     }
+    else if (Key == "cluster.shards")
+    {
+        try
+        {
+            ShardCount = static_cast<uint32_t>(std::stoul(Value));
+            RebuildShardRing();
+        }
+        catch (...) { return QueueResult::INVALID_PARAMETER; }
+    }
+    else if (Key == "cluster.shard.vnodes")
+    {
+        try
+        {
+            ShardVirtualNodes = static_cast<uint32_t>(std::stoul(Value));
+            RebuildShardRing();
+        }
+        catch (...) { return QueueResult::INVALID_PARAMETER; }
+    }
+    else if (Key == "cluster.heartbeat.flap.prob")
+    {
+        try
+        {
+            double Prob = std::stod(Value);
+            if (Prob < 0.0) Prob = 0.0; if (Prob > 1.0) Prob = 1.0;
+            std::lock_guard<std::mutex> Lk(HeartbeatMutex);
+            HeartbeatFlapProbability = Prob;
+        }
+        catch (...) { return QueueResult::INVALID_PARAMETER; }
+    }
+    else if (Key == "replication.min.acks")
+    {
+        try
+        {
+            uint32_t Acks = static_cast<uint32_t>(std::stoul(Value));
+            MinReplicationAcks = Acks;
+        }
+        catch (...) { return QueueResult::INVALID_PARAMETER; }
+    }
 
     return QueueResult::SUCCESS;
 }
@@ -1647,6 +1812,101 @@ QueueResult MessageQueue::ValidateQueue(const std::string& QueueName)
 
 QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePtr Message)
 {
+    if (!Message)
+    {
+        return QueueResult::INVALID_PARAMETER;
+    }
+
+    // 选择路由键：优先使用消息属性 partition_key，否则使用队列名
+    std::string RouteKey = SourceQueue;
+    auto ItKey = Message->Header.Properties.find("partition_key");
+    if (ItKey != Message->Header.Properties.end() && !ItKey->second.empty())
+    {
+        RouteKey = ItKey->second;
+    }
+
+    // 通过一致性哈希获得目标节点（单机：shard-i）
+    const std::string NodeId = ShardRing.GetNode(RouteKey);
+
+    // 尝试解析分片索引
+    int ShardIndex = -1;
+    if (!NodeId.empty())
+    {
+        auto Pos = NodeId.rfind('-');
+        if (Pos != std::string::npos)
+        {
+            try { ShardIndex = std::stoi(NodeId.substr(Pos + 1)); } catch (...) { ShardIndex = -1; }
+        }
+    }
+
+    // 基于分片选择副本（优先健康Leader，其次任一健康Follower）
+    std::string SelectedNodeId = NodeId;
+    std::string SelectedRole = "UNKNOWN";
+    bool SelectedHealthy = true;
+    if (ShardIndex >= 0)
+    {
+        std::shared_lock<std::shared_mutex> ClusterLock(ClusterMutex);
+        if (static_cast<size_t>(ShardIndex) < Cluster.Shards.size())
+        {
+            const auto& Replicas = Cluster.Shards[static_cast<size_t>(ShardIndex)].Replicas;
+            // 先找健康Leader
+            for (const auto& R : Replicas)
+            {
+                if (R.Role == ReplicaRole::LEADER && R.Healthy)
+                {
+                    SelectedNodeId = R.NodeId;
+                    SelectedRole = "LEADER";
+                    SelectedHealthy = true;
+                    break;
+                }
+            }
+            // 如未选中Leader，再找健康Follower
+            if (SelectedRole != "LEADER")
+            {
+                for (const auto& R : Replicas)
+                {
+                    if (R.Healthy)
+                    {
+                        SelectedNodeId = R.NodeId;
+                        SelectedRole = (R.Role == ReplicaRole::FOLLOWER ? "FOLLOWER" : "UNKNOWN");
+                        SelectedHealthy = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 注入路由信息到属性（便于后续副本/HA接入）
+    Message->Header.Properties["routed_node"] = SelectedNodeId;
+    if (ShardIndex >= 0)
+    {
+        Message->Header.Properties["routed_shard"] = std::to_string(ShardIndex);
+    }
+    if (!SelectedRole.empty())
+    {
+        Message->Header.Properties["routed_role"] = SelectedRole;
+    }
+    Message->Header.Properties["routed_healthy"] = SelectedHealthy ? "true" : "false";
+
+    // 结构化日志记录
+    {
+        Helianthus::Common::LogFields F;
+        F.AddField("queue", SourceQueue);
+        F.AddField("message_id", static_cast<uint64_t>(Message->Header.Id));
+        F.AddField("route_key", RouteKey);
+        F.AddField("node", SelectedNodeId);
+        F.AddField("shard", ShardIndex);
+        F.AddField("role", SelectedRole);
+        F.AddField("healthy", SelectedHealthy);
+        Helianthus::Common::StructuredLogger::Log(
+            Helianthus::Common::StructuredLogLevel::INFO,
+            "MQ",
+            "Message routed",
+            F,
+            __FILE__, __LINE__, SPDLOG_FUNCTION);
+    }
+
     return QueueResult::SUCCESS;
 }
 const MessageQueue::TopicData* MessageQueue::GetTopicData(const std::string& TopicName) const
@@ -2170,8 +2430,297 @@ void MessageQueue::ProcessMetricsMonitoring()
                     __FILE__, __LINE__, SPDLOG_FUNCTION);
             }
         }
+
+        // 分片/副本状态指标（聚合）
+        uint32_t Shards = 0;
+        uint32_t Leaders = 0;
+        uint32_t HealthyReplicas = 0;
+        {
+            std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+            Shards = static_cast<uint32_t>(Cluster.Shards.size());
+            for (const auto& S : Cluster.Shards)
+            {
+                for (const auto& R : S.Replicas)
+                {
+                    if (R.Role == ReplicaRole::LEADER) Leaders++;
+                    if (R.Healthy) HealthyReplicas++;
+                }
+            }
+        }
+        {
+            Helianthus::Common::LogFields F;
+            F.AddField("shards", Shards);
+            F.AddField("leaders", Leaders);
+            F.AddField("healthy_replicas", HealthyReplicas);
+            Helianthus::Common::StructuredLogger::Log(
+                Helianthus::Common::StructuredLogLevel::INFO,
+                "MQ",
+                "Cluster metrics",
+                F,
+                __FILE__, __LINE__, SPDLOG_FUNCTION);
+        }
     }
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "指标监控线程停止");
+}
+
+void MessageQueue::RebuildShardRing()
+{
+    ShardRing.Clear();
+    // 单机模拟：使用本地"节点"为 shard-i
+    for (uint32_t I = 0; I < std::max(ShardCount, 1u); ++I)
+    {
+        const std::string NodeId = std::string("shard-") + std::to_string(I);
+        ShardRing.AddNode(NodeId, std::max(ShardVirtualNodes, 1u));
+    }
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "一致性哈希环构建完成: shards={} vnodes/node={} total_nodes={}",
+          ShardCount, ShardVirtualNodes, ShardRing.Size());
+}
+
+// 集群/分片/副本接口实现
+QueueResult MessageQueue::SetClusterConfig(const ClusterConfig& Config)
+{
+    {
+        std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
+        Cluster = Config;
+        // 同步 ShardCount 与 HashRing（按 Shards 大小）
+        ShardCount = static_cast<uint32_t>(Cluster.Shards.size() > 0 ? Cluster.Shards.size() : ShardCount);
+    }
+    RebuildShardRing();
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::GetClusterConfig(ClusterConfig& OutConfig) const
+{
+    std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+    OutConfig = Cluster;
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::GetShardForKey(const std::string& Key, ShardId& OutShardId, std::string& OutNodeId) const
+{
+    const std::string NodeId = ShardRing.GetNode(Key);
+    if (NodeId.empty()) return QueueResult::INTERNAL_ERROR;
+    // 解析 shard index
+    int ShardIndex = -1;
+    auto Pos = NodeId.rfind('-');
+    if (Pos != std::string::npos)
+    {
+        try { ShardIndex = std::stoi(NodeId.substr(Pos + 1)); } catch (...) { ShardIndex = -1; }
+    }
+    if (ShardIndex < 0) return QueueResult::INTERNAL_ERROR;
+    OutShardId = static_cast<ShardId>(ShardIndex);
+    OutNodeId = NodeId;
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::GetShardReplicas(ShardId Shard, std::vector<ReplicaInfo>& OutReplicas) const
+{
+    std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    OutReplicas = Cluster.Shards[Shard].Replicas;
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::SetNodeHealth(const std::string& NodeId, bool Healthy)
+{
+    std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
+    for (auto& Shard : Cluster.Shards)
+    {
+        for (auto& Rep : Shard.Replicas)
+        {
+            if (Rep.NodeId == NodeId)
+            {
+                Rep.Healthy = Healthy;
+            }
+        }
+    }
+    return QueueResult::SUCCESS;
+}
+
+void MessageQueue::ProcessHeartbeat()
+{
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "启动心跳线程");
+    for (;;)
+    {
+        std::unique_lock<std::mutex> Lk(HeartbeatMutex);
+        if (HeartbeatCondition.wait_for(Lk, std::chrono::milliseconds(HeartbeatIntervalMs), [this]{ return StopHeartbeat.load(); }))
+        {
+            break;
+        }
+        Lk.unlock();
+
+        // 扫描并随机模拟健康波动
+        {
+            std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
+            if (!Cluster.Shards.empty())
+            {
+                // 简单伪随机：基于时间种子与自增扰动，避免全局rand()
+                const auto NowNs = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+                uint64_t Seed = static_cast<uint64_t>(NowNs);
+                auto NextBool = [&Seed]() {
+                    // xorshift64*
+                    Seed ^= Seed >> 12; Seed ^= Seed << 25; Seed ^= Seed >> 27; 
+                    uint64_t R = Seed * 2685821657736338717ULL; 
+                    return (R & 0xFFFFFFFFULL);
+                };
+                for (auto& Shard : Cluster.Shards)
+                {
+                    // 记录当前Leader是否健康
+                    std::string CurrentLeader;
+                    bool LeaderHealthy = false;
+                    for (auto& Replica : Shard.Replicas)
+                    {
+                        // 以 HeartbeatFlapProbability 概率翻转健康状态
+                        uint32_t RandomValue = static_cast<uint32_t>(NextBool());
+                        // 将0..UINT32映射到[0,1)
+                        const double Uniform = static_cast<double>(RandomValue) / static_cast<double>(0xFFFFFFFFu);
+                        if (Uniform < HeartbeatFlapProbability)
+                        {
+                            Replica.Healthy = !Replica.Healthy;
+                        }
+                        if (Replica.Role == ReplicaRole::LEADER) { CurrentLeader = Replica.NodeId; LeaderHealthy = Replica.Healthy; }
+                    }
+
+                    // 简单主选举：Leader不健康则选择第一个健康Follower接管
+                    if (!LeaderHealthy)
+                    {
+                        std::string TakeoverNode;
+                        for (auto& Replica : Shard.Replicas)
+                        {
+                            if (Replica.NodeId != CurrentLeader && Replica.Healthy)
+                            {
+                                TakeoverNode = Replica.NodeId;
+                                break;
+                            }
+                        }
+                        if (!TakeoverNode.empty())
+                        {
+                            // 执行切换
+                            for (auto& Replica : Shard.Replicas)
+                            {
+                                if (Replica.NodeId == CurrentLeader) Replica.Role = ReplicaRole::FOLLOWER;
+                                if (Replica.NodeId == TakeoverNode) Replica.Role = ReplicaRole::LEADER;
+                            }
+                            // 回调（在持锁内先收集参数，出锁后触发）
+                            std::string OldLeader = CurrentLeader;
+                            std::string NewLeader = TakeoverNode;
+                            ShardId ShardIdValue = Shard.Id;
+                            // 出锁后回调
+                            Lock.unlock();
+                            if (FailoverCb) FailoverCb(ShardIdValue, OldLeader, NewLeader);
+                            if (LeaderChangedCb) LeaderChangedCb(ShardIdValue, OldLeader, NewLeader);
+                            // 重新加锁以继续循环
+                            Lock.lock();
+                        }
+                    }
+                }
+            }
+        }
+
+        // 输出心跳日志（演示用）
+        std::vector<std::pair<std::string, bool>> NodeHealthList;
+        {
+            std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+            for (const auto& Shard : Cluster.Shards)
+            {
+                for (const auto& Replica : Shard.Replicas)
+                {
+                    NodeHealthList.emplace_back(Replica.NodeId, Replica.Healthy);
+                }
+            }
+        }
+        if (!NodeHealthList.empty())
+        {
+            Helianthus::Common::LogFields F;
+            F.AddField("nodes", static_cast<uint64_t>(NodeHealthList.size()));
+            Helianthus::Common::StructuredLogger::Log(
+                Helianthus::Common::StructuredLogLevel::INFO,
+                "MQ",
+                "Heartbeat tick",
+                F,
+                __FILE__, __LINE__, SPDLOG_FUNCTION);
+        }
+    }
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "心跳线程停止");
+}
+
+QueueResult MessageQueue::GetClusterShardStatuses(std::vector<ShardInfo>& OutShards) const
+{
+    std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+    OutShards = Cluster.Shards;
+    return QueueResult::SUCCESS;
+}
+
+uint32_t MessageQueue::SimulateReplication(uint32_t ShardIndex, MessageId Id)
+{
+    std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+    if (ShardIndex >= Cluster.Shards.size()) return 0;
+    const auto& Shard = Cluster.Shards[ShardIndex];
+    // 简化：对所有健康Follower计为ACK，最多不超过 MinReplicationAcks
+    uint32_t Acked = 0;
+    for (const auto& Replica : Shard.Replicas)
+    {
+        if (Replica.Role == ReplicaRole::FOLLOWER && Replica.Healthy)
+        {
+            Acked++;
+            if (Acked >= MinReplicationAcks) break;
+        }
+    }
+    return Acked;
+}
+
+QueueResult MessageQueue::PromoteToLeader(ShardId Shard, const std::string& NodeId)
+{
+    std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
+    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    auto& Replicas = Cluster.Shards[Shard].Replicas;
+    std::string OldLeader;
+    for (auto& R : Replicas) {
+        if (R.Role == ReplicaRole::LEADER) { OldLeader = R.NodeId; R.Role = ReplicaRole::FOLLOWER; }
+    }
+    bool Found = false;
+    for (auto& R : Replicas) {
+        if (R.NodeId == NodeId) { R.Role = ReplicaRole::LEADER; Found = true; break; }
+    }
+    if (!Found) return QueueResult::QUEUE_NOT_FOUND;
+    Lock.unlock();
+    if (LeaderChangedCb) LeaderChangedCb(Shard, OldLeader, NodeId);
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::DemoteToFollower(ShardId Shard, const std::string& NodeId)
+{
+    std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
+    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    auto& Replicas = Cluster.Shards[Shard].Replicas;
+    bool Found = false;
+    for (auto& R : Replicas) {
+        if (R.NodeId == NodeId) { R.Role = ReplicaRole::FOLLOWER; Found = true; break; }
+    }
+    return Found ? QueueResult::SUCCESS : QueueResult::QUEUE_NOT_FOUND;
+}
+
+QueueResult MessageQueue::GetCurrentLeader(ShardId Shard, std::string& OutNodeId) const
+{
+    std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
+    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    for (const auto& R : Cluster.Shards[Shard].Replicas) {
+        if (R.Role == ReplicaRole::LEADER) { OutNodeId = R.NodeId; return QueueResult::SUCCESS; }
+    }
+    OutNodeId.clear();
+    return QueueResult::QUEUE_NOT_FOUND;
+}
+
+void MessageQueue::SetLeaderChangeHandler(LeaderChangeHandler Handler)
+{
+    std::lock_guard<std::mutex> Lk(HandlersMutex);
+    LeaderChangedCb = Handler;
+}
+
+void MessageQueue::SetFailoverHandler(FailoverHandler Handler)
+{
+    std::lock_guard<std::mutex> Lk(HandlersMutex);
+    FailoverCb = Handler;
 }
 
 }  // namespace Helianthus::MessageQueue

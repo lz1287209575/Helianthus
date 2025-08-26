@@ -7,6 +7,7 @@
 
 #include "Shared/MessageQueue/IMessageQueue.h"
 #include "Shared/MessageQueue/MessageTypes.h"
+#include "Shared/MessageQueue/MessageQueue.h"
 #include "Shared/Common/StructuredLogger.h"
 
 using namespace Helianthus::Common;
@@ -214,17 +215,17 @@ private:
         // 发送一些过期消息（模拟无法处理的消息）
         for (int i = 1; i <= 3; ++i)
         {
-            auto Message = std::make_shared<Message>(MessageType::TEXT, 
+            auto Msg = std::make_shared<Helianthus::MessageQueue::Message>(MessageType::TEXT, 
                 "过期消息 #" + std::to_string(i));
             
-            Message->Header.Priority = MessagePriority::LOW;
-            Message->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
-            Message->Header.ExpireTime = GetCurrentTimestamp() - 1000; // 已过期
+            Msg->Header.Priority = MessagePriority::LOW;
+            Msg->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
+            Msg->Header.ExpireTime = GetCurrentTimestamp() - 1000; // 已过期
             
-            auto SendResult = Queue->SendMessage(QueueName, Message);
+            auto SendResult = Queue->SendMessage(QueueName, Msg);
             if (SendResult == QueueResult::SUCCESS)
             {
-                std::cout << "✅ 发送过期消息: " << Message->Header.Id << std::endl;
+                std::cout << "✅ 发送过期消息: " << Msg->Header.Id << std::endl;
             }
         }
         
