@@ -153,6 +153,23 @@ public:
     std::vector<MessagePtr> GetPendingMessages(const std::string& QueueName,
                                                uint32_t MaxCount = 100) const override;
 
+    // DLQ监控
+    QueueResult GetDeadLetterQueueStats(const std::string& QueueName, 
+                                        DeadLetterQueueStats& OutStats) const override;
+    QueueResult GetAllDeadLetterQueueStats(std::vector<DeadLetterQueueStats>& OutStats) const override;
+    QueueResult SetDeadLetterAlertConfig(const std::string& QueueName, 
+                                         const DeadLetterAlertConfig& Config) override;
+    QueueResult GetDeadLetterAlertConfig(const std::string& QueueName, 
+                                         DeadLetterAlertConfig& OutConfig) const override;
+    QueueResult GetActiveDeadLetterAlerts(const std::string& QueueName,
+                                         std::vector<DeadLetterAlert>& OutAlerts) const override;
+    QueueResult GetAllActiveDeadLetterAlerts(std::vector<DeadLetterAlert>& OutAlerts) const override;
+    QueueResult ClearDeadLetterAlert(const std::string& QueueName, 
+                                     DeadLetterAlertType AlertType) override;
+    QueueResult ClearAllDeadLetterAlerts(const std::string& QueueName) override;
+    void SetDeadLetterAlertHandler(DeadLetterAlertHandler Handler) override;
+    void SetDeadLetterStatsHandler(DeadLetterStatsHandler Handler) override;
+
     // 持久化管理
     QueueResult SaveToDisk() override;
     QueueResult LoadFromDisk() override;
@@ -181,6 +198,10 @@ public:
     std::vector<std::string> GetQueueDiagnostics(const std::string& QueueName) const override;
     QueueResult ValidateQueue(const std::string& QueueName) override;
 
+    // 指标查询
+    virtual QueueResult GetQueueMetrics(const std::string& QueueName, QueueMetrics& OutMetrics) const override;
+    virtual QueueResult GetAllQueueMetrics(std::vector<QueueMetrics>& OutMetrics) const override;
+
 private:
     // 内部数据结构
     struct QueueData
@@ -202,6 +223,13 @@ private:
         std::condition_variable_any NotifyCondition;
         std::string MessageFilter;
         std::unordered_map<std::string, std::string> MessageRouters;
+
+        // 指标滑动窗口（最近窗口秒内的事件时间戳与时延样本）
+        std::deque<MessageTimestamp> EnqueueTimestamps;
+        std::deque<MessageTimestamp> DequeueTimestamps;
+        std::vector<double> LatencySamplesMs; // 环形缓冲上限
+        size_t LatencyCapacity = 512;
+        MessageTimestamp LastMetricsSampleTs = 0;
 
         QueueData(const QueueConfig& Config);
         bool ShouldUsePriorityQueue() const;
@@ -266,6 +294,24 @@ private:
     ErrorHandler ErrorHandlerFunc;
     std::mutex HandlersMutex;
 
+    // DLQ监控
+    std::unordered_map<std::string, DeadLetterAlertConfig> DeadLetterAlertConfigs;
+    std::unordered_map<std::string, std::vector<DeadLetterAlert>> ActiveDeadLetterAlerts;
+    DeadLetterAlertHandler DeadLetterAlertHandlerFunc;
+    DeadLetterStatsHandler DeadLetterStatsHandlerFunc;
+    std::thread DeadLetterMonitorThread;
+    std::atomic<bool> StopDeadLetterMonitor;
+    std::condition_variable DeadLetterMonitorCondition;
+    mutable std::shared_mutex DeadLetterMonitorMutex;
+
+    // 指标监控线程
+    std::thread MetricsMonitorThread;
+    std::atomic<bool> StopMetricsMonitor{false};
+    std::condition_variable MetricsMonitorCondition;
+    mutable std::mutex MetricsMonitorMutex;
+    uint32_t MetricsIntervalMs = 5000; // 默认5秒
+    uint32_t MetricsWindowMs = 60000; // 60秒窗口（可配置）
+
     // 全局配置
     std::unordered_map<std::string, std::string> GlobalConfig;
     mutable std::shared_mutex ConfigMutex;
@@ -295,7 +341,7 @@ private:
     bool ValidateQueueConfig(const QueueConfig& Config);
     bool ValidateTopicConfig(const TopicConfig& Config);
     bool IsMessageExpired(MessagePtr Message);
-    void MoveToDeadLetter(const std::string& QueueName, MessagePtr Message);
+    void MoveToDeadLetter(const std::string& QueueName, MessagePtr Message, DeadLetterReason Reason);
 
     QueueResult DeliverMessageToConsumers(const std::string& QueueName, MessagePtr Message);
     QueueResult DeliverMessageToSubscribers(const std::string& TopicName, MessagePtr Message);
@@ -305,8 +351,29 @@ private:
     void UpdateTopicStats(const std::string& TopicName, bool MessagePublished);
     void UpdateGlobalStats(bool MessageProcessed, bool MessageFailed = false);
 
-    std::string GetDeadLetterQueueName(const std::string& QueueName);
+    // 指标窗口统计辅助
+    void RecordEnqueueEvent(QueueData* Queue);
+    void RecordDequeueEvent(QueueData* Queue);
+    void RecordLatencySample(QueueData* Queue, double Ms);
+    static void TrimOld(std::deque<MessageTimestamp>& TsDeque, MessageTimestamp Now, uint32_t WindowMs);
+    static double ComputeRatePerSec(const std::deque<MessageTimestamp>& TsDeque, MessageTimestamp Now, uint32_t WindowMs);
+    static void ComputePercentiles(const std::vector<double>& Samples, double& P50, double& P95);
+
+    std::string GetDeadLetterQueueName(const std::string& QueueName) const;
     QueueResult EnsureDeadLetterQueue(const std::string& QueueName);
+
+    // DLQ监控内部方法
+    void ProcessDeadLetterMonitoring();
+    void CheckDeadLetterAlerts(const std::string& QueueName);
+    void UpdateDeadLetterStats(const std::string& QueueName, DeadLetterReason Reason);
+    void TriggerDeadLetterAlert(const std::string& QueueName, DeadLetterAlertType AlertType, 
+                                const std::string& AlertMessage, uint64_t CurrentValue = 0, 
+                                uint64_t ThresholdValue = 0, double CurrentRate = 0.0, 
+                                double ThresholdRate = 0.0);
+    void ClearDeadLetterAlertInternal(const std::string& QueueName, DeadLetterAlertType AlertType);
+
+    // 指标监控内部方法
+    void ProcessMetricsMonitoring();
 
     bool EvaluateMessageFilter(const std::string& Filter, MessagePtr Message);
     QueueResult RouteMessage(const std::string& SourceQueue, MessagePtr Message);

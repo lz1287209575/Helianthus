@@ -105,6 +105,27 @@ Helianthus/
 - **可靠传输**: 消息确认和重传机制
 - **热更新支持**: 运行时消息格式变更
 
+#### 指标系统（Queue Metrics）
+- 基础指标：队列长度、累计发送/接收/确认/重试/死信计数
+- 速率指标：入/出队速率，基于可配置滑动窗口计算
+- 时延指标：处理时延 P50/P95（样本近似）
+- 周期输出：结构化日志定期输出（文件 sink），控制台可关闭
+
+配置示例：
+```cpp
+auto queue = std::make_unique<Helianthus::MessageQueue::MessageQueue>();
+queue->Initialize();
+
+// 指标采集与输出
+queue->SetGlobalConfig("metrics.interval.ms", "2000");        // 指标输出间隔（毫秒）
+queue->SetGlobalConfig("metrics.window.ms", "60000");         // 滑动窗口（毫秒）
+queue->SetGlobalConfig("metrics.latency.capacity", "1024");  // 时延样本容量
+
+// 查询单队列指标
+Helianthus::MessageQueue::QueueMetrics m;
+queue->GetQueueMetrics("queue_name", m);
+```
+
 ### 服务发现 (Discovery)
 - **服务注册**: 自动服务注册和注销
 - **负载均衡**: 多种负载均衡策略

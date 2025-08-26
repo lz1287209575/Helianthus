@@ -5,6 +5,8 @@
 #include <string>
 #include <unordered_map>
 #include <mutex>
+#include <cstring>
+#include <iostream>
 
 #include "Common/Types.h"
 #include "Common/Logger.h"
@@ -25,45 +27,61 @@ namespace Helianthus::Common
     class LogCategory
     {
     public:
-        explicit LogCategory(const char* NameIn, LogVerbosity DefaultVerbosity = LogVerbosity::Log)
-            : Name(NameIn), MinVerbosity(DefaultVerbosity) {}
-
-        const char* GetName() const { return Name; }
-
-        void SetMinVerbosity(LogVerbosity Verbosity) { MinVerbosity.store(Verbosity, std::memory_order_relaxed); }
-        LogVerbosity GetMinVerbosity() const { return MinVerbosity.load(std::memory_order_relaxed); }
-
-        static void SetCategoryMinVerbosity(const std::string& CategoryName, LogVerbosity Verbosity)
+        // 单例获取方法
+        static LogCategory& GetInstance(const std::string& CategoryName, LogVerbosity DefaultVerbosity = LogVerbosity::Log)
         {
-            std::lock_guard<std::mutex> Lock(GetRegistryMutex());
-            auto& Map = GetRegistry();
-            if (auto It = Map.find(CategoryName); It != Map.end())
-            {
-                It->second->SetMinVerbosity(Verbosity);
+            static std::mutex InstanceMutex;
+            static std::unordered_map<std::string, std::unique_ptr<LogCategory>> Instances;
+            
+            std::lock_guard<std::mutex> Lock(InstanceMutex);
+            
+            auto It = Instances.find(CategoryName);
+            if (It != Instances.end()) {
+                return *(It->second);
             }
+            
+            // 创建新实例
+            auto Instance = std::unique_ptr<LogCategory>(new LogCategory(CategoryName, DefaultVerbosity));
+            auto& Ref = *Instance;
+            Instances[CategoryName] = std::move(Instance);
+            
+
+            return Ref;
         }
 
-        static LogCategory* Register(const char* CategoryName, LogCategory* Category)
+        const char* GetName() const { 
+            return Name.c_str(); 
+        }
+
+        void SetMinVerbosity(LogVerbosity Verbosity) { MinVerbosity.store(Verbosity, std::memory_order_relaxed); }
+        LogVerbosity GetMinVerbosity() const { 
+            return MinVerbosity.load(std::memory_order_relaxed);
+        }
+
+        bool IsLoggable(LogVerbosity Verbosity) const
         {
-            std::lock_guard<std::mutex> Lock(GetRegistryMutex());
-            GetRegistry().emplace(CategoryName, Category);
-            return Category;
+            return static_cast<int>(Verbosity) >= static_cast<int>(MinVerbosity.load(std::memory_order_relaxed));
+        }
+
+        // 兼容性方法
+        static void SetCategoryMinVerbosity(const std::string& CategoryName, LogVerbosity Verbosity)
+        {
+            GetInstance(CategoryName).SetMinVerbosity(Verbosity);
         }
 
     private:
-        static std::unordered_map<std::string, LogCategory*>& GetRegistry()
+        // 私有构造函数，防止外部创建实例
+        explicit LogCategory(const std::string& NameIn, LogVerbosity DefaultVerbosity = LogVerbosity::Log)
+            : Name(NameIn), MinVerbosity(DefaultVerbosity)
         {
-            static std::unordered_map<std::string, LogCategory*> CategoryRegistry;
-            return CategoryRegistry;
-        }
-        static std::mutex& GetRegistryMutex()
-        {
-            static std::mutex RegistryLock;
-            return RegistryLock;
         }
 
-        const char* Name;
-        std::atomic<LogVerbosity> MinVerbosity;
+        // 禁用拷贝和赋值
+        LogCategory(const LogCategory&) = delete;
+        LogCategory& operator=(const LogCategory&) = delete;
+
+        std::string Name;
+        mutable std::atomic<LogVerbosity> MinVerbosity;
     };
 
     inline spdlog::level::level_enum ToSpdLevel(LogVerbosity Verbosity)
@@ -87,15 +105,15 @@ namespace Helianthus::Common
     extern Helianthus::Common::LogCategory CategoryName
 
 #define H_DEFINE_LOG_CATEGORY(CategoryName, DefaultVerbosity) \
-    Helianthus::Common::LogCategory CategoryName##Impl{#CategoryName, DefaultVerbosity}; \
-    Helianthus::Common::LogCategory& CategoryName = *Helianthus::Common::LogCategory::Register(#CategoryName, &CategoryName##Impl)
+    Helianthus::Common::LogCategory& CategoryName = Helianthus::Common::LogCategory::GetInstance(#CategoryName, DefaultVerbosity)
 
 // H_LOG(Category, Level, Fmt, ...): 仅输出到分类logger（控制台/分类文件）
 #if HELIANTHUS_ENABLE_LOGGING
     #define H_LOG(Category, Level, Fmt, ...)                                                                                  \
         do {                                                                                                                  \
             if (static_cast<int>(Level) <= static_cast<int>((Category).GetMinVerbosity())) {                                  \
-                Helianthus::Common::Logger::CategoryLog((Category).GetName(), Helianthus::Common::ToSpdLevel(Level),          \
+                Helianthus::Common::Logger::CategoryLog(#Category, Helianthus::Common::ToSpdLevel(Level),          \
+                                                        spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},    \
                                                         Fmt, ##__VA_ARGS__);                                                  \
             }                                                                                                                 \
         } while (0)

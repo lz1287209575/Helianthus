@@ -94,6 +94,20 @@ enum class QueueType : uint8_t
     BROADCAST = 4     // 广播队列
 };
 
+// 死信队列原因
+enum class DeadLetterReason : uint8_t
+{
+    EXPIRED = 0,           // 消息过期
+    MAX_RETRIES_EXCEEDED = 1,  // 超过最大重试次数
+    REJECTED = 2,          // 消费者拒收
+    QUEUE_FULL = 3,        // 队列已满
+    MESSAGE_TOO_LARGE = 4, // 消息过大
+    INVALID_MESSAGE = 5,   // 无效消息
+    CONSUMER_ERROR = 6,    // 消费者处理错误
+    TIMEOUT = 7,           // 处理超时
+    UNKNOWN = 255          // 未知原因
+};
+
 // 消息状态
 enum class MessageStatus : uint8_t
 {
@@ -139,6 +153,9 @@ struct MessageHeader
     MessageTimestamp ExpireTime = 0;
     uint32_t RetryCount = 0;
     uint32_t MaxRetries = 3;
+    MessageTimestamp NextRetryTime = 0;     // 下次重试时间
+    DeadLetterReason DeadLetterReasonValue = DeadLetterReason::UNKNOWN;  // 死信原因
+    std::string OriginalQueue;              // 原始队列名称
     std::string SourceId;
     std::string TargetId;
     std::string CorrelationId;
@@ -292,6 +309,12 @@ struct QueueConfig
     uint32_t QueueTtlMs = 0;                    // 队列TTL (0表示永不过期)
     bool EnableDeadLetter = true;               // 启用死信队列
     std::string DeadLetterQueue;                // 死信队列名称
+    uint32_t MaxRetries = 3;                    // 最大重试次数
+    uint32_t RetryDelayMs = 1000;               // 重试延迟（毫秒）
+    bool EnableRetryBackoff = true;             // 启用指数退避
+    double RetryBackoffMultiplier = 2.0;        // 退避倍数
+    uint32_t MaxRetryDelayMs = 60000;           // 最大重试延迟（毫秒）
+    uint32_t DeadLetterTtlMs = 86400000;        // 死信消息TTL（24小时）
     bool EnablePriority = false;                // 启用优先级排序
     bool EnableBatching = true;                 // 启用批量处理
     uint32_t BatchSize = 100;                   // 批量大小
@@ -347,6 +370,9 @@ struct QueueStats
     uint64_t ProcessedMessages = 0;        // 已处理消息数
     uint64_t FailedMessages = 0;           // 失败消息数
     uint64_t DeadLetterMessages = 0;       // 死信消息数
+    uint64_t RetriedMessages = 0;          // 重试消息数
+    uint64_t ExpiredMessages = 0;          // 过期消息数
+    uint64_t RejectedMessages = 0;         // 拒收消息数
     uint64_t TotalBytes = 0;               // 总字节数
     uint32_t ActiveConsumers = 0;          // 活跃消费者数
     uint32_t ActiveProducers = 0;          // 活跃生产者数
@@ -356,6 +382,67 @@ struct QueueStats
     MessageTimestamp LastMessageTime = 0;  // 最后消息时间
     MessageTimestamp CreatedTime = 0;      // 队列创建时间
 };
+
+// DLQ监控统计信息
+struct DeadLetterQueueStats
+{
+    std::string QueueName;                    // 原队列名称
+    std::string DeadLetterQueueName;          // 死信队列名称
+    uint64_t TotalDeadLetterMessages = 0;     // 总死信消息数
+    uint64_t CurrentDeadLetterMessages = 0;   // 当前死信队列中的消息数
+    uint64_t ExpiredMessages = 0;             // 过期消息数
+    uint64_t MaxRetriesExceededMessages = 0;  // 超过最大重试次数消息数
+    uint64_t RejectedMessages = 0;            // 拒收消息数
+    uint64_t QueueFullMessages = 0;           // 队列已满消息数
+    uint64_t MessageTooLargeMessages = 0;     // 消息过大消息数
+    uint64_t InvalidMessageMessages = 0;      // 无效消息数
+    uint64_t ConsumerErrorMessages = 0;       // 消费者错误消息数
+    uint64_t TimeoutMessages = 0;             // 超时消息数
+    uint64_t UnknownReasonMessages = 0;       // 未知原因消息数
+    MessageTimestamp LastDeadLetterTime = 0;  // 最后死信消息时间
+    MessageTimestamp CreatedTime = 0;         // 死信队列创建时间
+    double DeadLetterRate = 0.0;              // 死信率（死信消息数/总消息数）
+};
+
+// DLQ告警配置
+struct DeadLetterAlertConfig
+{
+    uint64_t MaxDeadLetterMessages = 1000;    // 最大死信消息数阈值
+    double MaxDeadLetterRate = 0.1;           // 最大死信率阈值（10%）
+    uint32_t AlertCheckIntervalMs = 60000;    // 告警检查间隔（毫秒）
+    bool EnableDeadLetterRateAlert = true;    // 启用死信率告警
+    bool EnableDeadLetterCountAlert = true;   // 启用死信数量告警
+    bool EnableDeadLetterTrendAlert = true;   // 启用死信趋势告警
+};
+
+// DLQ告警事件
+enum class DeadLetterAlertType : uint8_t
+{
+    DEAD_LETTER_COUNT_EXCEEDED = 0,    // 死信数量超过阈值
+    DEAD_LETTER_RATE_EXCEEDED = 1,     // 死信率超过阈值
+    DEAD_LETTER_TREND_ANOMALY = 2,     // 死信趋势异常
+    DEAD_LETTER_QUEUE_FULL = 3,        // 死信队列已满
+    DEAD_LETTER_PROCESSING_FAILED = 4  // 死信处理失败
+};
+
+// DLQ告警信息
+struct DeadLetterAlert
+{
+    DeadLetterAlertType Type;              // 告警类型
+    std::string QueueName;                 // 队列名称
+    std::string DeadLetterQueueName;       // 死信队列名称
+    std::string AlertMessage;              // 告警消息
+    uint64_t CurrentValue;                 // 当前值
+    uint64_t ThresholdValue;               // 阈值
+    double CurrentRate;                    // 当前比率
+    double ThresholdRate;                  // 阈值比率
+    MessageTimestamp AlertTime;            // 告警时间
+    bool IsActive;                         // 是否活跃
+};
+
+// DLQ监控回调函数类型定义
+using DeadLetterAlertHandler = std::function<void(const DeadLetterAlert& Alert)>;
+using DeadLetterStatsHandler = std::function<void(const DeadLetterQueueStats& Stats)>;
 
 // 前向声明
 class IMessageQueue;
@@ -379,5 +466,27 @@ using ErrorHandler = std::function<void(QueueResult Result, const std::string& E
 using AcknowledgeHandler = std::function<void(MessageId MessageId, bool Success)>;
 using QueueEventHandler = std::function<void(
     const std::string& QueueName, const std::string& Event, const std::string& Details)>;
+
+// 队列监控指标
+struct QueueMetrics
+{
+    std::string QueueName;
+    uint64_t PendingMessages = 0;      // 当前待处理消息数（队列长度）
+    uint64_t TotalMessages = 0;        // 总入队数
+    uint64_t ProcessedMessages = 0;    // 已处理(出队并确认)消息数
+    uint64_t DeadLetterMessages = 0;   // 死信累计数
+    uint64_t RetriedMessages = 0;      // 已重试累计数
+
+    // 速率（条/秒），以窗口内差分估算
+    double EnqueueRate = 0.0;          // 入队速率
+    double DequeueRate = 0.0;          // 出队速率
+
+    // 处理时延分位（占位，后续实现采样与TDigest）
+    double P50LatencyMs = 0.0;
+    double P95LatencyMs = 0.0;
+
+    // 采样时间
+    MessageTimestamp Timestamp = 0;
+};
 
 }  // namespace Helianthus::MessageQueue

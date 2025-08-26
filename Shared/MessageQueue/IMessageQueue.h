@@ -144,6 +144,27 @@ public:
     virtual std::vector<MessagePtr> GetPendingMessages(const std::string& QueueName,
                                                        uint32_t MaxCount = 100) const = 0;
 
+    // DLQ监控
+    virtual QueueResult GetDeadLetterQueueStats(const std::string& QueueName, 
+                                                DeadLetterQueueStats& OutStats) const = 0;
+    virtual QueueResult GetAllDeadLetterQueueStats(std::vector<DeadLetterQueueStats>& OutStats) const = 0;
+    virtual QueueResult SetDeadLetterAlertConfig(const std::string& QueueName, 
+                                                 const DeadLetterAlertConfig& Config) = 0;
+    virtual QueueResult GetDeadLetterAlertConfig(const std::string& QueueName, 
+                                                 DeadLetterAlertConfig& OutConfig) const = 0;
+    virtual QueueResult GetActiveDeadLetterAlerts(const std::string& QueueName,
+                                                  std::vector<DeadLetterAlert>& OutAlerts) const = 0;
+    virtual QueueResult GetAllActiveDeadLetterAlerts(std::vector<DeadLetterAlert>& OutAlerts) const = 0;
+    virtual QueueResult ClearDeadLetterAlert(const std::string& QueueName, 
+                                             DeadLetterAlertType AlertType) = 0;
+    virtual QueueResult ClearAllDeadLetterAlerts(const std::string& QueueName) = 0;
+    virtual void SetDeadLetterAlertHandler(DeadLetterAlertHandler Handler) = 0;
+    virtual void SetDeadLetterStatsHandler(DeadLetterStatsHandler Handler) = 0;
+
+    // 队列指标
+    virtual QueueResult GetQueueMetrics(const std::string& QueueName, QueueMetrics& OutMetrics) const = 0;
+    virtual QueueResult GetAllQueueMetrics(std::vector<QueueMetrics>& OutMetrics) const = 0;
+
     // 持久化管理
     virtual QueueResult SaveToDisk() = 0;
     virtual QueueResult LoadFromDisk() = 0;

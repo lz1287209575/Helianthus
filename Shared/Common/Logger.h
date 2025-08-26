@@ -3,8 +3,14 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <iostream>
 
 #include "Types.h"
+
+// 前向声明
+namespace Helianthus::Common {
+    class LogCategory;
+}
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
@@ -13,6 +19,81 @@
 
 namespace Helianthus::Common
 {
+    // 分类 Logger 类，封装单个分类的日志功能
+    class CategoryLogger
+    {
+    public:
+        explicit CategoryLogger(std::shared_ptr<spdlog::logger> LoggerPtr) 
+            : LoggerInstance(LoggerPtr) {}
+
+        // 分类日志方法
+        template <typename... Args>
+        void Log(spdlog::level::level_enum Level,
+                 fmt::format_string<Args...> Format,
+                 Args&&... Arguments)
+        {
+            if (LoggerInstance && !ShuttingDownFlag.load(std::memory_order_acquire))
+            {
+                LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
+                                   Level, Format, std::forward<Args>(Arguments)...);
+            }
+        }
+
+        template <typename... Args>
+        void Log(spdlog::level::level_enum Level,
+                 const spdlog::source_loc& SourceLoc,
+                 fmt::format_string<Args...> Format,
+                 Args&&... Arguments)
+        {
+            if (LoggerInstance && !ShuttingDownFlag.load(std::memory_order_acquire))
+            {
+                LoggerInstance->log(SourceLoc, Level, Format, std::forward<Args>(Arguments)...);
+            }
+        }
+
+        template <typename... Args>
+        void Debug(fmt::format_string<Args...> Format, Args&&... Arguments)
+        {
+            Log(spdlog::level::debug, Format, std::forward<Args>(Arguments)...);
+        }
+
+        template <typename... Args>
+        void Info(fmt::format_string<Args...> Format, Args&&... Arguments)
+        {
+            Log(spdlog::level::info, Format, std::forward<Args>(Arguments)...);
+        }
+
+        template <typename... Args>
+        void Warn(fmt::format_string<Args...> Format, Args&&... Arguments)
+        {
+            Log(spdlog::level::warn, Format, std::forward<Args>(Arguments)...);
+        }
+
+        template <typename... Args>
+        void Error(fmt::format_string<Args...> Format, Args&&... Arguments)
+        {
+            Log(spdlog::level::err, Format, std::forward<Args>(Arguments)...);
+        }
+
+        template <typename... Args>
+        void Critical(fmt::format_string<Args...> Format, Args&&... Arguments)
+        {
+            Log(spdlog::level::critical, Format, std::forward<Args>(Arguments)...);
+        }
+
+        void Flush()
+        {
+            if (LoggerInstance)
+            {
+                LoggerInstance->flush();
+            }
+        }
+
+    private:
+        std::shared_ptr<spdlog::logger> LoggerInstance;
+        static std::atomic<bool> ShuttingDownFlag;
+    };
+
 /**
  * @brief Centralized logging system using spdlog (transitional)
  *
@@ -42,7 +123,7 @@ public:
               FilePath("logs/helianthus.log"),
               MaxFileSize(50 * 1024 * 1024),
               MaxFiles(5),
-              Pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%P-%t-–] [%n] [%-:%#] %v"),
+              Pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [%n] [%s:%#] %v"),
               UseAsync(true),
               QueueSize(8192),
               WorkerThreads(1)
@@ -105,28 +186,21 @@ public:
                                  Format, std::forward<Args>(Arguments)...);
     }
 
-    // Category logging API (called by macros)
+    // Category logging API (called by macros) - 使用统一的 Logger 接口
     template <typename... Args>
     static void CategoryLog(const char* CategoryName,
                             spdlog::level::level_enum Level,
+                            const spdlog::source_loc& SourceLoc,
                             fmt::format_string<Args...> Format,
                             Args&&... Arguments)
     {
+        // 使用 Logger 类的统一管理，包括关闭检查
         if (ShuttingDownFlag.load(std::memory_order_acquire)) return;
-        
-        // 调试：直接输出到主logger
-        if (LoggerInstance)
-        {
-            LoggerInstance->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
-                               Level, "[{}] {}", CategoryName, fmt::format(Format, std::forward<Args>(Arguments)...));
-        }
-        
-        auto LoggerPtr = GetOrCreateCategory(CategoryName);
-        if (LoggerPtr)
-        {
-            LoggerPtr->log(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION},
-                           Level, Format, std::forward<Args>(Arguments)...);
-        }
+ 
+        // 通过 Logger 类获取或创建分类 logger
+        auto CategoryLogger = GetOrCreateCategory(CategoryName);
+        // 使用 CategoryLogger 进行日志记录，传递源位置信息
+        CategoryLogger.Log(Level, SourceLoc, Format, std::forward<Args>(Arguments)...);
     }
 
     // Configuration
@@ -142,7 +216,7 @@ private:
     static std::atomic<bool> ShuttingDownFlag;
 
     // 获取或创建分类logger（控制台+可选分类文件 logs/<Category>.log）
-    static std::shared_ptr<spdlog::logger> GetOrCreateCategory(const std::string& CategoryName);
+    static CategoryLogger GetOrCreateCategory(const std::string& CategoryName);
 
     // 进程名缓存
     static std::string ProcessName;

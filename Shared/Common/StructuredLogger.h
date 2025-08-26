@@ -138,6 +138,17 @@ namespace Helianthus::Common
         static void SetGlobalField(const std::string& Key, double Value);
         static void SetGlobalField(const std::string& Key, bool Value);
 
+        // 线程本地上下文字段（仅作用于当前线程的日志）
+        static void SetThreadField(const std::string& Key, const std::string& Value);
+        static void SetThreadField(const std::string& Key, int32_t Value);
+        static void SetThreadField(const std::string& Key, int64_t Value);
+        static void SetThreadField(const std::string& Key, uint32_t Value);
+        static void SetThreadField(const std::string& Key, uint64_t Value);
+        static void SetThreadField(const std::string& Key, double Value);
+        static void SetThreadField(const std::string& Key, bool Value);
+        static void ClearThreadField(const std::string& Key);
+        static void ClearAllThreadFields();
+
         // 清除全局字段
         static void ClearGlobalField(const std::string& Key);
         static void ClearAllGlobalFields();
@@ -175,6 +186,8 @@ namespace Helianthus::Common
         StructuredLoggerConfig Config;
         std::vector<std::shared_ptr<ILogSink>> Sinks;
         LogFields GlobalFields;
+        // 线程本地字段
+        static thread_local LogFields ThreadFields;
         std::mutex SinksMutex;
         std::mutex GlobalFieldsMutex;
         std::atomic<bool> IsShutdown{false};

@@ -1,5 +1,8 @@
 #include "Shared/Common/StructuredLogger.h"
 #include "Shared/Common/Logger.h"
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/logger.h>
+#include <spdlog/pattern_formatter.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -31,8 +34,9 @@ namespace Helianthus::Common
     // 静态成员初始化
     std::unique_ptr<StructuredLogger> StructuredLogger::Instance = nullptr;
     std::mutex StructuredLogger::InstanceMutex;
+    thread_local LogFields StructuredLogger::ThreadFields;
 
-    // JSON输出Sink
+    // JSON输出Sink（到ostream）
     class JsonLogSink : public ILogSink
     {
     public:
@@ -167,6 +171,145 @@ namespace Helianthus::Common
         }
     };
 
+    // 基于spdlog旋转文件的JSON Sink
+    class RotatingFileJsonSink : public ILogSink
+    {
+    public:
+        RotatingFileJsonSink(const std::string& FilePath, size_t MaxFileSize, size_t MaxFiles)
+        {
+            auto sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(FilePath, MaxFileSize, MaxFiles);
+            LoggerPtr = std::make_shared<spdlog::logger>("structured_json", sink);
+            // 仅输出消息体本身
+            LoggerPtr->set_pattern("%v");
+            LoggerPtr->set_level(spdlog::level::info);
+            LoggerPtr->flush_on(spdlog::level::info);
+        }
+
+        void Write(const LogRecord& Record) override
+        {
+            std::string json = BuildJson(Record);
+            std::lock_guard<std::mutex> Lock(WriteMutex);
+            LoggerPtr->info("{}", json);
+        }
+
+        void Flush() override
+        {
+            LoggerPtr->flush();
+        }
+
+    private:
+        std::shared_ptr<spdlog::logger> LoggerPtr;
+        std::mutex WriteMutex;
+
+        static std::string Escape(const std::string& Str)
+        {
+            std::string Result;
+            Result.reserve(Str.length());
+            for (char C : Str)
+            {
+                switch (C)
+                {
+                    case '"': Result += "\\\""; break;
+                    case '\\': Result += "\\\\"; break;
+                    case '\b': Result += "\\b"; break;
+                    case '\f': Result += "\\f"; break;
+                    case '\n': Result += "\\n"; break;
+                    case '\r': Result += "\\r"; break;
+                    case '\t': Result += "\\t"; break;
+                    default: Result += C; break;
+                }
+            }
+            return Result;
+        }
+
+        static std::string LevelToString(StructuredLogLevel Level)
+        {
+            switch (Level)
+            {
+                case StructuredLogLevel::TRACE: return "TRACE";
+                case StructuredLogLevel::DEBUG_LEVEL: return "DEBUG";
+                case StructuredLogLevel::INFO: return "INFO";
+                case StructuredLogLevel::WARN: return "WARN";
+                case StructuredLogLevel::ERROR: return "ERROR";
+                case StructuredLogLevel::FATAL: return "FATAL";
+                default: return "UNKNOWN";
+            }
+        }
+
+        static std::string FormatTimestamp(const std::chrono::system_clock::time_point& Timestamp)
+        {
+            auto TimeT = std::chrono::system_clock::to_time_t(Timestamp);
+            auto Ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                Timestamp.time_since_epoch()) % 1000;
+            
+            std::stringstream Ss;
+            Ss << std::put_time(std::gmtime(&TimeT), "%Y-%m-%dT%H:%M:%S");
+            Ss << "." << std::setfill('0') << std::setw(3) << Ms.count() << "Z";
+            return Ss.str();
+        }
+
+        static void AppendFieldValue(std::stringstream& Os, const LogFieldValue& Value)
+        {
+            if (std::holds_alternative<std::string>(Value))
+            {
+                Os << '"' << Escape(std::get<std::string>(Value)) << '"';
+            }
+            else if (std::holds_alternative<bool>(Value))
+            {
+                Os << (std::get<bool>(Value) ? "true" : "false");
+            }
+            else if (std::holds_alternative<int32_t>(Value))
+            {
+                Os << std::get<int32_t>(Value);
+            }
+            else if (std::holds_alternative<int64_t>(Value))
+            {
+                Os << std::get<int64_t>(Value);
+            }
+            else if (std::holds_alternative<uint32_t>(Value))
+            {
+                Os << std::get<uint32_t>(Value);
+            }
+            else if (std::holds_alternative<uint64_t>(Value))
+            {
+                Os << std::get<uint64_t>(Value);
+            }
+            else if (std::holds_alternative<double>(Value))
+            {
+                Os << std::get<double>(Value);
+            }
+        }
+
+        static std::string BuildJson(const LogRecord& R)
+        {
+            std::stringstream Os;
+            Os << '{';
+            Os << "\"timestamp\":\"" << FormatTimestamp(R.Timestamp) << "\",";
+            Os << "\"level\":\"" << LevelToString(R.Level) << "\",";
+            Os << "\"category\":\"" << R.Category << "\",";
+            Os << "\"message\":\"" << Escape(R.Message) << "\",";
+            if (!R.TraceId.empty()) Os << "\"trace_id\":\"" << R.TraceId << "\",";
+            if (!R.ThreadId.empty()) Os << "\"thread_id\":\"" << R.ThreadId << "\",";
+            if (!R.FileName.empty()) Os << "\"file\":\"" << R.FileName << ":" << R.LineNumber << "\",";
+            if (!R.FunctionName.empty()) Os << "\"function\":\"" << R.FunctionName << "\",";
+            if (!R.Fields.GetAllFields().empty())
+            {
+                Os << "\"fields\":{";
+                bool first = true;
+                for (const auto& [k,v] : R.Fields.GetAllFields())
+                {
+                    if (!first) Os << ',';
+                    Os << '"' << k << '"' << ':';
+                    AppendFieldValue(Os, v);
+                    first = false;
+                }
+                Os << "}";
+            }
+            Os << '}';
+            return Os.str();
+        }
+    };
+
     // 通过现有Logger模块输出的Sink
     class LoggerBasedSink : public ILogSink
     {
@@ -198,8 +341,27 @@ namespace Helianthus::Common
                 Message << "}";
             }
             
-            // 使用项目包装的 Logger，避免异步日志问题
-            Logger::Info("{}", Message.str());
+            // 使用项目包装的分类日志，携带准确的文件与行号
+            spdlog::level::level_enum Level = spdlog::level::info;
+            switch (Record.Level)
+            {
+                case StructuredLogLevel::TRACE: Level = spdlog::level::trace; break;
+                case StructuredLogLevel::DEBUG_LEVEL: Level = spdlog::level::debug; break;
+                case StructuredLogLevel::INFO: Level = spdlog::level::info; break;
+                case StructuredLogLevel::WARN: Level = spdlog::level::warn; break;
+                case StructuredLogLevel::ERROR: Level = spdlog::level::err; break;
+                case StructuredLogLevel::FATAL: Level = spdlog::level::critical; break;
+                default: break;
+            }
+
+            const char* file = Record.FileName.empty() ? __FILE__ : Record.FileName.c_str();
+            const char* func = Record.FunctionName.empty() ? SPDLOG_FUNCTION : Record.FunctionName.c_str();
+            Helianthus::Common::Logger::CategoryLog(
+                Record.Category.c_str(),
+                Level,
+                spdlog::source_loc{file, static_cast<int>(Record.LineNumber), func},
+                "{}",
+                Message.str());
         }
 
         void Flush() override
@@ -259,14 +421,24 @@ namespace Helianthus::Common
 
         Instance = std::unique_ptr<StructuredLogger>(new StructuredLogger(Config));
         
-        // 添加控制台输出端
-        Instance->AddSink(std::make_shared<LoggerBasedSink>());
+        // 根据配置添加输出端
+        if (Config.EnableConsole)
+        {
+            Instance->AddSink(std::make_shared<LoggerBasedSink>());
+        }
         
         if (Config.EnableFile)
         {
-            // 暂时禁用文件输出，避免异步日志问题
-            // Logger::ConfigureCategoryFile("STRUCTURED", Config.FilePath, 
-            //                             Config.MaxFileSize, Config.MaxFiles);
+            try {
+                std::filesystem::path p = Config.FilePath;
+                if (p.has_parent_path()) {
+                    std::filesystem::create_directories(p.parent_path());
+                }
+            } catch (...) {
+                // 目录创建失败时忽略，后续sink创建可能会报错
+            }
+            Instance->AddSink(std::make_shared<RotatingFileJsonSink>(
+                Config.FilePath, Config.MaxFileSize, Config.MaxFiles));
         }
     }
 
@@ -284,9 +456,6 @@ namespace Helianthus::Common
             {
                 Sink->Flush();
             }
-            
-            // 清理结构化日志的分类文件配置
-            // Logger::RemoveCategoryFile("STRUCTURED");
             
             Instance.reset();
         }
@@ -409,6 +578,44 @@ namespace Helianthus::Common
         }
     }
 
+    // 线程本地字段实现
+    void StructuredLogger::SetThreadField(const std::string& Key, const std::string& Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::SetThreadField(const std::string& Key, int32_t Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::SetThreadField(const std::string& Key, int64_t Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::SetThreadField(const std::string& Key, uint32_t Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::SetThreadField(const std::string& Key, uint64_t Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::SetThreadField(const std::string& Key, double Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::SetThreadField(const std::string& Key, bool Value)
+    {
+        ThreadFields.AddField(Key, Value);
+    }
+    void StructuredLogger::ClearThreadField(const std::string& Key)
+    {
+        (void)Key; // LogFields暂无单独删除，实现前先保留接口
+    }
+    void StructuredLogger::ClearAllThreadFields()
+    {
+        ThreadFields.Clear();
+    }
+
     void StructuredLogger::ClearGlobalField(const std::string& Key)
     {
         if (Instance)
@@ -520,6 +727,8 @@ namespace Helianthus::Common
             std::lock_guard<std::mutex> Lock(GlobalFieldsMutex);
             Record.Fields.Merge(GlobalFields);
         }
+        // 合并线程本地字段（最后覆盖）
+        Record.Fields.Merge(ThreadFields);
         
         return Record;
     }

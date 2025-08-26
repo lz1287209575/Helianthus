@@ -264,3 +264,277 @@ cc_binary(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_binary(
+    name = "dead_letter_queue_example",
+    srcs = ["DeadLetterQueueExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "simple_dead_letter_example",
+    srcs = ["SimpleDeadLetterExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "dead_letter_core_test",
+    srcs = ["DeadLetterCoreTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "persistence_test",
+    srcs = ["PersistenceTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "file_persistence_test",
+    srcs = ["FilePersistenceTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "filesystem_test",
+    srcs = ["FileSystemTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "index_read_test",
+    srcs = ["IndexReadTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "simple_log_test",
+    srcs = ["SimpleLogTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "precise_debug_test",
+    srcs = ["PreciseDebugTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "thread_join_test",
+    srcs = ["ThreadJoinTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "destructor_test",
+    srcs = ["DestructorTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "initialize_step_test",
+    srcs = ["InitializeStepTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "mutex_destructor_test",
+    srcs = ["MutexDestructorTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "filestream_test",
+    srcs = ["FileStreamTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "readindex_test",
+    srcs = ["ReadIndexTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "simple_destructor_test",
+    srcs = ["SimpleDestructorTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "logger_shutdown_test",
+    srcs = ["LoggerShutdownTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "simple_send_test",
+    srcs = ["SimpleSendTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "simple_receive_test",
+    srcs = ["SimpleReceiveTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "dlq_monitor_test",
+    srcs = ["DLQMonitorTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
+        "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)

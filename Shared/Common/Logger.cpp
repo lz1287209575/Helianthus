@@ -3,6 +3,8 @@
 #include <vector>
 #include <cstdlib>
 #include <regex>
+#include <iostream>
+#include <spdlog/pattern_formatter.h>
 
 // Avoid Windows DEBUG/ERROR macro collisions with enum LogLevel members
 #ifdef DEBUG
@@ -20,6 +22,36 @@ bool Logger::IsInitializedFlag = false;
 std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> Logger::CategoryLoggers;
 std::atomic<bool> Logger::ShuttingDownFlag{false};
 std::string Logger::ProcessName;
+
+// CategoryLogger 静态成员定义
+std::atomic<bool> CategoryLogger::ShuttingDownFlag{false};
+
+// 自定义日志级别格式化器，显示大写的完整单词
+class CustomLevelFormatter : public spdlog::custom_flag_formatter
+{
+public:
+    void format(const spdlog::details::log_msg& Msg, const std::tm&, spdlog::memory_buf_t& Dest) override
+    {
+        std::string LevelStr;
+        switch (Msg.level)
+        {
+            case spdlog::level::trace: LevelStr = "TRACE"; break;
+            case spdlog::level::debug: LevelStr = "DEBUG"; break;
+            case spdlog::level::info: LevelStr = "INFO"; break;
+            case spdlog::level::warn: LevelStr = "WARN"; break;
+            case spdlog::level::err: LevelStr = "ERROR"; break;
+            case spdlog::level::critical: LevelStr = "CRITICAL"; break;
+            case spdlog::level::off: LevelStr = "OFF"; break;
+            default: LevelStr = "UNKNOWN"; break;
+        }
+        Dest.append(LevelStr.data(), LevelStr.data() + LevelStr.size());
+    }
+
+    std::unique_ptr<custom_flag_formatter> clone() const override
+    {
+        return spdlog::details::make_unique<CustomLevelFormatter>();
+    }
+};
 
 static std::string Trim(const std::string& S)
 {
@@ -107,8 +139,12 @@ void Logger::Initialize(const LoggerConfig& Config)
     }
 
     LoggerInstance->set_level(ConvertLogLevel(Config.Level));
-    std::string Pattern = "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%P-%t--] [" + ProcessName + "] [%n] [%s:%#] %v";
-    LoggerInstance->set_pattern(Pattern);
+    
+    // 创建自定义格式化器
+    auto CustomFormatter = std::make_unique<spdlog::pattern_formatter>();
+    CustomFormatter->add_flag<CustomLevelFormatter>('L');
+    CustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName + "] [%n] [%s:%#] %v");
+    LoggerInstance->set_formatter(std::move(CustomFormatter));
     LoggerInstance->flush_on(spdlog::level::info);
 
     LoadCategoryFromEnv();
@@ -153,10 +189,15 @@ bool Logger::IsShuttingDown()
     return ShuttingDownFlag.load(std::memory_order_acquire);
 }
 
-std::shared_ptr<spdlog::logger> Logger::GetOrCreateCategory(const std::string& CategoryName)
+CategoryLogger Logger::GetOrCreateCategory(const std::string& CategoryName)
 {
+    // 检查分类名称是否为空
+    if (CategoryName.empty()) {
+        return CategoryLogger(nullptr);
+    }
+    
     auto It = CategoryLoggers.find(CategoryName);
-    if (It != CategoryLoggers.end()) return It->second;
+    if (It != CategoryLoggers.end()) return CategoryLogger(It->second);
 
     std::vector<spdlog::sink_ptr> Sinks;
     if (CurrentConfig.EnableConsole)
@@ -182,10 +223,15 @@ std::shared_ptr<spdlog::logger> Logger::GetOrCreateCategory(const std::string& C
         CatLogger = std::make_shared<spdlog::logger>(CategoryName, begin(Sinks), end(Sinks));
     }
     CatLogger->set_level(ConvertLogLevel(CurrentConfig.Level));
-    CatLogger->set_pattern(CurrentConfig.Pattern);
+    
+    // 为分类日志器设置自定义格式化器
+    auto CatCustomFormatter = std::make_unique<spdlog::pattern_formatter>();
+    CatCustomFormatter->add_flag<CustomLevelFormatter>('L');
+    CatCustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName + "] [%n] [%s:%#] %v");
+    CatLogger->set_formatter(std::move(CatCustomFormatter));
     spdlog::register_logger(CatLogger);
     CategoryLoggers[CategoryName] = CatLogger;
-    return CatLogger;
+    return CategoryLogger(CatLogger);
 }
 
 void Logger::ConfigureCategoryFile(const std::string& CategoryName,
@@ -212,7 +258,12 @@ void Logger::ConfigureCategoryFile(const std::string& CategoryName,
         CatLogger = std::make_shared<spdlog::logger>(std::string("cat_") + CategoryName, begin(Sinks), end(Sinks));
     }
     CatLogger->set_level(ConvertLogLevel(CurrentConfig.Level));
-    CatLogger->set_pattern(CurrentConfig.Pattern);
+    
+    // 为分类日志器设置自定义格式化器
+    auto CatCustomFormatter = std::make_unique<spdlog::pattern_formatter>();
+    CatCustomFormatter->add_flag<CustomLevelFormatter>('L');
+    CatCustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName + "] [%n] [%s:%#] %v");
+    CatLogger->set_formatter(std::move(CatCustomFormatter));
     spdlog::register_logger(CatLogger);
 
     CategoryLoggers[CategoryName] = std::move(CatLogger);

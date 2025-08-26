@@ -35,7 +35,10 @@ QueueResult FileBasedPersistence::Initialize(const PersistenceConfig& Config)
 
     this->Config = Config;
     
+    H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "数据目录: {}", Config.DataDirectory);
+    
     // 确保数据目录存在
+    H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "开始创建数据目录...");
     auto Result = EnsureDataDirectory();
     if (Result != QueueResult::SUCCESS)
     {
@@ -503,9 +506,12 @@ QueueResult FileBasedPersistence::EnsureDataDirectory()
 {
     try
     {
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "检查数据目录: {}", Config.DataDirectory);
+        
         DataDir = std::filesystem::path(Config.DataDirectory);
         if (!std::filesystem::exists(DataDir))
         {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "创建数据目录: {}", Config.DataDirectory);
             std::filesystem::create_directories(DataDir);
         }
         
@@ -513,6 +519,7 @@ QueueResult FileBasedPersistence::EnsureDataDirectory()
         MessageDataPath = DataDir / Config.MessageDataFile;
         IndexPath = DataDir / Config.IndexFile;
         
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "数据目录准备完成");
         return QueueResult::SUCCESS;
     }
     catch (const std::exception& e)
@@ -526,27 +533,36 @@ QueueResult FileBasedPersistence::OpenFiles()
 {
     try
     {
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "开始打开文件...");
+        
         // 打开队列数据文件
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "打开队列数据文件: {}", QueueDataPath.string());
         QueueDataFile.open(QueueDataPath, std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
         if (!QueueDataFile.is_open())
         {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "重新打开队列数据文件（创建模式）");
             QueueDataFile.open(QueueDataPath, std::ios::binary | std::ios::out);
         }
         
         // 打开消息数据文件
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "打开消息数据文件: {}", MessageDataPath.string());
         MessageDataFile.open(MessageDataPath, std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
         if (!MessageDataFile.is_open())
         {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "重新打开消息数据文件（创建模式）");
             MessageDataFile.open(MessageDataPath, std::ios::binary | std::ios::out);
         }
         
         // 打开索引文件
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "打开索引文件: {}", IndexPath.string());
         IndexFile.open(IndexPath, std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
         if (!IndexFile.is_open())
         {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "重新打开索引文件（创建模式）");
             IndexFile.open(IndexPath, std::ios::binary | std::ios::out);
         }
         
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "所有文件打开完成");
         return QueueResult::SUCCESS;
     }
     catch (const std::exception& e)
@@ -802,29 +818,107 @@ QueueResult FileBasedPersistence::ReadIndexFromFile()
         
         IndexFile.seekg(0);
         
+        // 检查文件大小是否合理
+        IndexFile.seekg(0, std::ios::end);
+        auto fileSize = IndexFile.tellg();
+        IndexFile.seekg(0);
+        
+        if (fileSize < static_cast<std::streampos>(sizeof(uint32_t) * 2))
+        {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "索引文件太小，跳过读取");
+            return QueueResult::SUCCESS;
+        }
+        
         // 读取索引版本
         uint32_t Version;
         IndexFile.read(reinterpret_cast<char*>(&Version), sizeof(Version));
+        if (IndexFile.fail() || IndexFile.eof())
+        {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取索引版本失败");
+            return QueueResult::SUCCESS;
+        }
         
         // 读取队列数量
         uint32_t QueueCount;
         IndexFile.read(reinterpret_cast<char*>(&QueueCount), sizeof(QueueCount));
+        if (IndexFile.fail() || IndexFile.eof())
+        {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列数量失败");
+            return QueueResult::SUCCESS;
+        }
+        
+        // 添加保护：限制最大队列数量
+        const uint32_t MAX_QUEUE_COUNT = 10000;
+        if (QueueCount > MAX_QUEUE_COUNT)
+        {
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "队列数量过大 ({} > {})，跳过索引读取", QueueCount, MAX_QUEUE_COUNT);
+            return QueueResult::SUCCESS;
+        }
+        
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "开始读取 {} 个队列的索引", QueueCount);
         
         for (uint32_t i = 0; i < QueueCount; ++i)
         {
+            // 检查文件状态
+            if (IndexFile.fail() || IndexFile.eof())
+            {
+                H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列 {} 时文件状态异常", i);
+                break;
+            }
+            
             // 读取队列名长度和队列名
             uint32_t QueueNameLength;
             IndexFile.read(reinterpret_cast<char*>(&QueueNameLength), sizeof(QueueNameLength));
+            if (IndexFile.fail() || IndexFile.eof())
+            {
+                H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列 {} 名称长度失败", i);
+                break;
+            }
+            
+            // 添加保护：限制队列名长度
+            const uint32_t MAX_QUEUE_NAME_LENGTH = 1024;
+            if (QueueNameLength > MAX_QUEUE_NAME_LENGTH)
+            {
+                H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "队列 {} 名称长度过大 ({} > {})，跳过", i, QueueNameLength, MAX_QUEUE_NAME_LENGTH);
+                break;
+            }
             
             std::string QueueName(QueueNameLength, '\0');
             IndexFile.read(&QueueName[0], QueueNameLength);
+            if (IndexFile.fail() || IndexFile.eof())
+            {
+                H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列 {} 名称失败", i);
+                break;
+            }
             
             // 读取消息数量
             uint32_t MessageCount;
             IndexFile.read(reinterpret_cast<char*>(&MessageCount), sizeof(MessageCount));
+            if (IndexFile.fail() || IndexFile.eof())
+            {
+                H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列 {} 消息数量失败", i);
+                break;
+            }
+            
+            // 添加保护：限制每个队列的消息数量
+            const uint32_t MAX_MESSAGE_COUNT = 100000;
+            if (MessageCount > MAX_MESSAGE_COUNT)
+            {
+                H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "队列 {} 消息数量过大 ({} > {})，跳过", QueueName, MessageCount, MAX_MESSAGE_COUNT);
+                break;
+            }
+            
+            H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "读取队列 {} 的 {} 条消息索引", QueueName, MessageCount);
             
             for (uint32_t j = 0; j < MessageCount; ++j)
             {
+                // 检查文件状态
+                if (IndexFile.fail() || IndexFile.eof())
+                {
+                    H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列 {} 消息 {} 时文件状态异常", QueueName, j);
+                    break;
+                }
+                
                 MessageIndexEntry Entry;
                 IndexFile.read(reinterpret_cast<char*>(&Entry.Id), sizeof(Entry.Id));
                 IndexFile.read(reinterpret_cast<char*>(&Entry.FileOffset), sizeof(Entry.FileOffset));
@@ -832,11 +926,18 @@ QueueResult FileBasedPersistence::ReadIndexFromFile()
                 IndexFile.read(reinterpret_cast<char*>(&Entry.Timestamp), sizeof(Entry.Timestamp));
                 IndexFile.read(reinterpret_cast<char*>(&Entry.IsDeleted), sizeof(Entry.IsDeleted));
                 
+                if (IndexFile.fail() || IndexFile.eof())
+                {
+                    H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Warning, "读取队列 {} 消息 {} 索引条目失败", QueueName, j);
+                    break;
+                }
+                
                 Entry.QueueName = QueueName;
                 QueueMessageIndex[QueueName][Entry.Id] = Entry;
             }
         }
         
+        H_LOG(MQPersistence, Helianthus::Common::LogVerbosity::Display, "索引读取完成");
         return QueueResult::SUCCESS;
     }
     catch (const std::exception& e)
@@ -929,13 +1030,22 @@ QueueResult PersistenceManager::Initialize(const PersistenceConfig& Config)
 
     this->Config = Config;
     
+    H_LOG(MQManager, Helianthus::Common::LogVerbosity::Display, "持久化类型: {}", static_cast<int>(Config.Type));
+    
     // 根据配置类型创建持久化实现
     switch (Config.Type)
     {
         case PersistenceType::FILE_BASED:
-            PersistenceImpl = std::make_unique<FileBasedPersistence>();
+            H_LOG(MQManager, Helianthus::Common::LogVerbosity::Display, "创建文件持久化实现");
+            try {
+                PersistenceImpl = std::make_unique<FileBasedPersistence>();
+            } catch (const std::exception& e) {
+                H_LOG(MQManager, Helianthus::Common::LogVerbosity::Error, "创建文件持久化实现失败: {}", e.what());
+                return QueueResult::INTERNAL_ERROR;
+            }
             break;
         case PersistenceType::MEMORY_ONLY:
+            H_LOG(MQManager, Helianthus::Common::LogVerbosity::Display, "使用内存模式，跳过持久化");
             // 内存模式不需要持久化实现
             break;
         case PersistenceType::DATABASE:
@@ -943,15 +1053,24 @@ QueueResult PersistenceManager::Initialize(const PersistenceConfig& Config)
             H_LOG(MQManager, Helianthus::Common::LogVerbosity::Warning, "数据库持久化暂未实现");
             return QueueResult::NOT_IMPLEMENTED;
         default:
+            H_LOG(MQManager, Helianthus::Common::LogVerbosity::Error, "无效的持久化类型: {}", static_cast<int>(Config.Type));
             return QueueResult::INVALID_CONFIG;
     }
     
     if (PersistenceImpl)
     {
-        auto Result = PersistenceImpl->Initialize(Config);
-        if (Result != QueueResult::SUCCESS)
-        {
-            return Result;
+        H_LOG(MQManager, Helianthus::Common::LogVerbosity::Display, "开始初始化持久化实现");
+        try {
+            auto Result = PersistenceImpl->Initialize(Config);
+            if (Result != QueueResult::SUCCESS)
+            {
+                H_LOG(MQManager, Helianthus::Common::LogVerbosity::Error, "持久化实现初始化失败: {}", static_cast<int>(Result));
+                return Result;
+            }
+            H_LOG(MQManager, Helianthus::Common::LogVerbosity::Display, "持久化实现初始化成功");
+        } catch (const std::exception& e) {
+            H_LOG(MQManager, Helianthus::Common::LogVerbosity::Error, "持久化实现初始化异常: {}", e.what());
+            return QueueResult::INTERNAL_ERROR;
         }
     }
 
