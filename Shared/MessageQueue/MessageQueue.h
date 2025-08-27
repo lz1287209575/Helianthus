@@ -219,6 +219,101 @@ public:
     void SetLeaderChangeHandler(LeaderChangeHandler Handler) override;
     void SetFailoverHandler(FailoverHandler Handler) override;
 
+    // 事务管理
+    TransactionId BeginTransaction(const std::string& Description = "", uint32_t TimeoutMs = 30000) override;
+    QueueResult CommitTransaction(TransactionId Id) override;
+    QueueResult RollbackTransaction(TransactionId Id, const std::string& Reason = "") override;
+    QueueResult AbortTransaction(TransactionId Id, const std::string& Reason = "") override;
+    
+    // 事务内操作
+    QueueResult SendMessageInTransaction(TransactionId Id, const std::string& QueueName, MessagePtr Message) override;
+    QueueResult AcknowledgeMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId) override;
+    QueueResult RejectMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId, const std::string& Reason = "") override;
+    QueueResult CreateQueueInTransaction(TransactionId Id, const QueueConfig& Config) override;
+    QueueResult DeleteQueueInTransaction(TransactionId Id, const std::string& QueueName) override;
+    
+    // 事务查询
+    QueueResult GetTransactionStatus(TransactionId Id, TransactionStatus& Status) override;
+    QueueResult GetTransactionInfo(TransactionId Id, Transaction& Info) override;
+    QueueResult GetTransactionStats(TransactionStats& Stats) override;
+    
+    // 事务回调设置
+    void SetTransactionCommitHandler(TransactionCommitHandler Handler) override;
+    void SetTransactionRollbackHandler(TransactionRollbackHandler Handler) override;
+    void SetTransactionTimeoutHandler(TransactionTimeoutHandler Handler) override;
+    
+    // 分布式事务支持
+    QueueResult BeginDistributedTransaction(const std::string& CoordinatorId, const std::string& Description = "", uint32_t TimeoutMs = 30000) override;
+    QueueResult PrepareTransaction(TransactionId Id) override;
+    QueueResult CommitDistributedTransaction(TransactionId Id) override;
+    QueueResult RollbackDistributedTransaction(TransactionId Id, const std::string& Reason = "") override;
+
+    // 压缩和加密管理
+    QueueResult SetCompressionConfig(const std::string& QueueName, const CompressionConfig& Config) override;
+    QueueResult GetCompressionConfig(const std::string& QueueName, CompressionConfig& OutConfig) const override;
+    QueueResult SetEncryptionConfig(const std::string& QueueName, const EncryptionConfig& Config) override;
+    QueueResult GetEncryptionConfig(const std::string& QueueName, EncryptionConfig& OutConfig) const override;
+    
+    // 压缩和加密统计
+    QueueResult GetCompressionStats(const std::string& QueueName, CompressionStats& OutStats) const override;
+    QueueResult GetAllCompressionStats(std::vector<CompressionStats>& OutStats) const override;
+    QueueResult GetEncryptionStats(const std::string& QueueName, EncryptionStats& OutStats) const override;
+    QueueResult GetAllEncryptionStats(std::vector<EncryptionStats>& OutStats) const override;
+    
+    // 手动压缩和加密
+    QueueResult CompressMessage(MessagePtr Message, CompressionAlgorithm Algorithm = CompressionAlgorithm::GZIP) override;
+    QueueResult DecompressMessage(MessagePtr Message) override;
+    QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM) override;
+    QueueResult DecryptMessage(MessagePtr Message) override;
+
+    // 监控告警管理
+    QueueResult SetAlertConfig(const AlertConfig& Config) override;
+    QueueResult GetAlertConfig(AlertType Type, const std::string& QueueName, AlertConfig& OutConfig) const override;
+    QueueResult GetAllAlertConfigs(std::vector<AlertConfig>& OutConfigs) const override;
+    QueueResult DeleteAlertConfig(AlertType Type, const std::string& QueueName) override;
+    
+    // 告警查询
+    QueueResult GetActiveAlerts(std::vector<Alert>& OutAlerts) const override;
+    QueueResult GetAlertHistory(uint32_t Limit, std::vector<Alert>& OutAlerts) const override;
+    QueueResult GetAlertStats(AlertStats& OutStats) const override;
+    
+    // 告警操作
+    QueueResult AcknowledgeAlert(uint64_t AlertId) override;
+    QueueResult ResolveAlert(uint64_t AlertId, const std::string& ResolutionNote = "") override;
+    QueueResult ClearAllAlerts() override;
+    
+    // 告警回调设置
+    void SetAlertHandler(AlertHandler Handler) override;
+    void SetAlertConfigHandler(AlertConfigHandler Handler) override;
+
+    // 性能优化管理
+    QueueResult SetMemoryPoolConfig(const MemoryPoolConfig& Config) override;
+    QueueResult GetMemoryPoolConfig(MemoryPoolConfig& OutConfig) const override;
+    QueueResult SetBufferConfig(const BufferConfig& Config) override;
+    QueueResult GetBufferConfig(BufferConfig& OutConfig) const override;
+    
+    // 性能统计
+    QueueResult GetPerformanceStats(PerformanceStats& OutStats) const override;
+    QueueResult ResetPerformanceStats() override;
+    
+    // 内存池管理
+    QueueResult AllocateFromPool(size_t Size, void*& OutPtr) override;
+    QueueResult DeallocateToPool(void* Ptr, size_t Size) override;
+    QueueResult CompactMemoryPool() override;
+    
+    // 零拷贝操作
+    QueueResult CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer) override;
+    QueueResult ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer) override;
+    QueueResult SendMessageZeroCopy(const std::string& QueueName, const ZeroCopyBuffer& Buffer) override;
+    
+    // 批处理操作
+    QueueResult CreateBatch(uint32_t& OutBatchId) override;
+    QueueResult CreateBatchForQueue(const std::string& QueueName, uint32_t& OutBatchId) override;
+    QueueResult AddToBatch(uint32_t BatchId, MessagePtr Message) override;
+    QueueResult CommitBatch(uint32_t BatchId) override;
+    QueueResult AbortBatch(uint32_t BatchId) override;
+    QueueResult GetBatchInfo(uint32_t BatchId, BatchMessage& OutBatch) const override;
+
 private:
     // 一致性哈希分片路由
     class ConsistentHashRing
@@ -252,6 +347,142 @@ private:
     ConsistentHashRing ShardRing;
     uint32_t ShardCount = 1;
     uint32_t ShardVirtualNodes = 128;
+
+    // 事务管理
+    std::unordered_map<TransactionId, Transaction> Transactions;
+    std::shared_mutex TransactionsMutex;
+    TransactionId NextTransactionId = 1;
+    
+    // 事务统计
+    TransactionStats TransactionStatsData;
+    std::mutex TransactionStatsMutex;
+    
+    // 事务回调
+    TransactionCommitHandler TransactionCommitHandlerFunc;
+    TransactionRollbackHandler TransactionRollbackHandlerFunc;
+    TransactionTimeoutHandler TransactionTimeoutHandlerFunc;
+    
+    // 事务超时监控
+    std::thread TransactionTimeoutThread;
+    std::atomic<bool> StopTransactionTimeout{false};
+    std::condition_variable TransactionTimeoutCondition;
+    std::mutex TransactionTimeoutMutex;
+    
+    // 事务相关方法
+    TransactionId GenerateTransactionId();
+    QueueResult AddTransactionOperation(TransactionId Id, const TransactionOperation& Operation);
+    QueueResult ExecuteTransactionOperation(const TransactionOperation& Operation);
+    QueueResult RollbackTransactionOperations(TransactionId Id);
+    void ProcessTransactionTimeouts();
+    void UpdateTransactionStats(const Transaction& Transaction);
+    void NotifyTransactionCommit(TransactionId Id, bool Success, const std::string& ErrorMessage);
+    void NotifyTransactionRollback(TransactionId Id, const std::string& Reason);
+    void NotifyTransactionTimeout(TransactionId Id);
+
+    // 压缩和加密管理
+    std::unordered_map<std::string, CompressionConfig> CompressionConfigs;
+    std::unordered_map<std::string, EncryptionConfig> EncryptionConfigs;
+    mutable std::shared_mutex CompressionConfigsMutex;
+    mutable std::shared_mutex EncryptionConfigsMutex;
+    
+    // 压缩和加密统计
+    std::unordered_map<std::string, CompressionStats> CompressionStatsData;
+    std::unordered_map<std::string, EncryptionStats> EncryptionStatsData;
+    mutable std::mutex CompressionStatsMutex;
+    mutable std::mutex EncryptionStatsMutex;
+    
+    // 压缩和加密相关方法
+    QueueResult ApplyCompression(MessagePtr Message, const std::string& QueueName);
+    QueueResult ApplyDecompression(MessagePtr Message, const std::string& QueueName);
+    QueueResult ApplyEncryption(MessagePtr Message, const std::string& QueueName);
+    QueueResult ApplyDecryption(MessagePtr Message, const std::string& QueueName);
+    void UpdateCompressionStats(const std::string& QueueName, uint64_t OriginalSize, uint64_t CompressedSize, double TimeMs);
+    void UpdateEncryptionStats(const std::string& QueueName, double TimeMs);
+    
+    // 压缩算法实现
+    bool CompressGzip(const std::vector<char>& Input, std::vector<char>& Output);
+    bool DecompressGzip(const std::vector<char>& Input, std::vector<char>& Output);
+    bool CompressLz4(const std::vector<char>& Input, std::vector<char>& Output);
+    bool CompressZstd(const std::vector<char>& Input, std::vector<char>& Output);
+    bool CompressSnappy(const std::vector<char>& Input, std::vector<char>& Output);
+    
+    // 加密算法实现
+    bool EncryptAes256Gcm(const std::vector<char>& Input, std::vector<char>& Output);
+    bool DecryptAes256Gcm(const std::vector<char>& Input, std::vector<char>& Output);
+    bool EncryptChaCha20Poly1305(const std::vector<char>& Input, std::vector<char>& Output);
+    bool EncryptAes128Cbc(const std::vector<char>& Input, std::vector<char>& Output);
+
+    // 监控告警管理
+    std::unordered_map<std::string, AlertConfig> AlertConfigs;  // key: "type_queue"
+    std::unordered_map<uint64_t, Alert> ActiveAlerts;
+    std::vector<Alert> AlertHistory;
+    mutable std::shared_mutex AlertConfigsMutex;
+    mutable std::mutex AlertsMutex;
+    mutable std::mutex AlertHistoryMutex;
+    
+    // 告警统计
+    AlertStats AlertStatsData;
+    mutable std::mutex AlertStatsMutex;
+    
+    // 告警回调
+    AlertHandler AlertHandlerFunc;
+    AlertConfigHandler AlertConfigHandlerFunc;
+    
+    // 告警监控线程
+    std::thread AlertMonitorThread;
+    std::atomic<bool> StopAlertMonitor{false};
+    std::condition_variable AlertMonitorCondition;
+    std::mutex AlertMonitorMutex;
+    
+    // 告警相关方法
+    uint64_t GenerateAlertId();
+    std::string MakeAlertConfigKey(AlertType Type, const std::string& QueueName);
+    void ProcessAlertMonitoring();
+    void CheckQueueAlerts();
+    void CheckSystemAlerts();
+    void TriggerAlert(const AlertConfig& Config, double CurrentValue, const std::string& Message, const std::string& Details = "");
+    void ResolveAlertInternal(uint64_t AlertId, const std::string& ResolutionNote = "");
+    void UpdateAlertStats(const Alert& Alert, bool IsNew = false);
+    void NotifyAlert(const Alert& Alert);
+
+    // 性能优化管理
+    MemoryPoolConfig MemoryPoolConfigData;
+    BufferConfig BufferConfigData;
+    PerformanceStats PerformanceStatsData;
+    mutable std::shared_mutex MemoryPoolConfigMutex;
+    mutable std::shared_mutex BufferConfigMutex;
+    mutable std::mutex PerformanceStatsMutex;
+    
+    // 内存池管理
+    std::vector<MemoryBlock*> MemoryPoolBlocks;
+    std::vector<MemoryBlock*> FreeBlocks;
+    void* MemoryPoolData = nullptr;
+    size_t MemoryPoolSize = 0;
+    size_t MemoryPoolUsed = 0;
+    // 记录大块分配（多块聚合）：base_ptr -> 占用块数
+    std::unordered_map<void*, size_t> LargeAllocBlocks;
+    mutable std::mutex MemoryPoolMutex;
+    
+    // 批处理管理
+    std::unordered_map<uint32_t, BatchMessage> ActiveBatches;
+    std::atomic<uint32_t> NextBatchId{1};
+    mutable std::mutex BatchesMutex;
+    
+    // 零拷贝缓冲区管理
+    std::vector<ZeroCopyBuffer> ActiveZeroCopyBuffers;
+    mutable std::mutex ZeroCopyBuffersMutex;
+    
+    // 性能优化相关方法
+    void InitializeMemoryPool();
+    void CleanupMemoryPool();
+    MemoryBlock* FindFreeBlock(size_t Size);
+    bool FindContiguousFreeBlocks(size_t BlocksNeeded, size_t& OutStartIndex);
+    void MarkBlockAsUsed(MemoryBlock* Block);
+    void MarkBlockAsFree(MemoryBlock* Block);
+    void UpdatePerformanceStats(const std::string& Operation, double TimeMs, size_t Size = 0);
+    void ProcessBatchTimeout();
+    void CompressBatch(BatchMessage& Batch);
+    void DecompressBatch(BatchMessage& Batch);
 
     // 集群配置与元数据
     ClusterConfig Cluster;

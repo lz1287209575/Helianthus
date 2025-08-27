@@ -113,17 +113,355 @@ Helianthus/
 
 配置示例：
 ```cpp
-auto queue = std::make_unique<Helianthus::MessageQueue::MessageQueue>();
-queue->Initialize();
+auto Queue = std::make_unique<Helianthus::MessageQueue::MessageQueue>();
+Queue->Initialize();
 
 // 指标采集与输出
-queue->SetGlobalConfig("metrics.interval.ms", "2000");        // 指标输出间隔（毫秒）
-queue->SetGlobalConfig("metrics.window.ms", "60000");         // 滑动窗口（毫秒）
-queue->SetGlobalConfig("metrics.latency.capacity", "1024");  // 时延样本容量
+Queue->SetGlobalConfig("metrics.interval.ms", "2000");        // 指标输出间隔（毫秒）
+Queue->SetGlobalConfig("metrics.window.ms", "60000");         // 滑动窗口（毫秒）
+Queue->SetGlobalConfig("metrics.latency.capacity", "1024");  // 时延样本容量
 
 // 查询单队列指标
 Helianthus::MessageQueue::QueueMetrics m;
-queue->GetQueueMetrics("queue_name", m);
+Queue->GetQueueMetrics("queue_name", m);
+```
+
+## 集群和分片（一致性哈希）
+
+### 路由策略
+- **分区键优先**：消息属性 `partition_key` 优先用于路由
+- **队列名回退**：无分区键时使用队列名进行路由
+- **一致性哈希**：基于虚拟节点的一致性哈希分片
+
+### 配置项
+```cpp
+// 设置分片数量
+Queue->SetGlobalConfig("cluster.shards", "4");
+
+// 设置每个分片的虚拟节点数
+Queue->SetGlobalConfig("cluster.shard.vnodes", "150");
+
+// 设置心跳波动概率（用于测试）
+Queue->SetGlobalConfig("cluster.heartbeat.flap.prob", "0.1");
+```
+
+### 副本/HA
+- **Leader/Follower 角色**：每个分片支持多个副本
+- **健康状态管理**：动态健康检查
+- **自动故障转移**：Leader 故障时自动选举新 Leader
+- **健康感知路由**：优先选择健康的 Leader，回退到健康的 Follower
+
+### 心跳与健康
+- **轻量级心跳**：定期健康检查和状态更新
+- **模拟健康波动**：可配置的故障模拟概率
+- **Leader 选举**：基于健康状态的自动选举
+
+### 分片状态导出
+```cpp
+std::vector<ShardInfo> ShardStatuses;
+Queue->GetClusterShardStatuses(ShardStatuses);
+for (const auto& Shard : ShardStatuses) {
+    // 显示每个分片的 Leader 和健康 Follower 数量
+}
+```
+
+### 副本同步骨架
+- **WAL 条目**：每个分片维护 WAL 日志
+- **Follower 位点**：跟踪每个 Follower 的应用进度
+- **复制确认**：可配置的最小复制确认数
+- **复制指标**：复制滞后度和 ACK 计数
+
+### 故障转移回调
+```cpp
+// Leader 变更回调
+Queue->SetLeaderChangeHandler([](ShardId Shard, const std::string& OldLeader, const std::string& NewLeader) {
+    // 处理 Leader 变更事件
+});
+
+// 故障转移回调
+Queue->SetFailoverHandler([](ShardId Shard, const std::string& FailedLeader, const std::string& TakeoverNode) {
+    // 处理故障转移事件
+});
+```
+
+### 路由容错增强
+- **自动回退**：主节点失效时自动回退到备用节点
+- **重试幂等**：支持消息重试，避免重复处理
+- **健康感知**：路由时考虑节点健康状态
+- **故障检测**：实时检测节点故障并触发故障转移
+
+## 事务支持
+
+### 事务管理
+- **事务创建**：支持本地事务和分布式事务
+- **事务操作**：在事务内执行消息发送、确认、拒收、队列创建/删除
+- **事务提交**：原子性提交所有事务操作
+- **事务回滚**：支持事务失败时的完整回滚
+
+### 事务API
+```cpp
+// 开始事务
+TransactionId TxId = Queue->BeginTransaction("事务描述", 10000);
+
+// 事务内操作
+Queue->SendMessageInTransaction(TxId, "queue_name", Message);
+Queue->AcknowledgeMessageInTransaction(TxId, "queue_name", MessageId);
+Queue->RejectMessageInTransaction(TxId, "queue_name", MessageId, "原因");
+Queue->CreateQueueInTransaction(TxId, QueueConfig);
+Queue->DeleteQueueInTransaction(TxId, "queue_name");
+
+// 提交或回滚事务
+Queue->CommitTransaction(TxId);
+Queue->RollbackTransaction(TxId, "回滚原因");
+```
+
+### 事务监控
+- **事务统计**：总事务数、成功率、回滚率、超时率
+- **性能指标**：平均提交时间、平均回滚时间
+- **事务回调**：提交、回滚、超时事件回调
+
+### 分布式事务
+- **两阶段提交**：Prepare 和 Commit 阶段
+- **协调者模式**：支持分布式事务协调
+- **故障恢复**：分布式事务的故障检测和恢复
+
+### 事务回调
+```cpp
+// 设置事务回调
+Queue->SetTransactionCommitHandler([](TransactionId Id, bool Success, const std::string& ErrorMessage) {
+    // 处理事务提交结果
+});
+
+Queue->SetTransactionRollbackHandler([](TransactionId Id, const std::string& Reason) {
+    // 处理事务回滚
+});
+
+Queue->SetTransactionTimeoutHandler([](TransactionId Id) {
+    // 处理事务超时
+});
+```
+
+## 消息压缩和加密
+
+### 压缩算法支持
+- **GZIP**：通用压缩算法，平衡压缩率和速度
+- **LZ4**：高速压缩算法，适合实时应用
+- **ZSTD**：Facebook 开发的高效压缩算法
+- **Snappy**：Google 开发的快速压缩算法
+
+### 加密算法支持
+- **AES-256-GCM**：高级加密标准，带认证
+- **ChaCha20-Poly1305**：现代流密码，高性能
+- **AES-128-CBC**：传统加密模式
+
+### 压缩和加密配置
+```cpp
+// 设置压缩配置
+CompressionConfig CompConfig;
+CompConfig.Algorithm = CompressionAlgorithm::GZIP;
+CompConfig.Level = 6;              // 压缩级别 (1-9)
+CompConfig.MinSize = 1024;         // 最小压缩大小
+CompConfig.EnableAutoCompression = true;
+Queue->SetCompressionConfig("queue_name", CompConfig);
+
+// 设置加密配置
+EncryptionConfig EncConfig;
+EncConfig.Algorithm = EncryptionAlgorithm::AES_256_GCM;
+EncConfig.Key = "your-secret-key-32-bytes-long";
+EncConfig.IV = "your-iv-16-bytes";
+EncConfig.EnableAutoEncryption = true;
+Queue->SetEncryptionConfig("queue_name", EncConfig);
+```
+
+### 手动压缩和加密
+```cpp
+// 手动压缩消息
+Queue->CompressMessage(Message, CompressionAlgorithm::GZIP);
+
+// 手动解压消息
+Queue->DecompressMessage(Message);
+
+// 手动加密消息
+Queue->EncryptMessage(Message, EncryptionAlgorithm::AES_256_GCM);
+
+// 手动解密消息
+Queue->DecryptMessage(Message);
+```
+
+### 压缩和加密统计
+```cpp
+// 获取压缩统计
+CompressionStats CompStats;
+Queue->GetCompressionStats("queue_name", CompStats);
+// CompStats.CompressionRatio - 压缩比
+// CompStats.AverageCompressionTimeMs - 平均压缩时间
+
+// 获取加密统计
+EncryptionStats EncStats;
+Queue->GetEncryptionStats("queue_name", EncStats);
+// EncStats.AverageEncryptionTimeMs - 平均加密时间
+// EncStats.AverageDecryptionTimeMs - 平均解密时间
+```
+
+## 监控告警
+
+### 告警级别和类型
+- **告警级别**：INFO、WARNING、ERROR、CRITICAL
+- **告警类型**：队列满、队列空、高延迟、低吞吐量、死信队列、消费者离线、磁盘空间、内存使用率、CPU使用率、网络错误、持久化错误、压缩错误、加密错误、事务超时、复制滞后、节点健康、自定义告警
+
+### 告警配置管理
+```cpp
+// 设置告警配置
+AlertConfig AlertConfig;
+AlertConfig.Type = AlertType::QUEUE_FULL;
+AlertConfig.Level = AlertLevel::WARNING;
+AlertConfig.QueueName = "queue_name";
+AlertConfig.Threshold = 0.8;              // 80% 使用率时告警
+AlertConfig.DurationMs = 60000;           // 1分钟持续时间
+AlertConfig.CooldownMs = 300000;          // 5分钟冷却时间
+AlertConfig.Enabled = true;
+AlertConfig.Description = "队列使用率过高告警";
+AlertConfig.NotifyChannels = {"email", "slack"};
+Queue->SetAlertConfig(AlertConfig);
+
+// 查询告警配置
+AlertConfig RetrievedConfig;
+Queue->GetAlertConfig(AlertType::QUEUE_FULL, "queue_name", RetrievedConfig);
+```
+
+### 告警查询和管理
+```cpp
+// 查询活跃告警
+std::vector<Alert> ActiveAlerts;
+Queue->GetActiveAlerts(ActiveAlerts);
+
+// 查询告警历史
+std::vector<Alert> AlertHistory;
+Queue->GetAlertHistory(10, AlertHistory);
+
+// 查询告警统计
+AlertStats AlertStats;
+Queue->GetAlertStats(AlertStats);
+// AlertStats.TotalAlerts - 总告警数
+// AlertStats.ActiveAlerts - 活跃告警数
+// AlertStats.WarningAlerts - 警告级别告警数
+
+// 确认告警
+Queue->AcknowledgeAlert(AlertId);
+
+// 解决告警
+Queue->ResolveAlert(AlertId, "问题已解决");
+
+// 清空所有告警
+Queue->ClearAllAlerts();
+```
+
+### 告警回调处理
+```cpp
+// 设置告警处理器
+Queue->SetAlertHandler([](const Alert& Alert) {
+    std::cout << "收到告警: id=" << Alert.Id 
+              << ", type=" << static_cast<int>(Alert.Type)
+              << ", level=" << static_cast<int>(Alert.Level)
+              << ", message=" << Alert.Message << std::endl;
+});
+
+// 设置告警配置变更处理器
+Queue->SetAlertConfigHandler([](const AlertConfig& Config) {
+    std::cout << "告警配置变更: type=" << static_cast<int>(Config.Type)
+              << ", queue=" << Config.QueueName << std::endl;
+});
+```
+
+## 性能优化
+
+### 内存池管理
+```cpp
+// 设置内存池配置
+MemoryPoolConfig MemoryPoolConfig;
+MemoryPoolConfig.InitialSize = 1024 * 1024;        // 1MB
+MemoryPoolConfig.MaxSize = 100 * 1024 * 1024;      // 100MB
+MemoryPoolConfig.BlockSize = 4096;                 // 4KB
+MemoryPoolConfig.GrowthFactor = 2;                 // 增长因子
+MemoryPoolConfig.EnablePreallocation = true;       // 启用预分配
+MemoryPoolConfig.PreallocationBlocks = 1000;       // 预分配1000个块
+MemoryPoolConfig.EnableCompaction = true;          // 启用内存压缩
+MemoryPoolConfig.CompactionThreshold = 50;         // 50%压缩阈值
+Queue->SetMemoryPoolConfig(MemoryPoolConfig);
+
+// 从内存池分配内存
+void* Ptr = nullptr;
+Queue->AllocateFromPool(1024, Ptr);
+
+// 释放内存到内存池
+Queue->DeallocateToPool(Ptr, 1024);
+
+// 压缩内存池
+Queue->CompactMemoryPool();
+```
+
+### 缓冲区优化
+```cpp
+// 设置缓冲区配置
+BufferConfig BufferConfig;
+BufferConfig.InitialCapacity = 8192;               // 8KB
+BufferConfig.MaxCapacity = 1024 * 1024;            // 1MB
+BufferConfig.GrowthFactor = 2;                     // 增长因子
+BufferConfig.EnableZeroCopy = true;                // 启用零拷贝
+BufferConfig.EnableCompression = false;            // 禁用压缩
+BufferConfig.CompressionThreshold = 1024;          // 压缩阈值
+BufferConfig.EnableBatching = true;                // 启用批处理
+BufferConfig.BatchSize = 100;                      // 批处理大小
+BufferConfig.BatchTimeoutMs = 100;                 // 批处理超时时间
+Queue->SetBufferConfig(BufferConfig);
+```
+
+### 零拷贝操作
+```cpp
+// 创建零拷贝缓冲区
+std::string Data = "零拷贝测试数据";
+ZeroCopyBuffer Buffer;
+Queue->CreateZeroCopyBuffer(Data.data(), Data.size(), Buffer);
+
+// 零拷贝发送消息
+Queue->SendMessageZeroCopy("queue_name", Buffer);
+
+// 释放零拷贝缓冲区
+Queue->ReleaseZeroCopyBuffer(Buffer);
+```
+
+### 批处理操作
+```cpp
+// 创建批处理
+uint32_t BatchId = 0;
+Queue->CreateBatch(BatchId);
+
+// 添加消息到批处理
+auto Message = std::make_shared<Message>();
+Message->Payload.Data = std::vector<char>("消息内容".begin(), "消息内容".end());
+Queue->AddToBatch(BatchId, Message);
+
+// 提交批处理
+Queue->CommitBatch(BatchId);
+
+// 获取批处理信息
+BatchMessage BatchInfo;
+Queue->GetBatchInfo(BatchId, BatchInfo);
+```
+
+### 性能统计
+```cpp
+// 获取性能统计
+PerformanceStats Stats;
+Queue->GetPerformanceStats(Stats);
+// Stats.TotalAllocations - 总分配次数
+// Stats.MemoryPoolHitRate - 内存池命中率
+// Stats.ZeroCopyOperations - 零拷贝操作次数
+// Stats.BatchOperations - 批处理操作次数
+// Stats.AverageAllocationTimeMs - 平均分配时间
+
+// 重置性能统计
+Queue->ResetPerformanceStats();
 ```
 
 ### 服务发现 (Discovery)
@@ -253,29 +591,4 @@ config.EnableReplication = true;
 ## 🤝 贡献指南
 
 1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🙋 支持与联系
-
-- **问题反馈**: [GitHub Issues](https://github.com/lz1287209575/helianthus/issues)
-- **功能建议**: [GitHub Discussions](https://github.com/lz1287209575/helianthus/discussions)
-- **文档**: [项目文档](https://helianthus-docs.example.com)
-
-## 🌟 致谢
-
-感谢以下开源项目的支持：
-- [spdlog](https://github.com/gabime/spdlog) - 高性能日志库
-- [Protocol Buffers](https://developers.google.com/protocol-buffers) - 数据序列化
-- [Google Test](https://github.com/google/googletest) - 单元测试框架
-- [Bazel](https://bazel.build/) - 构建系统
-
----
-
-⭐ 如果这个项目对你有帮助，请给我们一个 Star！
+2. 创建特性分支 (`

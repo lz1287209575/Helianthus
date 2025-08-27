@@ -210,6 +210,101 @@ public:
     // 事件回调
     virtual void SetLeaderChangeHandler(LeaderChangeHandler Handler) = 0;
     virtual void SetFailoverHandler(FailoverHandler Handler) = 0;
+
+    // 事务管理
+    virtual TransactionId BeginTransaction(const std::string& Description = "", uint32_t TimeoutMs = 30000) = 0;
+    virtual QueueResult CommitTransaction(TransactionId Id) = 0;
+    virtual QueueResult RollbackTransaction(TransactionId Id, const std::string& Reason = "") = 0;
+    virtual QueueResult AbortTransaction(TransactionId Id, const std::string& Reason = "") = 0;
+    
+    // 事务内操作
+    virtual QueueResult SendMessageInTransaction(TransactionId Id, const std::string& QueueName, MessagePtr Message) = 0;
+    virtual QueueResult AcknowledgeMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId) = 0;
+    virtual QueueResult RejectMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId, const std::string& Reason = "") = 0;
+    virtual QueueResult CreateQueueInTransaction(TransactionId Id, const QueueConfig& Config) = 0;
+    virtual QueueResult DeleteQueueInTransaction(TransactionId Id, const std::string& QueueName) = 0;
+    
+    // 事务查询
+    virtual QueueResult GetTransactionStatus(TransactionId Id, TransactionStatus& Status) = 0;
+    virtual QueueResult GetTransactionInfo(TransactionId Id, Transaction& Info) = 0;
+    virtual QueueResult GetTransactionStats(TransactionStats& Stats) = 0;
+    
+    // 事务回调设置
+    virtual void SetTransactionCommitHandler(TransactionCommitHandler Handler) = 0;
+    virtual void SetTransactionRollbackHandler(TransactionRollbackHandler Handler) = 0;
+    virtual void SetTransactionTimeoutHandler(TransactionTimeoutHandler Handler) = 0;
+    
+    // 分布式事务支持
+    virtual QueueResult BeginDistributedTransaction(const std::string& CoordinatorId, const std::string& Description = "", uint32_t TimeoutMs = 30000) = 0;
+    virtual QueueResult PrepareTransaction(TransactionId Id) = 0;
+    virtual QueueResult CommitDistributedTransaction(TransactionId Id) = 0;
+    virtual QueueResult RollbackDistributedTransaction(TransactionId Id, const std::string& Reason = "") = 0;
+
+    // 压缩和加密管理
+    virtual QueueResult SetCompressionConfig(const std::string& QueueName, const CompressionConfig& Config) = 0;
+    virtual QueueResult GetCompressionConfig(const std::string& QueueName, CompressionConfig& OutConfig) const = 0;
+    virtual QueueResult SetEncryptionConfig(const std::string& QueueName, const EncryptionConfig& Config) = 0;
+    virtual QueueResult GetEncryptionConfig(const std::string& QueueName, EncryptionConfig& OutConfig) const = 0;
+    
+    // 压缩和加密统计
+    virtual QueueResult GetCompressionStats(const std::string& QueueName, CompressionStats& OutStats) const = 0;
+    virtual QueueResult GetAllCompressionStats(std::vector<CompressionStats>& OutStats) const = 0;
+    virtual QueueResult GetEncryptionStats(const std::string& QueueName, EncryptionStats& OutStats) const = 0;
+    virtual QueueResult GetAllEncryptionStats(std::vector<EncryptionStats>& OutStats) const = 0;
+    
+    // 手动压缩和加密
+    virtual QueueResult CompressMessage(MessagePtr Message, CompressionAlgorithm Algorithm = CompressionAlgorithm::GZIP) = 0;
+    virtual QueueResult DecompressMessage(MessagePtr Message) = 0;
+    virtual QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM) = 0;
+    virtual QueueResult DecryptMessage(MessagePtr Message) = 0;
+
+    // 监控告警管理
+    virtual QueueResult SetAlertConfig(const AlertConfig& Config) = 0;
+    virtual QueueResult GetAlertConfig(AlertType Type, const std::string& QueueName, AlertConfig& OutConfig) const = 0;
+    virtual QueueResult GetAllAlertConfigs(std::vector<AlertConfig>& OutConfigs) const = 0;
+    virtual QueueResult DeleteAlertConfig(AlertType Type, const std::string& QueueName) = 0;
+    
+    // 告警查询
+    virtual QueueResult GetActiveAlerts(std::vector<Alert>& OutAlerts) const = 0;
+    virtual QueueResult GetAlertHistory(uint32_t Limit, std::vector<Alert>& OutAlerts) const = 0;
+    virtual QueueResult GetAlertStats(AlertStats& OutStats) const = 0;
+    
+    // 告警操作
+    virtual QueueResult AcknowledgeAlert(uint64_t AlertId) = 0;
+    virtual QueueResult ResolveAlert(uint64_t AlertId, const std::string& ResolutionNote = "") = 0;
+    virtual QueueResult ClearAllAlerts() = 0;
+    
+    // 告警回调设置
+    virtual void SetAlertHandler(AlertHandler Handler) = 0;
+    virtual void SetAlertConfigHandler(AlertConfigHandler Handler) = 0;
+
+    // 性能优化管理
+    virtual QueueResult SetMemoryPoolConfig(const MemoryPoolConfig& Config) = 0;
+    virtual QueueResult GetMemoryPoolConfig(MemoryPoolConfig& OutConfig) const = 0;
+    virtual QueueResult SetBufferConfig(const BufferConfig& Config) = 0;
+    virtual QueueResult GetBufferConfig(BufferConfig& OutConfig) const = 0;
+    
+    // 性能统计
+    virtual QueueResult GetPerformanceStats(PerformanceStats& OutStats) const = 0;
+    virtual QueueResult ResetPerformanceStats() = 0;
+    
+    // 内存池管理
+    virtual QueueResult AllocateFromPool(size_t Size, void*& OutPtr) = 0;
+    virtual QueueResult DeallocateToPool(void* Ptr, size_t Size) = 0;
+    virtual QueueResult CompactMemoryPool() = 0;
+    
+    // 零拷贝操作
+    virtual QueueResult CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer) = 0;
+    virtual QueueResult ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer) = 0;
+    virtual QueueResult SendMessageZeroCopy(const std::string& QueueName, const ZeroCopyBuffer& Buffer) = 0;
+    
+    // 批处理操作
+    virtual QueueResult CreateBatch(uint32_t& OutBatchId) = 0;
+    virtual QueueResult CreateBatchForQueue(const std::string& QueueName, uint32_t& OutBatchId) = 0;
+    virtual QueueResult AddToBatch(uint32_t BatchId, MessagePtr Message) = 0;
+    virtual QueueResult CommitBatch(uint32_t BatchId) = 0;
+    virtual QueueResult AbortBatch(uint32_t BatchId) = 0;
+    virtual QueueResult GetBatchInfo(uint32_t BatchId, BatchMessage& OutBatch) const = 0;
 };
 
 /**

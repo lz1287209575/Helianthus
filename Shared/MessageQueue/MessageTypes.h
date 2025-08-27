@@ -139,7 +139,10 @@ enum class QueueResult : uint8_t
     INTERNAL_ERROR = 13,
     MESSAGE_NOT_FOUND = 14,
     NOT_IMPLEMENTED = 15,
-    INVALID_CONFIG = 16
+    INVALID_CONFIG = 16,
+    INVALID_STATE = 17,        // 状态不正确
+    OPERATION_FAILED = 18,     // 操作失败
+    TRANSACTION_NOT_FOUND = 19 // 事务不存在
 };
 
 // 消息头信息
@@ -167,6 +170,11 @@ struct MessagePayload
 {
     std::vector<char> Data;
     MessageSize Size = 0;
+    // 零拷贝支持：外部缓冲区
+    const void* ExternalData = nullptr;
+    MessageSize ExternalSize = 0;
+    bool ExternalOwned = false;
+    std::function<void(const void*)> ExternalDeallocator; // 可为空
     std::string ContentType = "application/octet-stream";
     std::string Encoding = "binary";
 
@@ -188,35 +196,56 @@ struct MessagePayload
     {
     }
 
+    ~MessagePayload()
+    {
+        if (ExternalOwned && ExternalData && ExternalDeallocator)
+        {
+            try { ExternalDeallocator(ExternalData); } catch (...) {}
+        }
+    }
+
     // 获取文本内容
     std::string AsString() const
     {
+        if (ExternalData && ExternalSize > 0)
+        {
+            return std::string(static_cast<const char*>(ExternalData), static_cast<const char*>(ExternalData) + ExternalSize);
+        }
         return std::string(Data.begin(), Data.end());
     }
 
     // 获取二进制数据
     const char* GetData() const
     {
+        if (ExternalData) return static_cast<const char*>(ExternalData);
         return Data.data();
     }
     const void* GetVoidData() const
     {
+        if (ExternalData) return ExternalData;
         return static_cast<const void*>(Data.data());
     }
 
     bool IsEmpty() const
     {
+        if (ExternalData) return ExternalSize == 0;
         return Data.empty();
     }
     void Clear()
     {
         Data.clear();
         Size = 0;
+        // 清除外部数据引用，但不负责释放（如需释放应设 ExternalOwned=true 且提供释放器）
+        ExternalData = nullptr;
+        ExternalSize = 0;
+        ExternalOwned = false;
+        ExternalDeallocator = nullptr;
     }
     
     // 获取数据大小
     size_t GetSize() const
     {
+        if (ExternalData) return ExternalSize;
         return Data.size();
     }
     
@@ -227,6 +256,11 @@ struct MessagePayload
         Size = static_cast<MessageSize>(Text.size());
         ContentType = "text/plain";
         Encoding = "utf-8";
+        // 覆盖外部数据
+        ExternalData = nullptr;
+        ExternalSize = 0;
+        ExternalOwned = false;
+        ExternalDeallocator = nullptr;
     }
     
     // 设置二进制数据
@@ -235,6 +269,25 @@ struct MessagePayload
         Data.assign(static_cast<const char*>(NewData), 
                    static_cast<const char*>(NewData) + NewSize);
         Size = static_cast<MessageSize>(NewSize);
+        ContentType = "application/octet-stream";
+        Encoding = "binary";
+        // 覆盖外部数据
+        ExternalData = nullptr;
+        ExternalSize = 0;
+        ExternalOwned = false;
+        ExternalDeallocator = nullptr;
+    }
+
+    // 设置外部零拷贝数据（不复制）
+    void SetExternal(const void* Ptr, size_t NewSize, bool Owned = false, std::function<void(const void*)> Deallocator = nullptr)
+    {
+        ExternalData = Ptr;
+        ExternalSize = static_cast<MessageSize>(NewSize);
+        ExternalOwned = Owned;
+        ExternalDeallocator = std::move(Deallocator);
+        // 清空内部缓冲
+        Data.clear();
+        Size = ExternalSize;
         ContentType = "application/octet-stream";
         Encoding = "binary";
     }
@@ -538,6 +591,300 @@ struct QueueMetrics
 
     // 采样时间
     MessageTimestamp Timestamp = 0;
+};
+
+// 事务相关类型
+using TransactionId = uint64_t;
+using TransactionTimestamp = Common::TimestampMs;
+
+// 事务状态枚举
+enum class TransactionStatus : uint8_t
+{
+    PENDING = 0,        // 待处理
+    COMMITTED = 1,      // 已提交
+    ROLLED_BACK = 2,    // 已回滚
+    TIMEOUT = 3,        // 超时
+    FAILED = 4          // 失败
+};
+
+// 事务操作类型
+enum class TransactionOperationType : uint8_t
+{
+    SEND_MESSAGE = 0,   // 发送消息
+    ACKNOWLEDGE = 1,    // 确认消息
+    REJECT_MESSAGE = 2, // 拒收消息
+    CREATE_QUEUE = 3,   // 创建队列
+    DELETE_QUEUE = 4    // 删除队列
+};
+
+// 事务操作
+struct TransactionOperation
+{
+    TransactionOperationType Type = TransactionOperationType::SEND_MESSAGE;
+    std::string QueueName;                    // 队列名称
+    MessagePtr Message;                       // 消息（发送/确认/拒收时使用）
+    MessageId TargetMessageId = InvalidMessageId;   // 消息ID（确认/拒收时使用）
+    QueueConfig TargetQueueConfig;                  // 队列配置（创建队列时使用）
+    std::string ErrorMessage;                 // 错误信息
+    TransactionTimestamp Timestamp = 0;       // 操作时间戳
+};
+
+// 事务信息
+struct Transaction
+{
+    TransactionId Id = 0;                     // 事务ID
+    TransactionStatus Status = TransactionStatus::PENDING; // 事务状态
+    std::vector<TransactionOperation> Operations; // 事务操作列表
+    TransactionTimestamp StartTime = 0;       // 开始时间
+    TransactionTimestamp EndTime = 0;         // 结束时间
+    std::string Description;                  // 事务描述
+    uint32_t TimeoutMs = 30000;              // 超时时间（毫秒）
+    bool IsDistributed = false;              // 是否为分布式事务
+    std::string CoordinatorId;               // 协调者ID（分布式事务）
+};
+
+// 事务统计
+struct TransactionStats
+{
+    uint64_t TotalTransactions = 0;           // 总事务数
+    uint64_t CommittedTransactions = 0;       // 已提交事务数
+    uint64_t RolledBackTransactions = 0;      // 已回滚事务数
+    uint64_t TimeoutTransactions = 0;         // 超时事务数
+    uint64_t FailedTransactions = 0;          // 失败事务数
+    
+    // 成功率统计
+    double SuccessRate = 0.0;                 // 成功率
+    double RollbackRate = 0.0;                // 回滚率
+    double TimeoutRate = 0.0;                 // 超时率
+    
+    // 性能统计
+    double AverageCommitTimeMs = 0.0;         // 平均提交时间
+    double AverageRollbackTimeMs = 0.0;       // 平均回滚时间
+    TransactionTimestamp LastUpdateTime = 0;  // 最后更新时间
+};
+
+// 事务回调函数类型
+using TransactionCommitHandler = std::function<void(TransactionId Id, bool Success, const std::string& ErrorMessage)>;
+using TransactionRollbackHandler = std::function<void(TransactionId Id, const std::string& Reason)>;
+using TransactionTimeoutHandler = std::function<void(TransactionId Id)>;
+
+// 压缩算法枚举
+enum class CompressionAlgorithm : uint8_t
+{
+    NONE = 0,           // 无压缩
+    GZIP = 1,           // GZIP 压缩
+    LZ4 = 2,            // LZ4 压缩
+    ZSTD = 3,           // ZSTD 压缩
+    SNAPPY = 4          // Snappy 压缩
+};
+
+// 加密算法枚举
+enum class EncryptionAlgorithm : uint8_t
+{
+    NONE = 0,           // 无加密
+    AES_256_GCM = 1,    // AES-256-GCM 加密
+    CHACHA20_POLY1305 = 2, // ChaCha20-Poly1305 加密
+    AES_128_CBC = 3     // AES-128-CBC 加密
+};
+
+// 压缩配置
+struct CompressionConfig
+{
+    CompressionAlgorithm Algorithm = CompressionAlgorithm::NONE;
+    uint32_t Level = 6;              // 压缩级别 (1-9, 越高压缩率越好但速度越慢)
+    uint32_t MinSize = 1024;         // 最小压缩大小 (小于此大小的消息不压缩)
+    bool EnableAutoCompression = true; // 是否启用自动压缩
+};
+
+// 加密配置
+struct EncryptionConfig
+{
+    EncryptionAlgorithm Algorithm = EncryptionAlgorithm::NONE;
+    std::string Key;                 // 加密密钥
+    std::string IV;                  // 初始化向量 (某些算法需要)
+    bool EnableAutoEncryption = true; // 是否启用自动加密
+};
+
+// 压缩统计
+struct CompressionStats
+{
+    uint64_t TotalMessages = 0;           // 总消息数
+    uint64_t CompressedMessages = 0;      // 已压缩消息数
+    uint64_t OriginalBytes = 0;           // 原始字节数
+    uint64_t CompressedBytes = 0;         // 压缩后字节数
+    double CompressionRatio = 0.0;        // 压缩比
+    double AverageCompressionTimeMs = 0.0; // 平均压缩时间
+    double AverageDecompressionTimeMs = 0.0; // 平均解压时间
+    Common::TimestampMs LastUpdateTime = 0; // 最后更新时间
+};
+
+// 加密统计
+struct EncryptionStats
+{
+    uint64_t TotalMessages = 0;           // 总消息数
+    uint64_t EncryptedMessages = 0;       // 已加密消息数
+    double AverageEncryptionTimeMs = 0.0; // 平均加密时间
+    double AverageDecryptionTimeMs = 0.0; // 平均解密时间
+    Common::TimestampMs LastUpdateTime = 0; // 最后更新时间
+};
+
+// 告警级别枚举
+enum class AlertLevel : uint8_t
+{
+    INFO = 0,        // 信息级别
+    WARNING = 1,     // 警告级别
+    ERROR = 2,       // 错误级别
+    CRITICAL = 3     // 严重级别
+};
+
+// 告警类型枚举
+enum class AlertType : uint8_t
+{
+    QUEUE_FULL = 0,              // 队列已满
+    QUEUE_EMPTY = 1,             // 队列为空
+    HIGH_LATENCY = 2,            // 高延迟
+    LOW_THROUGHPUT = 3,          // 低吞吐量
+    DEAD_LETTER_HIGH = 4,        // 死信队列消息过多
+    CONSUMER_OFFLINE = 5,        // 消费者离线
+    DISK_SPACE_LOW = 6,          // 磁盘空间不足
+    MEMORY_USAGE_HIGH = 7,       // 内存使用率过高
+    CPU_USAGE_HIGH = 8,          // CPU使用率过高
+    NETWORK_ERROR = 9,           // 网络错误
+    PERSISTENCE_ERROR = 10,      // 持久化错误
+    COMPRESSION_ERROR = 11,      // 压缩错误
+    ENCRYPTION_ERROR = 12,       // 加密错误
+    TRANSACTION_TIMEOUT = 13,    // 事务超时
+    REPLICATION_LAG = 14,        // 复制滞后
+    NODE_HEALTH_DEGRADED = 15,   // 节点健康状态恶化
+    CUSTOM = 16                  // 自定义告警
+};
+
+// 告警配置
+struct AlertConfig
+{
+    AlertType Type = AlertType::QUEUE_FULL;
+    AlertLevel Level = AlertLevel::WARNING;
+    std::string QueueName;                    // 队列名称（如果适用）
+    double Threshold = 0.0;                   // 阈值
+    uint32_t DurationMs = 60000;              // 持续时间（毫秒）
+    uint32_t CooldownMs = 300000;             // 冷却时间（毫秒）
+    bool Enabled = true;                      // 是否启用
+    std::string Description;                  // 告警描述
+    std::vector<std::string> NotifyChannels;  // 通知渠道
+};
+
+// 告警信息
+struct Alert
+{
+    uint64_t Id = 0;                          // 告警ID
+    AlertType Type = AlertType::QUEUE_FULL;
+    AlertLevel Level = AlertLevel::WARNING;
+    std::string QueueName;                    // 队列名称
+    std::string Message;                      // 告警消息
+    double CurrentValue = 0.0;                // 当前值
+    double Threshold = 0.0;                   // 阈值
+    Common::TimestampMs TriggerTime = 0;      // 触发时间
+    Common::TimestampMs LastUpdateTime = 0;   // 最后更新时间
+    bool IsActive = false;                    // 是否活跃
+    uint32_t OccurrenceCount = 0;             // 发生次数
+    std::string Details;                      // 详细信息
+};
+
+// 告警统计
+struct AlertStats
+{
+    uint64_t TotalAlerts = 0;                 // 总告警数
+    uint64_t ActiveAlerts = 0;                // 活跃告警数
+    uint64_t InfoAlerts = 0;                  // 信息级别告警数
+    uint64_t WarningAlerts = 0;               // 警告级别告警数
+    uint64_t ErrorAlerts = 0;                 // 错误级别告警数
+    uint64_t CriticalAlerts = 0;              // 严重级别告警数
+    double AverageResolutionTimeMs = 0.0;     // 平均解决时间
+    Common::TimestampMs LastUpdateTime = 0;   // 最后更新时间
+};
+
+// 告警回调函数类型
+using AlertHandler = std::function<void(const Alert& Alert)>;
+using AlertConfigHandler = std::function<void(const AlertConfig& Config)>;
+
+// 内存池配置
+struct MemoryPoolConfig
+{
+    uint32_t InitialSize = 1024 * 1024;        // 初始大小 (1MB)
+    uint32_t MaxSize = 100 * 1024 * 1024;      // 最大大小 (100MB)
+    uint32_t BlockSize = 4096;                 // 块大小 (4KB)
+    uint32_t GrowthFactor = 2;                 // 增长因子
+    bool EnablePreallocation = true;           // 是否启用预分配
+    uint32_t PreallocationBlocks = 1000;       // 预分配块数
+    bool EnableCompaction = true;              // 是否启用内存压缩
+    uint32_t CompactionThreshold = 50;         // 压缩阈值 (百分比)
+};
+
+// 缓冲区配置
+struct BufferConfig
+{
+    uint32_t InitialCapacity = 8192;           // 初始容量 (8KB)
+    uint32_t MaxCapacity = 1024 * 1024;        // 最大容量 (1MB)
+    uint32_t GrowthFactor = 2;                 // 增长因子
+    bool EnableZeroCopy = true;                // 是否启用零拷贝
+    bool EnableCompression = false;            // 是否启用压缩
+    uint32_t CompressionThreshold = 1024;      // 压缩阈值
+    bool EnableBatching = true;                // 是否启用批处理
+    uint32_t BatchSize = 100;                  // 批处理大小
+    uint32_t BatchTimeoutMs = 100;             // 批处理超时时间
+};
+
+// 性能统计
+struct PerformanceStats
+{
+    uint64_t TotalAllocations = 0;             // 总分配次数
+    uint64_t TotalDeallocations = 0;           // 总释放次数
+    uint64_t TotalBytesAllocated = 0;          // 总分配字节数
+    uint64_t CurrentBytesAllocated = 0;        // 当前分配字节数
+    uint64_t PeakBytesAllocated = 0;           // 峰值分配字节数
+    uint64_t MemoryPoolHits = 0;               // 内存池命中次数
+    uint64_t MemoryPoolMisses = 0;             // 内存池未命中次数
+    double MemoryPoolHitRate = 0.0;            // 内存池命中率
+    uint64_t ZeroCopyOperations = 0;           // 零拷贝操作次数
+    uint64_t BatchOperations = 0;              // 批处理操作次数
+    double AverageAllocationTimeMs = 0.0;      // 平均分配时间
+    double AverageDeallocationTimeMs = 0.0;    // 平均释放时间
+    double AverageZeroCopyTimeMs = 0.0;        // 平均零拷贝时间
+    double AverageBatchTimeMs = 0.0;           // 平均批处理时间
+    Common::TimestampMs LastUpdateTime = 0;    // 最后更新时间
+};
+
+// 批处理消息
+struct BatchMessage
+{
+    std::vector<MessagePtr> Messages;          // 消息列表
+    uint32_t BatchId = 0;                      // 批处理ID
+    std::string QueueName;                     // 批处理目标队列
+    Common::TimestampMs CreateTime = 0;        // 创建时间
+    Common::TimestampMs ExpireTime = 0;        // 过期时间
+    bool IsCompressed = false;                 // 是否已压缩
+    uint32_t OriginalSize = 0;                 // 原始大小
+    uint32_t CompressedSize = 0;               // 压缩后大小
+};
+
+// 零拷贝缓冲区
+struct ZeroCopyBuffer
+{
+    void* Data = nullptr;                      // 数据指针
+    size_t Size = 0;                           // 数据大小
+    size_t Capacity = 0;                       // 缓冲区容量
+    bool IsOwned = false;                      // 是否拥有内存
+    std::function<void(void*)> Deallocator;    // 释放函数
+};
+
+// 内存池块
+struct MemoryBlock
+{
+    void* Data = nullptr;                      // 数据指针
+    size_t Size = 0;                           // 块大小
+    bool IsUsed = false;                       // 是否已使用
+    MemoryBlock* Next = nullptr;               // 下一个块
+    Common::TimestampMs AllocTime = 0;         // 分配时间
 };
 
 }  // namespace Helianthus::MessageQueue
