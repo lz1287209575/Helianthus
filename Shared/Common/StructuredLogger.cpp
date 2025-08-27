@@ -280,14 +280,88 @@ namespace Helianthus::Common
             }
         }
 
+        // 轻量级进程名与PID工具（跨平台尽量覆盖）
+        static std::string DetectProcessName()
+        {
+            // 尝试多平台获取可执行名，失败则返回空
+#if defined(_WIN32)
+            char Buffer[MAX_PATH] = {0};
+            DWORD Len = GetModuleFileNameA(nullptr, Buffer, MAX_PATH);
+            if (Len > 0)
+            {
+                std::string Path(Buffer, Buffer + Len);
+                auto Pos = Path.find_last_of("\\/");
+                return Pos == std::string::npos ? Path : Path.substr(Pos + 1);
+            }
+            return "";
+#elif defined(__APPLE__)
+            char Buffer[1024];
+            uint32_t Size = sizeof(Buffer);
+            if (_NSGetExecutablePath(Buffer, &Size) == 0)
+            {
+                std::string Path(Buffer);
+                auto Pos = Path.find_last_of("/");
+                return Pos == std::string::npos ? Path : Path.substr(Pos + 1);
+            }
+            return "";
+#else
+            // Linux/Unix: 先尝试 /proc/self/comm，再回退 /proc/self/exe
+            try {
+                std::ifstream Comm("/proc/self/comm");
+                if (Comm.is_open())
+                {
+                    std::string Name;
+                    std::getline(Comm, Name);
+                    if (!Name.empty()) return Name;
+                }
+            } catch (...) {}
+            try {
+                char Buffer[1024] = {0};
+                ssize_t Len = readlink("/proc/self/exe", Buffer, sizeof(Buffer) - 1);
+                if (Len > 0)
+                {
+                    std::string Path(Buffer, Buffer + Len);
+                    auto Pos = Path.find_last_of("/");
+                    return Pos == std::string::npos ? Path : Path.substr(Pos + 1);
+                }
+            } catch (...) {}
+            return "";
+#endif
+        }
+
+        static uint64_t GetProcessId()
+        {
+#if defined(_WIN32)
+            return static_cast<uint64_t>(GetCurrentProcessId());
+#else
+            return static_cast<uint64_t>(getpid());
+#endif
+        }
+
         static std::string BuildJson(const LogRecord& R)
         {
             std::stringstream Os;
             Os << '{';
-            Os << "\"timestamp\":\"" << FormatTimestamp(R.Timestamp) << "\",";
+            // 新标准键
+            Os << "\"time\":\"" << FormatTimestamp(R.Timestamp) << "\",";
             Os << "\"level\":\"" << LevelToString(R.Level) << "\",";
+            Os << "\"pid\":" << GetProcessId() << ",";
+            if (!R.ThreadId.empty()) Os << "\"tid\":\"" << R.ThreadId << "\",";
+            {
+                static const std::string ProcName = DetectProcessName();
+                if (!ProcName.empty()) Os << "\"proc_name\":\"" << ProcName << "\",";
+            }
             Os << "\"category\":\"" << R.Category << "\",";
+            if (!R.FileName.empty())
+            {
+                Os << "\"file_name\":\"" << R.FileName << "\",";
+                Os << "\"line_no\":" << R.LineNumber << ",";
+            }
+            if (!R.TraceId.empty()) Os << "\"cid\":\"" << R.TraceId << "\",";
             Os << "\"message\":\"" << Escape(R.Message) << "\",";
+
+            // 兼容旧键（过渡期保留）
+            Os << "\"timestamp\":\"" << FormatTimestamp(R.Timestamp) << "\",";
             if (!R.TraceId.empty()) Os << "\"trace_id\":\"" << R.TraceId << "\",";
             if (!R.ThreadId.empty()) Os << "\"thread_id\":\"" << R.ThreadId << "\",";
             if (!R.FileName.empty()) Os << "\"file\":\"" << R.FileName << ":" << R.LineNumber << "\",";
