@@ -43,6 +43,13 @@ int main()
         return 1;
     }
     std::cout << "创建队列成功: " << Config.Name << std::endl;
+    // 放大队列容量以便批量基准
+    Config.MaxSize = 100000;
+    auto UpdateRes = Queue->UpdateQueueConfig(Config.Name, Config);
+    if (UpdateRes != QueueResult::SUCCESS)
+    {
+        std::cout << "更新队列配置失败: code=" << static_cast<int>(UpdateRes) << std::endl;
+    }
 
     // 测试1：设置压缩配置
     std::cout << "=== 测试1：设置压缩配置 ===" << std::endl;
@@ -184,6 +191,109 @@ int main()
         std::cout << "  平均加密时间: " << EncStats.AverageEncryptionTimeMs << "ms" << std::endl;
         std::cout << "  平均解密时间: " << EncStats.AverageDecryptionTimeMs << "ms" << std::endl;
     }
+
+    // 测试7：发送未手动压缩/加密的消息，验证自动管线与统计
+    std::cout << "=== 测试7：自动压缩/加密与统计验证 ===" << std::endl;
+    auto AutoMsg = std::make_shared<Helianthus::MessageQueue::Message>();
+    AutoMsg->Header.Type = MessageType::TEXT;
+    AutoMsg->Header.Priority = MessagePriority::NORMAL;
+    AutoMsg->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
+    AutoMsg->Header.ExpireTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count() + 60000;
+    std::string AutoPayload(8192, 'A');
+    AutoMsg->Payload.Data = std::vector<char>(AutoPayload.begin(), AutoPayload.end());
+    AutoMsg->Payload.Size = AutoMsg->Payload.Data.size();
+    auto AutoSend = Queue->SendMessage(Config.Name, AutoMsg);
+    if (AutoSend == QueueResult::SUCCESS)
+    {
+        std::cout << "自动消息发送成功: id=" << AutoMsg->Header.Id << std::endl;
+    }
+    else
+    {
+        std::cout << "自动消息发送失败: code=" << static_cast<int>(AutoSend) << std::endl;
+    }
+
+    // 再次查询统计
+    GetCompStatsResult = Queue->GetCompressionStats(Config.Name, CompStats);
+    GetEncStatsResult = Queue->GetEncryptionStats(Config.Name, EncStats);
+    if (GetCompStatsResult == QueueResult::SUCCESS)
+    {
+        std::cout << "自动后压缩统计:" << std::endl;
+        std::cout << "  总消息数: " << CompStats.TotalMessages << std::endl;
+        std::cout << "  已压缩消息数: " << CompStats.CompressedMessages << std::endl;
+        std::cout << "  原始字节数: " << CompStats.OriginalBytes << std::endl;
+        std::cout << "  压缩后字节数: " << CompStats.CompressedBytes << std::endl;
+        std::cout << "  压缩比: " << (CompStats.CompressionRatio * 100) << "%" << std::endl;
+        std::cout << "  平均压缩时间: " << CompStats.AverageCompressionTimeMs << "ms" << std::endl;
+    }
+    if (GetEncStatsResult == QueueResult::SUCCESS)
+    {
+        std::cout << "自动后加密统计:" << std::endl;
+        std::cout << "  总消息数: " << EncStats.TotalMessages << std::endl;
+        std::cout << "  已加密消息数: " << EncStats.EncryptedMessages << std::endl;
+        std::cout << "  平均加密时间: " << EncStats.AverageEncryptionTimeMs << "ms" << std::endl;
+        std::cout << "  平均解密时间: " << EncStats.AverageDecryptionTimeMs << "ms" << std::endl;
+    }
+
+    // 回环验证：接收消息，自动解密/解压后验证内容
+    std::cout << "=== 测试8：回环验证（自动解密/解压） ===" << std::endl;
+    Helianthus::MessageQueue::MessagePtr RecvMsg;
+    bool Verified = false;
+    std::string ExpectA(8192, 'A');
+    std::string ExpectLarge(LargePayload.begin(), LargePayload.end());
+    for (int tries = 0; tries < 4 && !Verified; ++tries)
+    {
+        auto RecvRes = Queue->ReceiveMessage(Config.Name, RecvMsg, 1000);
+        if (RecvRes == QueueResult::SUCCESS && RecvMsg)
+        {
+            std::string Actual(RecvMsg->Payload.Data.begin(), RecvMsg->Payload.Data.end());
+            if (Actual == ExpectA || Actual == ExpectLarge)
+            {
+                std::cout << "回环验证成功：内容一致 (" << Actual.size() << " bytes)" << std::endl;
+                Verified = true;
+                break;
+            }
+            else
+            {
+                std::cout << "回环验证未命中：size=" << Actual.size() << std::endl;
+            }
+        }
+    }
+    if (!Verified)
+    {
+        std::cout << "回环验证失败：未匹配到期望内容" << std::endl;
+    }
+
+    // 批量基准：发送 N 条，统计吞吐与均值耗时
+    std::cout << "=== 测试9：批量基准（吞吐/均值耗时） ===" << std::endl;
+    const int BatchN = 5000;
+    std::vector<char> BenchPayload(2048, 'B');
+    auto Start = std::chrono::high_resolution_clock::now();
+    int Sent = 0;
+    for (int i = 0; i < BatchN; ++i)
+    {
+        auto Msg = std::make_shared<Helianthus::MessageQueue::Message>();
+        Msg->Header.Type = MessageType::TEXT;
+        Msg->Header.Priority = MessagePriority::NORMAL;
+        Msg->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
+        Msg->Header.ExpireTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count() + 60000;
+        Msg->Payload.Data = BenchPayload;
+        Msg->Payload.Size = BenchPayload.size();
+        auto R = Queue->SendMessage(Config.Name, Msg);
+        if (R != QueueResult::SUCCESS)
+        {
+            std::cout << "发送失败: i=" << i << " code=" << static_cast<int>(R) << std::endl;
+            break;
+        }
+        ++Sent;
+    }
+    auto End = std::chrono::high_resolution_clock::now();
+    double Ms = std::chrono::duration<double, std::milli>(End - Start).count();
+    double Throughput = (Sent / (Ms / 1000.0));
+    std::cout << "批量发送: N=" << Sent << ", 总耗时(ms)=" << Ms
+              << ", 吞吐(msg/s)=" << Throughput
+              << ", 平均耗时(us)=" << (Ms * 1000.0 / std::max(1, Sent)) << std::endl;
 
     // 清理
     std::cout << "=== 压缩和加密功能测试完成 ===" << std::endl;

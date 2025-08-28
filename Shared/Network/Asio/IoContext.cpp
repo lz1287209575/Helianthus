@@ -30,7 +30,6 @@
 #if !defined(_WIN32)
     #include <errno.h>
     #include <fcntl.h>
-    #include <sys/eventfd.h>
     #include <unistd.h>
 #endif
 
@@ -74,8 +73,21 @@ IoContext::~IoContext()
 void IoContext::InitializeWakeupFd()
     {
 #ifndef _WIN32
-    // 使用 eventfd 创建唤醒文件描述符
+    // 跨平台唤醒FD：
+#if defined(__linux__)
+    // Linux 使用 eventfd
     WakeupFd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+#else
+    // macOS/BSD 使用 pipe 退化
+    int PipeFds[2] = {-1, -1};
+    if (pipe(PipeFds) == 0)
+    {
+        // 仅监听读端
+        WakeupFd = PipeFds[0];
+        // 将写端保存为额外的fd，通过 Proactor 触发写入；此处简化仅注册读端清空
+        fcntl(WakeupFd, F_SETFL, O_NONBLOCK);
+    }
+#endif
     if (WakeupFd >= 0 && ReactorPtr)
     {
         // 将唤醒文件描述符添加到 Reactor
@@ -83,12 +95,9 @@ void IoContext::InitializeWakeupFd()
                         EventMask::Read,
                         [this](EventMask)
                         {
-                            // 读取 eventfd 来清除事件
-                            uint64_t Value;
-                            while (read(WakeupFd, &Value, sizeof(Value)) > 0)
-                            {
-                                // 继续读取直到没有更多数据
-                            }
+                            // 清空读缓冲
+                            char Buffer[64];
+                            while (read(WakeupFd, Buffer, sizeof(Buffer)) > 0) {}
                         });
     }
 #endif

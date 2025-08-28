@@ -509,6 +509,24 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     // 分配消息ID
     Message->Header.Id = GenerateMessageId();
     Message->Status = MessageStatus::SENT;
+    // 自动压缩与加密（按队列配置），确保属性被保留
+    {
+        auto BeforeSize = Message->Payload.Data.size();
+        auto C1 = ApplyCompression(Message, QueueName);
+        auto C2 = ApplyEncryption(Message, QueueName);
+        (void)BeforeSize; (void)C1; (void)C2;
+        // 再次校验属性存在性
+        if (!Message->Header.Properties.count("CompressionAlgorithm") &&
+            Message->Header.Properties.count("Compressed"))
+        {
+            Message->Header.Properties["CompressionAlgorithm"] = "gzip"; // 仅当前实现
+        }
+        if (Message->Header.Properties.count("Encrypted") &&
+            !Message->Header.Properties.count("EncryptionAlgorithm"))
+        {
+            Message->Header.Properties["EncryptionAlgorithm"] = "aes-256-gcm"; // 当前实现
+        }
+    }
     auto enqueueStart = std::chrono::high_resolution_clock::now();
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
@@ -688,6 +706,44 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     if (!OutMessage)
     {
         return QueueResult::TIMEOUT;
+    }
+    // 调试：打印属性与大小（解密/解压前）
+    {
+        const auto hasEnc = OutMessage->Header.Properties.find("Encrypted") != OutMessage->Header.Properties.end();
+        const auto hasComp = OutMessage->Header.Properties.find("Compressed") != OutMessage->Header.Properties.end();
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+              "接收前属性: enc={} comp={} size={}",
+              hasEnc ? OutMessage->Header.Properties["Encrypted"] : "0",
+              hasComp ? OutMessage->Header.Properties["Compressed"] : "0",
+              static_cast<uint64_t>(OutMessage->Payload.Data.size()));
+    }
+    // 自动解密与解压（按队列配置），并在失败时记录日志
+    {
+        // 先尝试标记驱动的解密，其次尝试启发式解密
+        auto R1 = ApplyDecryption(OutMessage, QueueName);
+        if (R1 == QueueResult::SUCCESS)
+        {
+            // ok
+        }
+        else
+        {
+            R1 = ApplyDecryption(OutMessage, QueueName, 0);
+        }
+        if (R1 != QueueResult::SUCCESS)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                  "自动解密失败: queue={} id={} code={}", QueueName,
+                  static_cast<uint64_t>(OutMessage->Header.Id), static_cast<int>(R1));
+        }
+        auto R2 = ApplyDecompression(OutMessage, QueueName);
+        if (R2 != QueueResult::SUCCESS)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                  "自动解压失败: queue={} id={} code={}", QueueName,
+                  static_cast<uint64_t>(OutMessage->Header.Id), static_cast<int>(R2));
+        }
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+              "解密/解压后 size={}", static_cast<uint64_t>(OutMessage->Payload.Data.size()));
     }
 
     // 检查消息是否过期

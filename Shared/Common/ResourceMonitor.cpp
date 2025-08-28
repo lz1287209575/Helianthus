@@ -405,9 +405,12 @@ namespace Helianthus::Common
         size_t Size = sizeof(LoadAvg);
         if (sysctl(Mib, 2, &LoadAvg, &Size, nullptr, 0) == 0)
         {
-            Stats.CpuLoadAverage1Min = static_cast<double>(LoadAvg.ldavg[0]) / LoadAvg.ldscale;
-            Stats.CpuLoadAverage5Min = static_cast<double>(LoadAvg.ldavg[1]) / LoadAvg.ldscale;
-            Stats.CpuLoadAverage15Min = static_cast<double>(LoadAvg.ldavg[2]) / LoadAvg.ldscale;
+            // macOS uses fscale instead of ldscale
+            long Scale = LoadAvg.fscale;
+            if (Scale == 0) Scale = 1;
+            Stats.CpuLoadAverage1Min = static_cast<double>(LoadAvg.ldavg[0]) / static_cast<double>(Scale);
+            Stats.CpuLoadAverage5Min = static_cast<double>(LoadAvg.ldavg[1]) / static_cast<double>(Scale);
+            Stats.CpuLoadAverage15Min = static_cast<double>(LoadAvg.ldavg[2]) / static_cast<double>(Scale);
         }
         
         // 获取 CPU 核心数

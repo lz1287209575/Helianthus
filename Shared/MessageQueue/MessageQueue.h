@@ -400,8 +400,11 @@ private:
     QueueResult ApplyDecompression(MessagePtr Message, const std::string& QueueName);
     QueueResult ApplyEncryption(MessagePtr Message, const std::string& QueueName);
     QueueResult ApplyDecryption(MessagePtr Message, const std::string& QueueName);
+    QueueResult ApplyDecryption(MessagePtr Message, const std::string& QueueName, int /*overload_guard*/);
     void UpdateCompressionStats(const std::string& QueueName, uint64_t OriginalSize, uint64_t CompressedSize, double TimeMs);
     void UpdateEncryptionStats(const std::string& QueueName, double TimeMs);
+    void UpdateDecryptionStats(const std::string& QueueName, double TimeMs);
+    void UpdateDecompressionStats(const std::string& QueueName, double TimeMs);
     
     // 压缩算法实现
     bool CompressGzip(const std::vector<char>& Input, std::vector<char>& Output);

@@ -15,13 +15,13 @@ cc_library(
     ],
     hdrs = [
         "miniz/miniz.h",
-        "miniz_compat/miniz_export.h",
+        "miniz/miniz_export.h",
         "miniz/miniz_common.h",
         "miniz/miniz_tdef.h",
         "miniz/miniz_tinfl.h",
         "miniz/miniz_zip.h",
     ],
-    includes = ["miniz", "miniz_compat"],
+    includes = ["miniz"],
     copts = ["-Iminiz"],
     visibility = ["//visibility:public"],
 )

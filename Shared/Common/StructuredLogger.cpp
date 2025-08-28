@@ -12,6 +12,9 @@
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 // 防止 Windows 宏冲突
 #ifdef _WIN32

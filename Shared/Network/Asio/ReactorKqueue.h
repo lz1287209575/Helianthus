@@ -21,10 +21,22 @@ public:
     bool Del(Fd Handle) override;
     int PollOnce(int TimeoutMs) override;
 
+    // 批处理相关
+    int  PollBatch(int TimeoutMs, size_t MaxEvents = 64) override;
+    void SetBatchConfig(const BatchConfig& Config) override;
+    BatchConfig GetBatchConfig() const override;
+
+    // 性能统计
+    Reactor::PerformanceStats GetPerformanceStats() const override;
+    void ResetPerformanceStats() override;
+
 private:
     int KqFd;
     std::unordered_map<Fd, IoCallback> Callbacks;
     std::unordered_map<Fd, EventMask> Masks;
+
+    BatchConfig BatchCfg;
+    Reactor::PerformanceStats PerfStats;
 };
 }  // namespace Helianthus::Network::Asio
 

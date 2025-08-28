@@ -6,8 +6,8 @@ cc_library(
         "NetworkManager.cpp",
         "WinSockInit.cpp",
         "Asio/IoContext.cpp",
-        "Asio/ReactorEpoll.cpp",
-        "Asio/ReactorIocp.cpp",
+        # Reactor implementation sources are platform-specific
+        # Linux: epoll; Windows: iocp; macOS/BSD: kqueue
         "Asio/ReactorKqueue.cpp",
         "Asio/AsyncUdpSocket.cpp",
         "Asio/AsyncTcpSocket.cpp",
@@ -18,9 +18,12 @@ cc_library(
         "Asio/ErrorMapping.cpp",
         "Asio/BufferPool.cpp",
         "Asio/ZeroCopyBuffer.cpp",
-        "Asio/MemoryMappedFile.cpp",
         "Asio/PerformanceMetrics.cpp",
-    ],
+    ] + select({
+        "@bazel_tools//src/conditions:windows": ["Asio/ReactorIocp.cpp"],
+        "@bazel_tools//src/conditions:linux": ["Asio/ReactorEpoll.cpp", "Asio/MemoryMappedFile.cpp"],
+        "//conditions:default": [],  # macOS uses kqueue (already in srcs)
+    }),
     hdrs = [
         "INetworkSocket.h",
         "INetworkManager.h",

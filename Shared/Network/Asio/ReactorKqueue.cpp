@@ -161,6 +161,75 @@ int ReactorKqueue::PollOnce(int TimeoutMs)
     }
     return n;
 }
+
+int ReactorKqueue::PollBatch(int TimeoutMs, size_t MaxEvents)
+{
+    if (MaxEvents == 0) MaxEvents = 64;
+    struct timespec ts;
+    if (TimeoutMs < 0)
+    {
+        ts.tv_sec = 0;
+        ts.tv_nsec = 0;
+    }
+    else
+    {
+        ts.tv_sec = TimeoutMs / 1000;
+        ts.tv_nsec = (TimeoutMs % 1000) * 1000000;
+    }
+    std::vector<struct kevent> EvList(MaxEvents);
+    auto Start = std::chrono::high_resolution_clock::now();
+    int n = kevent(KqFd, nullptr, 0, EvList.data(), static_cast<int>(EvList.size()), &ts);
+    auto End = std::chrono::high_resolution_clock::now();
+    if (n <= 0)
+    {
+        if (n == 0 || errno == EINTR) return 0;
+        return -1;
+    }
+    size_t BatchCount = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        Fd fd = static_cast<Fd>(EvList[i].ident);
+        auto it = Callbacks.find(fd);
+        if (it == Callbacks.end()) continue;
+        EventMask mask = EventMask::None;
+        if (EvList[i].filter == EVFILT_READ)  mask = mask | EventMask::Read;
+        if (EvList[i].filter == EVFILT_WRITE) mask = mask | EventMask::Write;
+        if (EvList[i].flags & EV_ERROR)       mask = mask | EventMask::Error;
+        it->second(mask);
+        BatchCount++;
+    }
+    PerfStats.TotalEvents += static_cast<size_t>(n);
+    PerfStats.TotalBatches++;
+    PerfStats.MaxBatchSize = std::max(PerfStats.MaxBatchSize, static_cast<size_t>(n));
+    if (PerfStats.MinBatchSize == 0) PerfStats.MinBatchSize = static_cast<size_t>(n);
+    else PerfStats.MinBatchSize = std::min(PerfStats.MinBatchSize, static_cast<size_t>(n));
+    double Ms = std::chrono::duration<double, std::milli>(End - Start).count();
+    // 简单EMA
+    PerfStats.AverageProcessingTimeMs = PerfStats.AverageProcessingTimeMs * 0.9 + Ms * 0.1;
+    PerfStats.AverageBatchSize = static_cast<size_t>(
+        (PerfStats.AverageBatchSize * 0.9) + (static_cast<double>(n) * 0.1));
+    return n;
+}
+
+void ReactorKqueue::SetBatchConfig(const BatchConfig& Config)
+{
+    BatchCfg = Config;
+}
+
+BatchConfig ReactorKqueue::GetBatchConfig() const
+{
+    return BatchCfg;
+}
+
+Reactor::PerformanceStats ReactorKqueue::GetPerformanceStats() const
+{
+    return PerfStats;
+}
+
+void ReactorKqueue::ResetPerformanceStats()
+{
+    PerfStats = PerformanceStats{};
+}
 }  // namespace Helianthus::Network::Asio
 
 #endif
