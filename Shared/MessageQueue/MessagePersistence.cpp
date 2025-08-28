@@ -590,6 +590,8 @@ void FileBasedPersistence::CloseFiles()
 
 QueueResult FileBasedPersistence::WriteMessageToFile(MessagePtr Message, size_t& OutOffset)
 {
+    auto StartTime = std::chrono::high_resolution_clock::now();
+    
     try
     {
         // 序列化消息
@@ -613,6 +615,11 @@ QueueResult FileBasedPersistence::WriteMessageToFile(MessagePtr Message, size_t&
         // 刷新文件
         MessageDataFile.flush();
         
+        // 记录耗时统计
+        auto EndTime = std::chrono::high_resolution_clock::now();
+        auto Duration = std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime);
+        Metrics.RecordWriteTime(static_cast<uint64_t>(Duration.count()));
+        
         return QueueResult::SUCCESS;
     }
     catch (const std::exception& e)
@@ -624,6 +631,8 @@ QueueResult FileBasedPersistence::WriteMessageToFile(MessagePtr Message, size_t&
 
 QueueResult FileBasedPersistence::ReadMessageFromFile(size_t Offset, size_t Size, MessagePtr& OutMessage)
 {
+    auto StartTime = std::chrono::high_resolution_clock::now();
+    
     try
     {
         // 定位到指定位置
@@ -643,6 +652,11 @@ QueueResult FileBasedPersistence::ReadMessageFromFile(size_t Offset, size_t Size
         {
             return Result;
         }
+        
+        // 记录耗时统计
+        auto EndTime = std::chrono::high_resolution_clock::now();
+        auto Duration = std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime);
+        Metrics.RecordReadTime(static_cast<uint64_t>(Duration.count()));
         
         return QueueResult::SUCCESS;
     }
@@ -1246,6 +1260,49 @@ std::vector<std::string> PersistenceManager::GetDiagnostics()
         return {"持久化管理器未初始化"};
     }
     return PersistenceImpl->GetDiagnostics();
+}
+
+// 持久化指标相关方法实现
+IMessagePersistence::PersistenceStats PersistenceManager::GetPersistenceStats()
+{
+    if (!Initialized.load() || !PersistenceImpl)
+    {
+        return IMessagePersistence::PersistenceStats{};
+    }
+    return PersistenceImpl->GetPersistenceStats();
+}
+
+void PersistenceManager::ResetPersistenceStats()
+{
+    if (Initialized.load() && PersistenceImpl)
+    {
+        PersistenceImpl->ResetPersistenceStats();
+    }
+}
+
+IMessagePersistence::PersistenceStats FileBasedPersistence::GetPersistenceStats()
+{
+    IMessagePersistence::PersistenceStats Stats;
+    
+    Stats.TotalWriteCount = Metrics.TotalWriteCount.load(std::memory_order_relaxed);
+    Stats.TotalReadCount = Metrics.TotalReadCount.load(std::memory_order_relaxed);
+    Stats.TotalWriteTimeMs = Metrics.TotalWriteTimeMs.load(std::memory_order_relaxed);
+    Stats.TotalReadTimeMs = Metrics.TotalReadTimeMs.load(std::memory_order_relaxed);
+    Stats.MaxWriteTimeMs = Metrics.MaxWriteTimeMs.load(std::memory_order_relaxed);
+    Stats.MaxReadTimeMs = Metrics.MaxReadTimeMs.load(std::memory_order_relaxed);
+    
+    uint64_t MinWrite = Metrics.MinWriteTimeMs.load(std::memory_order_relaxed);
+    Stats.MinWriteTimeMs = (MinWrite == UINT64_MAX) ? 0 : MinWrite;
+    
+    uint64_t MinRead = Metrics.MinReadTimeMs.load(std::memory_order_relaxed);
+    Stats.MinReadTimeMs = (MinRead == UINT64_MAX) ? 0 : MinRead;
+    
+    return Stats;
+}
+
+void FileBasedPersistence::ResetPersistenceStats()
+{
+    Metrics.Reset();
 }
 
 } // namespace Helianthus::MessageQueue

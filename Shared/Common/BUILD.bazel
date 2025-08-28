@@ -6,6 +6,7 @@ cc_library(
         "TCMallocWrapper.cpp",
         "StructuredLogger.cpp",
         "CommandLineParser.cpp",
+        "ResourceMonitor.cpp",
     ],
     hdrs = [
         "Logger.h",
@@ -15,6 +16,7 @@ cc_library(
         "TCMallocWrapper.h",
         "StructuredLogger.h",
         "CommandLineParser.h",
+        "ResourceMonitor.h",
     ],
     strip_include_prefix = ".",
     include_prefix = "Common",

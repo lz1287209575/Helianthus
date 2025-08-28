@@ -1,0 +1,11 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "tinyaes",
+    srcs = ["aes.c"],
+    hdrs = ["aes.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
+
+

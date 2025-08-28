@@ -43,3 +43,12 @@
 [submodule "ThirdParty/openssl"]
 	path = ThirdParty/openssl
 	url = https://gitee.com/mirrors/openssl.git
+[submodule "ThirdParty/picohttpparser"]
+	path = ThirdParty/picohttpparser
+	url = https://github.com/h2o/picohttpparser
+[submodule "ThirdParty/miniz"]
+	path = ThirdParty/miniz
+	url = https://github.com/richgel999/miniz
+[submodule "ThirdParty/AES"]
+	path = ThirdParty/AES
+	url = https://github.com/dhuertas/AES.git

@@ -45,6 +45,8 @@ public:
     NetworkError Bind(const NetworkAddress& Address) override;
     NetworkError Listen(uint32_t Backlog = 128) override;
     NetworkError Accept() override;
+    // Accept a client and adopt into OutClient (non-blocking fd). Returns NONE on success.
+    NetworkError AcceptClient(TcpSocket& OutClient);
     void Disconnect() override;
     NetworkError Send(const char* Data, size_t Size, size_t& BytesSent) override;
     NetworkError Receive(char* Buffer, size_t BufferSize, size_t& BytesReceived) override;

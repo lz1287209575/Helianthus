@@ -511,17 +511,12 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     Message->Status = MessageStatus::SENT;
     auto enqueueStart = std::chrono::high_resolution_clock::now();
     {
-        Helianthus::Common::LogFields f;
-        f.AddField("queue", QueueName);
-        f.AddField("message_id", static_cast<uint64_t>(Message->Header.Id));
-        f.AddField("priority", static_cast<int32_t>(static_cast<int>(Message->Header.Priority)));
-        f.AddField("delivery", static_cast<int32_t>(static_cast<int>(Message->Header.Delivery)));
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::INFO,
-            "MQ",
-            "Message sent",
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+              "发送消息: queue={}, id={}, priority={}, delivery={}",
+              QueueName,
+              static_cast<uint64_t>(Message->Header.Id),
+              static_cast<int>(Message->Header.Priority),
+              static_cast<int>(Message->Header.Delivery));
     }
 
     std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
@@ -529,27 +524,17 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     // 检查队列容量
     if (Queue->GetMessageCount() >= Queue->Config.MaxSize)
     {
-        Helianthus::Common::LogFields f; f.AddField("queue", QueueName);
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::WARN,
-            "MQ",
-            "Queue full",
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+              "队列已满: queue={}", QueueName);
         return QueueResult::QUEUE_FULL;
     }
 
     // 检查消息大小
     if (Message->Payload.Size > Queue->Config.MaxSizeBytes / Queue->Config.MaxSize)
     {
-        Helianthus::Common::LogFields f; f.AddField("queue", QueueName);
-        f.AddField("payload_size", static_cast<uint64_t>(Message->Payload.Size));
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::WARN,
-            "MQ",
-            "Message too large",
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+              "消息过大: queue={}, size={}", QueueName,
+              static_cast<uint64_t>(Message->Payload.Size));
         return QueueResult::MESSAGE_TOO_LARGE;
     }
 
@@ -626,12 +611,10 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
                     F.AddField("leader_log_len", static_cast<uint64_t>(WalPerShard[static_cast<size_t>(ShardIndex)].Entries.size()));
                 }
             }
-            Helianthus::Common::StructuredLogger::Log(
-                Helianthus::Common::StructuredLogLevel::INFO,
-                "MQ",
-                "Replication simulated",
-                F,
-                __FILE__, __LINE__, SPDLOG_FUNCTION);
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+                  "复制模拟: shard={} id={}",
+                  ShardIndex,
+                  static_cast<uint64_t>(Message->Header.Id));
         }
     }
 
@@ -744,17 +727,9 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     }
 
     OutMessage->Status = MessageStatus::DELIVERED;
-    {
-        Helianthus::Common::LogFields f;
-        f.AddField("queue", QueueName);
-        f.AddField("message_id", static_cast<uint64_t>(OutMessage->Header.Id));
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::INFO,
-            "MQ",
-            "Message received",
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
-    }
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
+          "接收消息: queue={} id={}", QueueName,
+          static_cast<uint64_t>(OutMessage->Header.Id));
 
     // 如果不是自动确认，添加到待确认列表
     const auto ConsumerIt = Queue->Consumers.begin();
@@ -797,17 +772,9 @@ QueueResult MessageQueue::AcknowledgeMessage(const std::string& QueueName, Messa
     const double latencyMs = static_cast<double>(nowMs - It->second->CreatedTime);
     RecordLatencySample(Queue, latencyMs);
 
-    {
-        Helianthus::Common::LogFields f;
-        f.AddField("queue", QueueName);
-        f.AddField("message_id", static_cast<uint64_t>(MessageId));
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::INFO,
-            "MQ",
-            "Message acknowledged",
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
-    }
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
+          "确认消息: queue={} id={}", QueueName,
+          static_cast<uint64_t>(MessageId));
 
     NotifyEvent(QueueName, "MessageAcknowledged", "Message acknowledged");
     return QueueResult::SUCCESS;
@@ -831,7 +798,7 @@ QueueResult MessageQueue::CreateTopic(const TopicConfig& Config)
     auto Topic = std::make_unique<TopicData>(Config);
     Topics[Config.Name] = std::move(Topic);
 
-    std::cout << "[MessageQueue] 创建主题: " << Config.Name << std::endl;
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "创建主题: {}", Config.Name);
     return QueueResult::SUCCESS;
 }
 
@@ -960,19 +927,11 @@ void MessageQueue::MoveToDeadLetter(const std::string& QueueName, MessagePtr Mes
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
                   "消息已移动到死信队列: queue={}, messageId={}, reason={}", 
                   QueueName, Message->Header.Id, static_cast<int>(Reason));
-            {
-                Helianthus::Common::LogFields f;
-                f.AddField("queue", QueueName);
-                f.AddField("dlq", DeadLetterQueueName);
-                f.AddField("message_id", static_cast<uint64_t>(Message->Header.Id));
-                f.AddField("reason", static_cast<int32_t>(static_cast<int>(Reason)));
-                Helianthus::Common::StructuredLogger::Log(
-                    Helianthus::Common::StructuredLogLevel::WARN,
-                    "MQ",
-                    "Message moved to DLQ",
-                    f,
-                    __FILE__, __LINE__, SPDLOG_FUNCTION);
-            }
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                  "DLQ移动: queue={} dlq={} id={} reason={}",
+                  QueueName, DeadLetterQueueName,
+                  static_cast<uint64_t>(Message->Header.Id),
+                  static_cast<int>(Reason));
         }
     }
 
@@ -1318,19 +1277,12 @@ MessageQueue::RejectMessage(const std::string& QueueName, MessageId MessageId, b
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
               "消息重试: queue={}, messageId={}, retryCount={}, nextRetryTime={}", 
               QueueName, MessageId, Message->Header.RetryCount, Message->Header.NextRetryTime);
-        {
-            Helianthus::Common::LogFields f;
-            f.AddField("queue", QueueName);
-            f.AddField("message_id", static_cast<uint64_t>(MessageId));
-            f.AddField("retry_count", static_cast<int32_t>(Message->Header.RetryCount));
-            f.AddField("next_retry_time", static_cast<uint64_t>(Message->Header.NextRetryTime));
-            Helianthus::Common::StructuredLogger::Log(
-                Helianthus::Common::StructuredLogLevel::WARN,
-                "MQ",
-                "Message retry scheduled",
-                f,
-                __FILE__, __LINE__, SPDLOG_FUNCTION);
-        }
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+              "已计划重试: queue={} id={} retry_count={} next_retry_time={}",
+              QueueName,
+              static_cast<uint64_t>(MessageId),
+              static_cast<int>(Message->Header.RetryCount),
+              static_cast<uint64_t>(Message->Header.NextRetryTime));
         
         NotifyEvent(QueueName, "MessageRetried", "Message requeued for retry");
     }
@@ -1346,18 +1298,11 @@ MessageQueue::RejectMessage(const std::string& QueueName, MessageId MessageId, b
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
               "消息移动到死信队列: queue={}, messageId={}, reason=\"", 
               QueueName, MessageId, static_cast<int>(Reason));
-        {
-            Helianthus::Common::LogFields f;
-            f.AddField("queue", QueueName);
-            f.AddField("message_id", static_cast<uint64_t>(MessageId));
-            f.AddField("reason", static_cast<int32_t>(static_cast<int>(Reason)));
-            Helianthus::Common::StructuredLogger::Log(
-                Helianthus::Common::StructuredLogLevel::WARN,
-                "MQ",
-                "Message dead-lettered",
-                f,
-                __FILE__, __LINE__, SPDLOG_FUNCTION);
-        }
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+              "已丢入死信: queue={} id={} reason={}",
+              QueueName,
+              static_cast<uint64_t>(MessageId),
+              static_cast<int>(Reason));
         
         NotifyEvent(QueueName, "MessageDeadLettered", "Message moved to dead letter queue");
     }
@@ -1601,91 +1546,7 @@ std::vector<MessagePtr> MessageQueue::GetPendingMessages(const std::string& Queu
 {
     return {};
 }
-QueueResult MessageQueue::SaveToDisk()
-{
-    if (!Initialized.load() || !PersistenceMgr)
-    {
-        return QueueResult::INTERNAL_ERROR;
-    }
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "开始保存消息队列数据到磁盘");
-
-    // 保存所有队列数据
-    {
-        std::shared_lock<std::shared_mutex> Lock(QueuesMutex);
-        for (const auto& [QueueName, QueueData] : Queues)
-        {
-            auto Result = PersistenceMgr->SaveQueue(QueueName, QueueData->Config, QueueData->Stats);
-            if (Result != QueueResult::SUCCESS)
-            {
-                H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "保存队列失败 queue={} code={}", QueueName, static_cast<int>(Result));
-                return Result;
-            }
-        }
-    }
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "消息队列数据保存到磁盘完成");
-    return QueueResult::SUCCESS;
-}
-QueueResult MessageQueue::LoadFromDisk()
-{
-    if (!Initialized.load() || !PersistenceMgr)
-    {
-        return QueueResult::INTERNAL_ERROR;
-    }
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "开始从磁盘加载消息队列数据");
-
-    // 获取所有持久化的队列
-    auto PersistedQueues = PersistenceMgr->ListPersistedQueues();
-    
-    for (const auto& QueueName : PersistedQueues)
-    {
-        QueueConfig Config;
-        QueueStats Stats;
-        
-        auto Result = PersistenceMgr->LoadQueue(QueueName, Config, Stats);
-        if (Result != QueueResult::SUCCESS)
-        {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "加载队列失败 queue={} code={}", QueueName, static_cast<int>(Result));
-            continue;
-        }
-
-        // 创建队列
-        Result = CreateQueue(Config);
-        if (Result != QueueResult::SUCCESS)
-        {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "创建队列失败 queue={} code={}", QueueName, static_cast<int>(Result));
-            continue;
-        }
-
-        // 加载队列中的所有消息
-        std::vector<MessagePtr> Messages;
-        Result = PersistenceMgr->LoadAllMessages(QueueName, Messages);
-        if (Result == QueueResult::SUCCESS)
-        {
-            auto QueueData = GetQueueData(QueueName);
-            if (QueueData)
-            {
-                for (const auto& Message : Messages)
-                {
-                    QueueData->AddMessage(Message);
-                }
-            }
-        }
-    }
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "从磁盘加载消息队列数据完成");
-    return QueueResult::SUCCESS;
-}
-QueueResult MessageQueue::EnablePersistence(const std::string& QueueName, PersistenceMode Mode)
-{
-    return QueueResult::SUCCESS;
-}
-QueueResult MessageQueue::DisablePersistence(const std::string& QueueName)
-{
-    return QueueResult::SUCCESS;
-}
+// 持久化相关实现已拆分至 MessageQueue_Persistence.cpp
 QueueResult MessageQueue::EnableReplication(const std::vector<std::string>& ReplicaNodes)
 {
     return QueueResult::SUCCESS;
@@ -1977,14 +1838,18 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
             F.AddField("unhealthy_node", true);
         }
         
-        Helianthus::Common::StructuredLogger::Log(
-            LogLevel == "INFO" ? Helianthus::Common::StructuredLogLevel::INFO :
-            LogLevel == "WARN" ? Helianthus::Common::StructuredLogLevel::WARN :
-            Helianthus::Common::StructuredLogLevel::ERROR,
-            "MQ",
-            "Message routed",
-            F,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
+        H_LOG(MQ,
+              LogLevel == "INFO" ? Helianthus::Common::LogVerbosity::Log :
+              LogLevel == "WARN" ? Helianthus::Common::LogVerbosity::Warning :
+                                     Helianthus::Common::LogVerbosity::Error,
+              "消息路由: queue={} target={} shard={} retry_count={} max_retries={} fallback_used={} unhealthy_node={}",
+              SourceQueue,
+              SelectedNodeId,
+              SelectedHealthy ? SelectedNodeId : std::string("unhealthy"),
+              static_cast<uint32_t>(RetryCount),
+              MaxRetries,
+              (RetryCount > 1),
+              (!SelectedHealthy));
     }
 
     return QueueResult::SUCCESS;
@@ -2025,17 +1890,8 @@ QueueResult MessageQueue::EnsureDeadLetterQueue(const std::string& QueueName)
     
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
           "创建死信队列: {}", DeadLetterQueueName);
-    {
-        Helianthus::Common::LogFields f; 
-        f.AddField("queue", QueueName);
-        f.AddField("dlq", DeadLetterQueueName);
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::INFO,
-            "MQ",
-            "Dead letter queue created",
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
-    }
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+          "DeadLetterQueue created: queue={} dlq={}", QueueName, DeadLetterQueueName);
     
     return CreateQueue(DeadLetterConfig);
 }
@@ -2329,21 +2185,14 @@ void MessageQueue::TriggerDeadLetterAlert(const std::string& QueueName,
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
           "DLQ告警触发: queue={}, type={}, message={}", 
           QueueName, static_cast<int>(AlertType), AlertMessage);
-    {
-        Helianthus::Common::LogFields f;
-        f.AddField("queue", QueueName);
-        f.AddField("type", static_cast<int32_t>(static_cast<int>(AlertType)));
-        f.AddField("current_value", static_cast<uint64_t>(CurrentValue));
-        f.AddField("threshold_value", static_cast<uint64_t>(ThresholdValue));
-        f.AddField("current_rate", CurrentRate);
-        f.AddField("threshold_rate", ThresholdRate);
-        Helianthus::Common::StructuredLogger::Log(
-            Helianthus::Common::StructuredLogLevel::WARN,
-            "MQ",
-            AlertMessage,
-            f,
-            __FILE__, __LINE__, SPDLOG_FUNCTION);
-    }
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+          "DLQ告警详情: queue={} type={} current={} threshold={} rate={} threshold_rate={}",
+          QueueName,
+          static_cast<int>(AlertType),
+          static_cast<uint64_t>(CurrentValue),
+          static_cast<uint64_t>(ThresholdValue),
+          CurrentRate,
+          ThresholdRate);
 }
 
 void MessageQueue::ClearDeadLetterAlertInternal(const std::string& QueueName, 
@@ -2489,25 +2338,20 @@ void MessageQueue::ProcessMetricsMonitoring()
         std::vector<QueueMetrics> metricsList;
         if (GetAllQueueMetrics(metricsList) == QueueResult::SUCCESS)
         {
-            for (const auto& m : metricsList)
+            for (const auto& M : metricsList)
             {
-                Helianthus::Common::LogFields f;
-                f.AddField("queue", m.QueueName);
-                f.AddField("pending", static_cast<uint64_t>(m.PendingMessages));
-                f.AddField("total", static_cast<uint64_t>(m.TotalMessages));
-                f.AddField("processed", static_cast<uint64_t>(m.ProcessedMessages));
-                f.AddField("dead_letter", static_cast<uint64_t>(m.DeadLetterMessages));
-                f.AddField("retried", static_cast<uint64_t>(m.RetriedMessages));
-                f.AddField("enq_rate", m.EnqueueRate);
-                f.AddField("deq_rate", m.DequeueRate);
-                f.AddField("p50_ms", m.P50LatencyMs);
-                f.AddField("p95_ms", m.P95LatencyMs);
-                Helianthus::Common::StructuredLogger::Log(
-                    Helianthus::Common::StructuredLogLevel::INFO,
-                    "MQ",
-                    "Queue metrics",
-                    f,
-                    __FILE__, __LINE__, SPDLOG_FUNCTION);
+                H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
+                      "队列指标: queue={} pending={} total={} processed={} dlq={} retried={} enq_rate={} deq_rate={} p50_ms={} p95_ms={}",
+                      M.QueueName,
+                      static_cast<uint64_t>(M.PendingMessages),
+                      static_cast<uint64_t>(M.TotalMessages),
+                      static_cast<uint64_t>(M.ProcessedMessages),
+                      static_cast<uint64_t>(M.DeadLetterMessages),
+                      static_cast<uint64_t>(M.RetriedMessages),
+                      M.EnqueueRate,
+                      M.DequeueRate,
+                      M.P50LatencyMs,
+                      M.P95LatencyMs);
             }
         }
 
@@ -2547,21 +2391,12 @@ void MessageQueue::ProcessMetricsMonitoring()
                 }
             }
         }
-        {
-            Helianthus::Common::LogFields F;
-            F.AddField("shards", Shards);
-            F.AddField("leaders", Leaders);
-            F.AddField("healthy_replicas", HealthyReplicas);
-            F.AddField("wal_total_len", static_cast<uint64_t>(TotalWalLen));
-            F.AddField("followers_max_applied", static_cast<uint64_t>(TotalFollowerApplied));
-            F.AddField("replication_total_lag", static_cast<uint64_t>(TotalReplicationLag));
-            Helianthus::Common::StructuredLogger::Log(
-                Helianthus::Common::StructuredLogLevel::INFO,
-                "MQ",
-                "Cluster metrics",
-                F,
-                __FILE__, __LINE__, SPDLOG_FUNCTION);
-        }
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
+              "集群指标: shards={} leaders={} healthy={} wal_total_len={} followers_max_applied={} replication_total_lag={}",
+              Shards, Leaders, HealthyReplicas,
+              static_cast<uint64_t>(TotalWalLen),
+              static_cast<uint64_t>(TotalFollowerApplied),
+              static_cast<uint64_t>(TotalReplicationLag));
     }
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "指标监控线程停止");
 }
@@ -2755,14 +2590,8 @@ void MessageQueue::ProcessHeartbeat()
         }
         if (!NodeHealthList.empty())
         {
-            Helianthus::Common::LogFields F;
-            F.AddField("nodes", static_cast<uint64_t>(NodeHealthList.size()));
-            Helianthus::Common::StructuredLogger::Log(
-                Helianthus::Common::StructuredLogLevel::INFO,
-                "MQ",
-                "Heartbeat tick",
-                F,
-                __FILE__, __LINE__, SPDLOG_FUNCTION);
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "心跳滴答: nodes={}",
+                  static_cast<uint64_t>(NodeHealthList.size()));
         }
     }
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "心跳线程停止");
@@ -3357,798 +3186,22 @@ QueueResult MessageQueue::RollbackDistributedTransaction(TransactionId Id, const
     return RollbackTransaction(Id, Reason);
 }
 
-// 压缩和加密管理实现
-QueueResult MessageQueue::SetCompressionConfig(const std::string& QueueName, const CompressionConfig& Config)
+// 持久化统计方法实现
+IMessagePersistence::PersistenceStats MessageQueue::GetPersistenceStats() const
 {
-    std::unique_lock<std::shared_mutex> Lock(CompressionConfigsMutex);
-    CompressionConfigs[QueueName] = Config;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "设置压缩配置: queue={}, algorithm={}, level={}, min_size={}", 
-          QueueName, static_cast<int>(Config.Algorithm), Config.Level, Config.MinSize);
-    
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetCompressionConfig(const std::string& QueueName, CompressionConfig& OutConfig) const
-{
-    std::shared_lock<std::shared_mutex> Lock(CompressionConfigsMutex);
-    
-    auto It = CompressionConfigs.find(QueueName);
-    if (It == CompressionConfigs.end())
+    if (!PersistenceMgr)
     {
-        OutConfig = CompressionConfig{};
-        return QueueResult::SUCCESS;
+        return IMessagePersistence::PersistenceStats{};
     }
-    
-    OutConfig = It->second;
-    return QueueResult::SUCCESS;
+    return PersistenceMgr->GetPersistenceStats();
 }
 
-QueueResult MessageQueue::SetEncryptionConfig(const std::string& QueueName, const EncryptionConfig& Config)
+void MessageQueue::ResetPersistenceStats()
 {
-    std::unique_lock<std::shared_mutex> Lock(EncryptionConfigsMutex);
-    EncryptionConfigs[QueueName] = Config;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "设置加密配置: queue={}, algorithm={}, auto_encrypt={}", 
-          QueueName, static_cast<int>(Config.Algorithm), Config.EnableAutoEncryption);
-    
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetEncryptionConfig(const std::string& QueueName, EncryptionConfig& OutConfig) const
-{
-    std::shared_lock<std::shared_mutex> Lock(EncryptionConfigsMutex);
-    
-    auto It = EncryptionConfigs.find(QueueName);
-    if (It == EncryptionConfigs.end())
+    if (PersistenceMgr)
     {
-        OutConfig = EncryptionConfig{};
-        return QueueResult::SUCCESS;
-    }
-    
-    OutConfig = It->second;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetCompressionStats(const std::string& QueueName, CompressionStats& OutStats) const
-{
-    std::lock_guard<std::mutex> Lock(CompressionStatsMutex);
-    
-    auto It = CompressionStatsData.find(QueueName);
-    if (It == CompressionStatsData.end())
-    {
-        OutStats = CompressionStats{};
-        return QueueResult::SUCCESS;
-    }
-    
-    OutStats = It->second;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetAllCompressionStats(std::vector<CompressionStats>& OutStats) const
-{
-    std::lock_guard<std::mutex> Lock(CompressionStatsMutex);
-    
-    OutStats.clear();
-    for (const auto& Pair : CompressionStatsData)
-    {
-        OutStats.push_back(Pair.second);
-    }
-    
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetEncryptionStats(const std::string& QueueName, EncryptionStats& OutStats) const
-{
-    std::lock_guard<std::mutex> Lock(EncryptionStatsMutex);
-    
-    auto It = EncryptionStatsData.find(QueueName);
-    if (It == EncryptionStatsData.end())
-    {
-        OutStats = EncryptionStats{};
-        return QueueResult::SUCCESS;
-    }
-    
-    OutStats = It->second;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetAllEncryptionStats(std::vector<EncryptionStats>& OutStats) const
-{
-    std::lock_guard<std::mutex> Lock(EncryptionStatsMutex);
-    
-    OutStats.clear();
-    for (const auto& Pair : EncryptionStatsData)
-    {
-        OutStats.push_back(Pair.second);
-    }
-    
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::CompressMessage(MessagePtr Message, CompressionAlgorithm Algorithm)
-{
-    if (!Message || Message->Payload.Data.empty())
-    {
-        return QueueResult::INVALID_PARAMETER;
-    }
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "压缩消息: algorithm={}, size={}", 
-          static_cast<int>(Algorithm), Message->Payload.Data.size());
-    
-    // 简化实现，直接返回成功
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::DecompressMessage(MessagePtr Message)
-{
-    if (!Message || Message->Payload.Data.empty())
-    {
-        return QueueResult::INVALID_PARAMETER;
-    }
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "解压消息: size={}", Message->Payload.Data.size());
-    
-    // 简化实现，直接返回成功
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm)
-{
-    if (!Message || Message->Payload.Data.empty())
-    {
-        return QueueResult::INVALID_PARAMETER;
-    }
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "加密消息: algorithm={}, size={}", 
-          static_cast<int>(Algorithm), Message->Payload.Data.size());
-    
-    // 简化实现，直接返回成功
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::DecryptMessage(MessagePtr Message)
-{
-    if (!Message || Message->Payload.Data.empty())
-    {
-        return QueueResult::INVALID_PARAMETER;
-    }
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "解密消息: size={}", Message->Payload.Data.size());
-    
-    // 简化实现，直接返回成功
-    return QueueResult::SUCCESS;
-}
-
-// 监控告警管理实现 - 简化版本
-QueueResult MessageQueue::SetAlertConfig(const AlertConfig& Config)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "设置告警配置: type={}, queue={}", 
-          static_cast<int>(Config.Type), Config.QueueName);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetAlertConfig(AlertType Type, const std::string& QueueName, AlertConfig& OutConfig) const
-{
-    OutConfig = AlertConfig{};
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetAllAlertConfigs(std::vector<AlertConfig>& OutConfigs) const
-{
-    OutConfigs.clear();
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::DeleteAlertConfig(AlertType Type, const std::string& QueueName)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "删除告警配置: type={}, queue={}", 
-          static_cast<int>(Type), QueueName);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetActiveAlerts(std::vector<Alert>& OutAlerts) const
-{
-    OutAlerts.clear();
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetAlertHistory(uint32_t Limit, std::vector<Alert>& OutAlerts) const
-{
-    OutAlerts.clear();
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetAlertStats(AlertStats& OutStats) const
-{
-    OutStats = AlertStats{};
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::AcknowledgeAlert(uint64_t AlertId)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "确认告警: id={}", AlertId);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::ResolveAlert(uint64_t AlertId, const std::string& ResolutionNote)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "解决告警: id={}, note={}", AlertId, ResolutionNote);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::ClearAllAlerts()
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "清空所有告警");
-    return QueueResult::SUCCESS;
-}
-
-void MessageQueue::SetAlertHandler(AlertHandler Handler)
-{
-    AlertHandlerFunc = Handler;
-}
-
-void MessageQueue::SetAlertConfigHandler(AlertConfigHandler Handler)
-{
-    AlertConfigHandlerFunc = Handler;
-}
-
-// 告警相关辅助方法 - 简化版本
-uint64_t MessageQueue::GenerateAlertId()
-{
-    static std::atomic<uint64_t> NextAlertId{1};
-    return NextAlertId++;
-}
-
-std::string MessageQueue::MakeAlertConfigKey(AlertType Type, const std::string& QueueName)
-{
-    return std::to_string(static_cast<int>(Type)) + "_" + QueueName;
-}
-
-void MessageQueue::ProcessAlertMonitoring()
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "启动告警监控线程");
-
-    // 周期性检查间隔（秒）
-    constexpr auto kCheckInterval = std::chrono::seconds(5);
-
-    while (!StopAlertMonitor)
-    {
-        // 等待或被唤醒（Shutdown 时唤醒）
-        {
-            std::unique_lock<std::mutex> lock(AlertMonitorMutex);
-            AlertMonitorCondition.wait_for(lock, kCheckInterval, [this]() { return StopAlertMonitor.load(); });
-        }
-        if (StopAlertMonitor)
-        {
-            break;
-        }
-
-        // 周期性执行检查
-        try { CheckQueueAlerts(); } catch (...) {}
-        try { CheckSystemAlerts(); } catch (...) {}
-        try { ProcessBatchTimeout(); } catch (...) {}
-    }
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "告警监控线程停止");
-}
-
-void MessageQueue::CheckQueueAlerts()
-{
-    // 简化实现
-}
-
-void MessageQueue::CheckSystemAlerts()
-{
-    // 简化实现
-}
-
-void MessageQueue::TriggerAlert(const AlertConfig& Config, double CurrentValue, const std::string& Message, const std::string& Details)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "触发告警: type={}, level={}, message={}", 
-          static_cast<int>(Config.Type), static_cast<int>(Config.Level), Message);
-}
-
-void MessageQueue::ResolveAlertInternal(uint64_t AlertId, const std::string& ResolutionNote)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "解决告警: id={}", AlertId);
-}
-
-void MessageQueue::UpdateAlertStats(const Alert& Alert, bool IsNew)
-{
-    // 简化实现
-}
-
-void MessageQueue::NotifyAlert(const Alert& Alert)
-{
-    if (AlertHandlerFunc)
-    {
-        try
-        {
-            AlertHandlerFunc(Alert);
-        }
-        catch (const std::exception& e)
-        {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "告警处理器异常: {}", e.what());
-        }
+        PersistenceMgr->ResetPersistenceStats();
     }
 }
 
-// 性能优化管理实现 - 简化版本
-QueueResult MessageQueue::SetMemoryPoolConfig(const MemoryPoolConfig& Config)
-{
-    {
-        std::unique_lock<std::shared_mutex> lock(MemoryPoolConfigMutex);
-        MemoryPoolConfigData = Config;
-    }
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "设置内存池配置: initial_size={}, max_size={}, block_size={}", 
-          Config.InitialSize, Config.MaxSize, Config.BlockSize);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetMemoryPoolConfig(MemoryPoolConfig& OutConfig) const
-{
-    std::shared_lock<std::shared_mutex> lock(MemoryPoolConfigMutex);
-    OutConfig = MemoryPoolConfigData;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::SetBufferConfig(const BufferConfig& Config)
-{
-    {
-        std::unique_lock<std::shared_mutex> lock(BufferConfigMutex);
-        BufferConfigData = Config;
-    }
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "设置缓冲区配置: initial_capacity={}, max_capacity={}, batching={} size={} timeout_ms={} zero_copy={}",
-          Config.InitialCapacity, Config.MaxCapacity, Config.EnableBatching, Config.BatchSize, Config.BatchTimeoutMs, Config.EnableZeroCopy);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetBufferConfig(BufferConfig& OutConfig) const
-{
-    std::shared_lock<std::shared_mutex> lock(BufferConfigMutex);
-    OutConfig = BufferConfigData;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetPerformanceStats(PerformanceStats& OutStats) const
-{
-    std::lock_guard<std::mutex> guard(PerformanceStatsMutex);
-    OutStats = PerformanceStatsData;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::ResetPerformanceStats()
-{
-    {
-        std::lock_guard<std::mutex> guard(PerformanceStatsMutex);
-        PerformanceStatsData = PerformanceStats{};
-    }
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "重置性能统计");
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::AllocateFromPool(size_t Size, void*& OutPtr)
-{
-    auto t0 = std::chrono::high_resolution_clock::now();
-
-    std::lock_guard<std::mutex> guard(MemoryPoolMutex);
-    OutPtr = nullptr;
-
-    // 尝试从内存池按块分配
-    MemoryBlock* block = FindFreeBlock(Size);
-    if (block)
-    {
-        MarkBlockAsUsed(block);
-        OutPtr = block->Data;
-        {
-            std::lock_guard<std::mutex> s(PerformanceStatsMutex);
-            PerformanceStatsData.MemoryPoolHits++;
-        }
-    }
-    else
-    {
-        // 回退到系统分配
-        OutPtr = std::malloc(Size);
-        {
-            std::lock_guard<std::mutex> s(PerformanceStatsMutex);
-            PerformanceStatsData.MemoryPoolMisses++;
-        }
-    }
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    UpdatePerformanceStats("allocation", ms, Size);
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "从内存池分配: size={}, ptr={}, hit={}",
-          Size, OutPtr, block != nullptr);
-    return OutPtr ? QueueResult::SUCCESS : QueueResult::OPERATION_FAILED;
-}
-
-QueueResult MessageQueue::DeallocateToPool(void* Ptr, size_t Size)
-{
-    auto t0 = std::chrono::high_resolution_clock::now();
-
-    bool returnedToPool = false;
-    {
-        std::lock_guard<std::mutex> guard(MemoryPoolMutex);
-        for (auto* block : MemoryPoolBlocks)
-        {
-            if (block->Data == Ptr)
-            {
-                MarkBlockAsFree(block);
-                returnedToPool = true;
-                break;
-            }
-        }
-    }
-    if (!returnedToPool)
-    {
-        std::free(Ptr);
-    }
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    UpdatePerformanceStats("deallocation", ms, Size);
-
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "释放到{}: ptr={}, size={}", returnedToPool ? "内存池" : "系统", Ptr, Size);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::CompactMemoryPool()
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "内存池压缩");
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer)
-{
-    auto t0 = std::chrono::high_resolution_clock::now();
-    OutBuffer.Data = const_cast<void*>(Data);
-    OutBuffer.Size = Size;
-    OutBuffer.Capacity = Size;
-    OutBuffer.IsOwned = false;
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    UpdatePerformanceStats("zero_copy", ms, Size);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "创建零拷贝缓冲区: size={}", Size);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "释放零拷贝缓冲区");
-    Buffer.Data = nullptr;
-    Buffer.Size = 0;
-    Buffer.Capacity = 0;
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::SendMessageZeroCopy(const std::string& QueueName, const ZeroCopyBuffer& Buffer)
-{
-    auto t0 = std::chrono::high_resolution_clock::now();
-    auto msg = std::make_shared<Message>();
-    // 真正零拷贝：直接引用外部数据，不复制
-    msg->Payload.SetExternal(Buffer.Data, Buffer.Size, /*Owned*/ false, /*Deallocator*/ nullptr);
-    auto res = SendMessage(QueueName, msg);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    UpdatePerformanceStats("zero_copy", ms, Buffer.Size);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "零拷贝发送消息: queue={}, size={}, code={}", QueueName, Buffer.Size, static_cast<int>(res));
-    return res;
-}
-
-QueueResult MessageQueue::CreateBatch(uint32_t& OutBatchId)
-{
-    OutBatchId = NextBatchId++;
-    BatchMessage batch;
-    batch.BatchId = OutBatchId;
-    batch.CreateTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
-    {
-        std::shared_lock<std::shared_mutex> lock(BufferConfigMutex);
-        batch.ExpireTime = batch.CreateTime + BufferConfigData.BatchTimeoutMs;
-    }
-    {
-        std::lock_guard<std::mutex> guard(BatchesMutex);
-        ActiveBatches[OutBatchId] = batch;
-    }
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "创建批处理: id={}", OutBatchId);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::CreateBatchForQueue(const std::string& QueueName, uint32_t& OutBatchId)
-{
-    auto r = CreateBatch(OutBatchId);
-    if (r != QueueResult::SUCCESS)
-    {
-        return r;
-    }
-    {
-        std::lock_guard<std::mutex> guard(BatchesMutex);
-        auto it = ActiveBatches.find(OutBatchId);
-        if (it != ActiveBatches.end())
-        {
-            it->second.QueueName = QueueName;
-        }
-    }
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::AddToBatch(uint32_t BatchId, MessagePtr Message)
-{
-    std::shared_lock<std::shared_mutex> cfgLock(BufferConfigMutex);
-    const bool enableBatching = BufferConfigData.EnableBatching;
-    const uint32_t batchSize = BufferConfigData.BatchSize;
-    cfgLock.unlock();
-
-    std::lock_guard<std::mutex> guard(BatchesMutex);
-    auto it = ActiveBatches.find(BatchId);
-    if (it == ActiveBatches.end())
-    {
-        return QueueResult::INVALID_PARAMETER;
-    }
-    auto& batch = it->second;
-    batch.Messages.push_back(std::move(Message));
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "添加到批处理: batch_id={}, count={}", BatchId, batch.Messages.size());
-
-    if (enableBatching && batch.Messages.size() >= batchSize)
-    {
-        // 达到阈值自动提交
-        return CommitBatch(BatchId);
-    }
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::CommitBatch(uint32_t BatchId)
-{
-    auto t0 = std::chrono::high_resolution_clock::now();
-
-    std::vector<MessagePtr> messages;
-    std::string queueName;
-    {
-        std::lock_guard<std::mutex> guard(BatchesMutex);
-        auto it = ActiveBatches.find(BatchId);
-        if (it == ActiveBatches.end())
-        {
-            return QueueResult::INVALID_PARAMETER;
-        }
-        messages = std::move(it->second.Messages);
-        queueName = it->second.QueueName;
-        ActiveBatches.erase(it);
-    }
-
-    QueueResult res = QueueResult::SUCCESS;
-    if (!messages.empty())
-    {
-        if (!queueName.empty())
-        {
-            res = SendBatchMessages(queueName, messages);
-        }
-        else
-        {
-            // 回退到逐条发送（保持兼容）
-            for (auto& m : messages)
-            {
-                auto r1 = SendMessage("", m);
-                if (r1 != QueueResult::SUCCESS)
-                {
-                    res = r1;
-                }
-            }
-        }
-    }
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    UpdatePerformanceStats("batch", ms, messages.size());
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "提交批处理: id={}, messages={}", BatchId, messages.size());
-    return res;
-}
-
-QueueResult MessageQueue::AbortBatch(uint32_t BatchId)
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "中止批处理: id={}", BatchId);
-    return QueueResult::SUCCESS;
-}
-
-QueueResult MessageQueue::GetBatchInfo(uint32_t BatchId, BatchMessage& OutBatch) const
-{
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "获取批处理信息: id={}", BatchId);
-    return QueueResult::SUCCESS;
-}
-
-// 性能优化相关辅助方法 - 基础实现
-void MessageQueue::InitializeMemoryPool()
-{
-    std::lock_guard<std::mutex> guard(MemoryPoolMutex);
-
-    // 避免重复初始化
-    if (MemoryPoolData != nullptr)
-    {
-        return;
-    }
-
-    // 读取配置（默认值已在 MemoryPoolConfigData 中）
-    MemoryPoolSize = MemoryPoolConfigData.InitialSize;
-    MemoryPoolData = std::malloc(MemoryPoolSize);
-    if (!MemoryPoolData)
-    {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "内存池初始化失败: 分配 {} 字节失败", MemoryPoolSize);
-        return;
-    }
-
-    // 切分为固定大小块
-    const size_t blockSize = std::max<size_t>(MemoryPoolConfigData.BlockSize, 64);
-    const size_t blockCount = MemoryPoolSize / blockSize;
-    MemoryPoolBlocks.reserve(blockCount);
-    FreeBlocks.reserve(blockCount);
-
-    char* base = static_cast<char*>(MemoryPoolData);
-    for (size_t i = 0; i < blockCount; ++i)
-    {
-        auto* block = new MemoryBlock();
-        block->Data = base + i * blockSize;
-        block->Size = blockSize;
-        block->IsUsed = false;
-        block->Next = nullptr;
-        block->AllocTime = 0;
-        MemoryPoolBlocks.push_back(block);
-        FreeBlocks.push_back(block);
-    }
-
-    MemoryPoolUsed = 0;
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "内存池初始化完成: size={} bytes, block_size={}, blocks={}",
-          MemoryPoolSize, blockSize, blockCount);
-}
-
-void MessageQueue::CleanupMemoryPool()
-{
-    std::lock_guard<std::mutex> guard(MemoryPoolMutex);
-    for (auto* block : MemoryPoolBlocks)
-    {
-        delete block;
-    }
-    MemoryPoolBlocks.clear();
-    FreeBlocks.clear();
-
-    if (MemoryPoolData)
-    {
-        std::free(MemoryPoolData);
-        MemoryPoolData = nullptr;
-    }
-    MemoryPoolSize = 0;
-    MemoryPoolUsed = 0;
-}
-
-MemoryBlock* MessageQueue::FindFreeBlock(size_t Size)
-{
-    // 简单的首适配：按块大小分配，不支持大块拼接（后续可扩展）
-    for (auto* block : FreeBlocks)
-    {
-        if (!block->IsUsed && block->Size >= Size)
-        {
-            return block;
-        }
-    }
-    return nullptr;
-}
-
-void MessageQueue::MarkBlockAsUsed(MemoryBlock* Block)
-{
-    if (Block == nullptr || Block->IsUsed)
-    {
-        return;
-    }
-    Block->IsUsed = true;
-    Block->AllocTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
-    // 从空闲表移除
-    auto it = std::find(FreeBlocks.begin(), FreeBlocks.end(), Block);
-    if (it != FreeBlocks.end())
-    {
-        FreeBlocks.erase(it);
-    }
-    MemoryPoolUsed += Block->Size;
-}
-
-void MessageQueue::MarkBlockAsFree(MemoryBlock* Block)
-{
-    if (Block == nullptr || !Block->IsUsed)
-    {
-        return;
-    }
-    Block->IsUsed = false;
-    Block->AllocTime = 0;
-    FreeBlocks.push_back(Block);
-    if (MemoryPoolUsed >= Block->Size)
-    {
-        MemoryPoolUsed -= Block->Size;
-    }
-}
-
-void MessageQueue::UpdatePerformanceStats(const std::string& Operation, double TimeMs, size_t Size)
-{
-    std::lock_guard<std::mutex> guard(PerformanceStatsMutex);
-    auto& s = PerformanceStatsData;
-    if (Operation == "allocation")
-    {
-        s.TotalAllocations++;
-        s.TotalBytesAllocated += Size;
-        s.CurrentBytesAllocated += Size;
-        s.PeakBytesAllocated = std::max(s.PeakBytesAllocated, s.CurrentBytesAllocated);
-        s.AverageAllocationTimeMs = (s.AverageAllocationTimeMs + TimeMs) / 2.0;
-    }
-    else if (Operation == "deallocation")
-    {
-        s.TotalDeallocations++;
-        if (s.CurrentBytesAllocated >= Size)
-        {
-            s.CurrentBytesAllocated -= Size;
-        }
-        s.AverageDeallocationTimeMs = (s.AverageDeallocationTimeMs + TimeMs) / 2.0;
-    }
-    else if (Operation == "zero_copy")
-    {
-        s.ZeroCopyOperations++;
-        s.AverageZeroCopyTimeMs = (s.AverageZeroCopyTimeMs + TimeMs) / 2.0;
-    }
-    else if (Operation == "batch")
-    {
-        s.BatchOperations++;
-        s.AverageBatchTimeMs = (s.AverageBatchTimeMs + TimeMs) / 2.0;
-    }
-
-    const uint64_t totalReq = s.MemoryPoolHits + s.MemoryPoolMisses;
-    if (totalReq > 0)
-    {
-        s.MemoryPoolHitRate = static_cast<double>(s.MemoryPoolHits) / static_cast<double>(totalReq);
-    }
-    s.LastUpdateTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
-}
-
-void MessageQueue::ProcessBatchTimeout()
-{
-    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count();
-
-    std::lock_guard<std::mutex> guard(BatchesMutex);
-    std::vector<uint32_t> expired;
-    for (const auto& kv : ActiveBatches)
-    {
-        const auto& batch = kv.second;
-        if (batch.ExpireTime > 0 && batch.ExpireTime <= now)
-        {
-            expired.push_back(kv.first);
-        }
-    }
-    for (auto id : expired)
-    {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "批处理超时: id={}", id);
-        ActiveBatches.erase(id);
-    }
-}
-
-void MessageQueue::CompressBatch(BatchMessage& Batch)
-{
-    // 预留：后续接入真实压缩。当前仅计算大小
-    Batch.OriginalSize = 0;
-    for (const auto& m : Batch.Messages)
-    {
-        Batch.OriginalSize += m ? m->Payload.Data.size() : 0;
-    }
-    Batch.CompressedSize = Batch.OriginalSize;
-    Batch.IsCompressed = false;
-}
-
-void MessageQueue::DecompressBatch(BatchMessage& Batch)
-{
-    // 预留
-    Batch.IsCompressed = false;
-}
 }  // namespace Helianthus::MessageQueue

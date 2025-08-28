@@ -1,3 +1,37 @@
 # Third-party dependencies BUILD file
 
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
 package(default_visibility = ["//visibility:public"])
+
+# miniz submodule
+cc_library(
+    name = "miniz",
+    srcs = [
+        "miniz/miniz.c",
+        "miniz/miniz_tinfl.c",
+        "miniz/miniz_tdef.c",
+        "miniz/miniz_zip.c",
+    ],
+    hdrs = [
+        "miniz/miniz.h",
+        "miniz_compat/miniz_export.h",
+        "miniz/miniz_common.h",
+        "miniz/miniz_tdef.h",
+        "miniz/miniz_tinfl.h",
+        "miniz/miniz_zip.h",
+    ],
+    includes = ["miniz", "miniz_compat"],
+    copts = ["-Iminiz"],
+    visibility = ["//visibility:public"],
+)
+
+# tiny-AES-c submodule
+cc_library(
+    name = "tinyaes",
+    srcs = ["AES/aes.c", "AES/gmult.c"],
+    hdrs = ["AES/aes.h", "AES/gmult.h"],
+    includes = ["AES"],
+    copts = ["-IAES"],
+    visibility = ["//visibility:public"],
+)

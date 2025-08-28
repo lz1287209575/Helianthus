@@ -1,264 +1,105 @@
 #pragma once
 
-#include "ReflectionTypes.h"
 #include <string>
 #include <vector>
 #include <fstream>
 #include <sstream>
 
-namespace Helianthus::Reflection
+namespace Helianthus::Reflection::CodeGen
 {
+    // 属性标记
+    enum class EPropertyFlags
+    {
+        None = 0,
+        ScriptReadable = 1 << 0,
+        ScriptWritable = 1 << 1,
+        BlueprintReadOnly = 1 << 2,
+        BlueprintReadWrite = 1 << 3,
+        SaveGame = 1 << 4,
+        Config = 1 << 5,
+        EditAnywhere = 1 << 6,
+        VisibleAnywhere = 1 << 7
+    };
+    
+    // 函数标记
+    enum class EFunctionFlags
+    {
+        None = 0,
+        ScriptCallable = 1 << 0,
+        ScriptEvent = 1 << 1,
+        BlueprintCallable = 1 << 2,
+        BlueprintEvent = 1 << 3,
+        BlueprintPure = 1 << 4,
+        NetMulticast = 1 << 5,
+        NetServer = 1 << 6,
+        NetClient = 1 << 7
+    };
+    
+    // 类信息
+    struct ClassInfo
+    {
+        std::string Name;
+        std::string SuperClassName = "HObject";
+        std::vector<std::string> Includes;
+        std::vector<PropertyInfo> Properties;
+        std::vector<FunctionInfo> Functions;
+    };
+    
+    // 属性信息
+    struct PropertyInfo
+    {
+        std::string Type;
+        std::string Name;
+        std::string DefaultValue;
+        std::vector<std::string> Flags;
+        std::string Description;
+    };
+    
+    // 函数信息
+    struct FunctionInfo
+    {
+        std::string ReturnType;
+        std::string Name;
+        std::vector<ParameterInfo> Parameters;
+        std::vector<std::string> Flags;
+        std::string Description;
+        bool bIsConst = false;
+    };
+    
+    // 参数信息
+    struct ParameterInfo
+    {
+        std::string Type;
+        std::string Name;
+        std::string DefaultValue;
+        bool bIsOutParam = false;
+        bool bIsConst = false;
+    };
+    
     // 代码生成器
-    class CodeGenerator
+    class HCodeGenerator
     {
     public:
+        static HCodeGenerator& Get();
+        
         // 生成头文件
-        static std::string GenerateHeader(const std::string& ClassName, 
-                                        const std::string& Namespace = "Helianthus::Reflection")
-        {
-            std::ostringstream oss;
-            oss << "#pragma once\n\n";
-            oss << "#include \"ReflectionTypes.h\"\n";
-            oss << "#include <type_traits>\n\n";
-            oss << "namespace " << Namespace << "\n";
-            oss << "{\n";
-            oss << "    // 自动生成的反射代码\n";
-            oss << "    class " << ClassName << "Reflection\n";
-            oss << "    {\n";
-            oss << "    public:\n";
-            oss << "        static void Register(ReflectionSystem* System);\n";
-            oss << "        static const ClassInfo& GetClassInfo();\n";
-            oss << "    };\n";
-            oss << "} // namespace " << Namespace << "\n";
-            return oss.str();
-        }
-
+        bool GenerateHeader(const std::string& ClassName, const ClassInfo& Info);
+        
         // 生成实现文件
-        static std::string GenerateImplementation(const std::string& ClassName,
-                                                const std::vector<std::string>& Properties,
-                                                const std::vector<std::string>& Methods,
-                                                const std::string& Namespace = "Helianthus::Reflection")
-        {
-            std::ostringstream oss;
-            oss << "#include \"" << ClassName << "Reflection.h\"\n";
-            oss << "#include \"" << ClassName << ".h\"\n\n";
-            oss << "namespace " << Namespace << "\n";
-            oss << "{\n";
-            oss << "    void " << ClassName << "Reflection::Register(ReflectionSystem* System)\n";
-            oss << "    {\n";
-            oss << "        if (System)\n";
-            oss << "        {\n";
-            oss << "            System->RegisterClass(GetClassInfo());\n";
-            oss << "        }\n";
-            oss << "    }\n\n";
-            oss << "    const ClassInfo& " << ClassName << "Reflection::GetClassInfo()\n";
-            oss << "    {\n";
-            oss << "        static ClassInfo Info;\n";
-            oss << "        static bool Initialized = false;\n\n";
-            oss << "        if (!Initialized)\n";
-            oss << "        {\n";
-            oss << "            Info.Name = \"" << ClassName << "\";\n";
-            oss << "            Info.FullName = \"" << Namespace << "::" << ClassName << "\";\n";
-            oss << "            Info.TypeIndex = std::type_index(typeid(" << ClassName << "));\n";
-            oss << "            Info.IsAbstract = std::is_abstract_v<" << ClassName << ">;\n";
-            oss << "            Info.IsFinal = std::is_final_v<" << ClassName << ">;\n\n";
-
-            // 生成属性注册代码
-            for (const auto& Property : Properties)
-            {
-                oss << "            // 注册属性: " << Property << "\n";
-                oss << "            PropertyInfo " << Property << "Prop;\n";
-                oss << "            " << Property << "Prop.Name = \"" << Property << "\";\n";
-                oss << "            " << Property << "Prop.TypeName = \"auto\";\n";
-                oss << "            " << Property << "Prop.Getter = [](void* Obj) -> void* {\n";
-                oss << "                auto* Object = static_cast<" << ClassName << "*>(Obj);\n";
-                oss << "                return static_cast<void*>(&Object->" << Property << ");\n";
-                oss << "            };\n";
-                oss << "            " << Property << "Prop.Setter = [](void* Obj, void* Value) {\n";
-                oss << "                auto* Object = static_cast<" << ClassName << "*>(Obj);\n";
-                oss << "                Object->" << Property << " = *static_cast<decltype(Object->" << Property << ")*>(Value);\n";
-                oss << "            };\n";
-                oss << "            Info.Properties.push_back(" << Property << "Prop);\n\n";
-            }
-
-            // 生成方法注册代码
-            for (const auto& Method : Methods)
-            {
-                oss << "            // 注册方法: " << Method << "\n";
-                oss << "            MethodInfo " << Method << "Method;\n";
-                oss << "            " << Method << "Method.Name = \"" << Method << "\";\n";
-                oss << "            " << Method << "Method.ReturnTypeName = \"auto\";\n";
-                oss << "            " << Method << "Method.Invoker = [](void* Obj, const std::vector<void*>& Args) -> void* {\n";
-                oss << "                auto* Object = static_cast<" << ClassName << "*>(Obj);\n";
-                oss << "                return static_cast<void*>(&Object->" << Method << "());\n";
-                oss << "            };\n";
-                oss << "            Info.Methods.push_back(" << Method << "Method);\n\n";
-            }
-
-            oss << "            Initialized = true;\n";
-            oss << "        }\n\n";
-            oss << "        return Info;\n";
-            oss << "    }\n";
-            oss << "} // namespace " << Namespace << "\n";
-            return oss.str();
-        }
-
-        // 生成自动注册宏
-        static std::string GenerateAutoRegisterMacro(const std::string& ClassName)
-        {
-            std::ostringstream oss;
-            oss << "#define " << ClassName << "_AUTO_REGISTER \\\n";
-            oss << "    static bool Register" << ClassName << "() { \\\n";
-            oss << "        if (GlobalReflectionSystem) { \\\n";
-            oss << "            " << ClassName << "Reflection::Register(GlobalReflectionSystem.get()); \\\n";
-            oss << "            return true; \\\n";
-            oss << "        } \\\n";
-            oss << "        return false; \\\n";
-            oss << "    } \\\n";
-            oss << "    static bool " << ClassName << "Registered = Register" << ClassName << "()\n";
-            return oss.str();
-        }
-
-        // 生成CMakeLists.txt片段
-        static std::string GenerateCMakeFragment(const std::string& ClassName)
-        {
-            std::ostringstream oss;
-            oss << "# 自动生成的反射代码\n";
-            oss << "set(" << ClassName << "_REFLECTION_SOURCES\n";
-            oss << "    " << ClassName << "Reflection.cpp\n";
-            oss << ")\n\n";
-            oss << "add_library(" << ClassName << "Reflection STATIC ${" << ClassName << "_REFLECTION_SOURCES})\n";
-            oss << "target_link_libraries(" << ClassName << "Reflection reflection)\n";
-            return oss.str();
-        }
-
-        // 生成Bazel BUILD片段
-        static std::string GenerateBazelFragment(const std::string& ClassName)
-        {
-            std::ostringstream oss;
-            oss << "cc_library(\n";
-            oss << "    name = \"" << ClassName << "_reflection\",\n";
-            oss << "    srcs = [\"" << ClassName << "Reflection.cpp\"],\n";
-            oss << "    hdrs = [\"" << ClassName << "Reflection.h\"],\n";
-            oss << "    deps = [\"//Shared/Reflection:reflection\"],\n";
-            oss << "    visibility = [\"//visibility:public\"],\n";
-            oss << ")\n";
-            return oss.str();
-        }
-
-        // 保存生成的文件
-        static bool SaveGeneratedFile(const std::string& FilePath, const std::string& Content)
-        {
-            std::ofstream File(FilePath);
-            if (File.is_open())
-            {
-                File << Content;
-                File.close();
-                return true;
-            }
-            return false;
-        }
-
-        // 生成完整的反射代码
-        static bool GenerateReflectionCode(const std::string& ClassName,
-                                         const std::vector<std::string>& Properties,
-                                         const std::vector<std::string>& Methods,
-                                         const std::string& OutputDir,
-                                         const std::string& Namespace = "Helianthus::Reflection")
-        {
-            // 生成头文件
-            std::string HeaderContent = GenerateHeader(ClassName, Namespace);
-            std::string HeaderPath = OutputDir + "/" + ClassName + "Reflection.h";
-            if (!SaveGeneratedFile(HeaderPath, HeaderContent))
-            {
-                return false;
-            }
-
-            // 生成实现文件
-            std::string ImplContent = GenerateImplementation(ClassName, Properties, Methods, Namespace);
-            std::string ImplPath = OutputDir + "/" + ClassName + "Reflection.cpp";
-            if (!SaveGeneratedFile(ImplPath, ImplContent))
-            {
-                return false;
-            }
-
-            // 生成宏定义文件
-            std::string MacroContent = GenerateAutoRegisterMacro(ClassName);
-            std::string MacroPath = OutputDir + "/" + ClassName + "Macros.h";
-            if (!SaveGeneratedFile(MacroPath, MacroContent))
-            {
-                return false;
-            }
-
-            return true;
-        }
-    };
-
-    // 智能注册管理器
-    class SmartRegistrationManager
-    {
-    public:
-        static SmartRegistrationManager& GetInstance()
-        {
-            static SmartRegistrationManager Instance;
-            return Instance;
-        }
-
-        // 注册类信息
-        void RegisterClassInfo(const std::string& ClassName,
-                              const std::vector<std::string>& Properties,
-                              const std::vector<std::string>& Methods)
-        {
-            ClassRegistry[ClassName] = {Properties, Methods};
-        }
-
-        // 生成所有注册代码
-        bool GenerateAllReflectionCode(const std::string& OutputDir)
-        {
-            for (const auto& [ClassName, Info] : ClassRegistry)
-            {
-                if (!CodeGenerator::GenerateReflectionCode(ClassName, Info.first, Info.second, OutputDir))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        // 获取注册的类信息
-        const std::unordered_map<std::string, std::pair<std::vector<std::string>, std::vector<std::string>>>& 
-        GetClassRegistry() const
-        {
-            return ClassRegistry;
-        }
-
+        bool GenerateImplementation(const std::string& ClassName, const ClassInfo& Info);
+        
+        // 生成反射数据
+        bool GenerateReflectionData(const std::string& ClassName, const ClassInfo& Info);
+        
     private:
-        std::unordered_map<std::string, std::pair<std::vector<std::string>, std::vector<std::string>>> ClassRegistry;
+        std::string GenerateHeaderContent(const ClassInfo& Info);
+        std::string GenerateImplementationContent(const ClassInfo& Info);
+        std::string GenerateReflectionContent(const ClassInfo& Info);
+        
+        std::string GeneratePropertyRegistration(const PropertyInfo& Prop);
+        std::string GenerateFunctionRegistration(const FunctionInfo& Func);
+        
+        std::string ToUpper(const std::string& Str);
+        std::string ToMacro(const std::string& Str);
     };
-
-    // 智能注册宏
-    #define HELIANTHUS_SMART_REGISTER_CLASS(ClassName, ...) \
-        namespace Helianthus::Reflection::AutoGen { \
-            static void Register##ClassName() { \
-                SmartRegistrationManager::GetInstance().RegisterClassInfo( \
-                    #ClassName, \
-                    {__VA_ARGS__}, \
-                    {} \
-                ); \
-            } \
-            static bool ClassName##Registered = (Register##ClassName(), true); \
-        }
-
-    #define HELIANTHUS_SMART_REGISTER_METHODS(ClassName, ...) \
-        namespace Helianthus::Reflection::AutoGen { \
-            static void Register##ClassName##Methods() { \
-                auto& Registry = SmartRegistrationManager::GetInstance(); \
-                auto Info = Registry.GetClassRegistry().at(#ClassName); \
-                auto Properties = Info.first; \
-                auto Methods = std::vector<std::string>{__VA_ARGS__}; \
-                Registry.RegisterClassInfo(#ClassName, Properties, Methods); \
-            } \
-            static bool ClassName##MethodsRegistered = (Register##ClassName##Methods(), true); \
-        }
-
-} // namespace Helianthus::Reflection
+}

@@ -176,6 +176,10 @@ public:
     QueueResult LoadFromDisk() override;
     QueueResult EnablePersistence(const std::string& QueueName, PersistenceMode Mode) override;
     QueueResult DisablePersistence(const std::string& QueueName) override;
+    
+    // 持久化统计
+    IMessagePersistence::PersistenceStats GetPersistenceStats() const override;
+    void ResetPersistenceStats() override;
 
     // 集群和复制
     QueueResult EnableReplication(const std::vector<std::string>& ReplicaNodes) override;

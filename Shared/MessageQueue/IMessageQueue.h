@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "MessageTypes.h"
+#include "MessagePersistence.h"
 
 namespace Helianthus::MessageQueue
 {
@@ -170,6 +171,10 @@ public:
     virtual QueueResult LoadFromDisk() = 0;
     virtual QueueResult EnablePersistence(const std::string& QueueName, PersistenceMode Mode) = 0;
     virtual QueueResult DisablePersistence(const std::string& QueueName) = 0;
+    
+    // 持久化统计
+    virtual IMessagePersistence::PersistenceStats GetPersistenceStats() const = 0;
+    virtual void ResetPersistenceStats() = 0;
 
     // 集群和复制
     virtual QueueResult EnableReplication(const std::vector<std::string>& ReplicaNodes) = 0;

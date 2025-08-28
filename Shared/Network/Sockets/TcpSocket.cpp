@@ -340,6 +340,39 @@ NetworkError TcpSocket::Accept()
     return NetworkError::NONE;
 }
 
+NetworkError TcpSocket::AcceptClient(TcpSocket& OutClient)
+{
+    std::lock_guard<std::mutex> Lock(Mutex);
+    if (SockImpl->Fd < 0)
+    {
+        return NetworkError::ACCEPT_FAILED;
+    }
+    sockaddr_in ClientAddr{};
+    socklen_t Len = sizeof(ClientAddr);
+#ifdef _WIN32
+    SOCKET ClientFd = ::accept(static_cast<SOCKET>(SockImpl->Fd), reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
+    if (ClientFd == INVALID_SOCKET)
+    {
+        return NetworkError::ACCEPT_FAILED;
+    }
+    NetworkAddress Local{SockImpl->Local.Ip, SockImpl->Local.Port};
+    NetworkAddress Remote{::inet_ntoa(ClientAddr.sin_addr), ntohs(ClientAddr.sin_port)};
+    OutClient.Adopt(static_cast<NativeHandle>(ClientFd), Local, Remote, true);
+#else
+    int ClientFd = ::accept(SockImpl->Fd, reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
+    if (ClientFd < 0)
+    {
+        return NetworkError::ACCEPT_FAILED;
+    }
+    char IpBuf[INET_ADDRSTRLEN] = {0};
+    ::inet_ntop(AF_INET, &ClientAddr.sin_addr, IpBuf, sizeof(IpBuf));
+    NetworkAddress Local{SockImpl->Local.Ip, SockImpl->Local.Port};
+    NetworkAddress Remote{IpBuf, ntohs(ClientAddr.sin_port)};
+    OutClient.Adopt(static_cast<NativeHandle>(ClientFd), Local, Remote, true);
+#endif
+    return NetworkError::NONE;
+}
+
 void TcpSocket::Disconnect()
 {
     std::lock_guard<std::mutex> Lock(Mutex);
