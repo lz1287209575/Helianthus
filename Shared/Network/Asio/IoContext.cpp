@@ -31,6 +31,9 @@
     #include <errno.h>
     #include <fcntl.h>
     #include <unistd.h>
+    #if defined(__linux__)
+        #include <sys/eventfd.h>
+    #endif
 #endif
 
 using namespace Helianthus::Network::Asio;

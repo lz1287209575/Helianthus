@@ -547,12 +547,13 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
         return QueueResult::QUEUE_FULL;
     }
 
-    // 检查消息大小
-    if (Message->Payload.Size > Queue->Config.MaxSizeBytes / Queue->Config.MaxSize)
+    // 检查消息大小（按总字节上限）
+    if (Message->Payload.Size > Queue->Config.MaxSizeBytes)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-              "消息过大: queue={}, size={}", QueueName,
-              static_cast<uint64_t>(Message->Payload.Size));
+              "消息过大: queue={}, size={}, limit={}B", QueueName,
+              static_cast<uint64_t>(Message->Payload.Size),
+              static_cast<uint64_t>(Queue->Config.MaxSizeBytes));
         return QueueResult::MESSAGE_TOO_LARGE;
     }
 
@@ -789,7 +790,10 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
 
     // 如果不是自动确认，添加到待确认列表
     const auto ConsumerIt = Queue->Consumers.begin();
-    if (ConsumerIt != Queue->Consumers.end() && !ConsumerIt->second.AutoAcknowledge)
+    // 若存在消费者且未开启自动确认，则加入待确认集合；
+    // 若当前无消费者，也加入待确认集合以保证应用层显式确认/拒收流程可用
+    if ((ConsumerIt != Queue->Consumers.end() && !ConsumerIt->second.AutoAcknowledge) ||
+        (Queue->Consumers.empty()))
     {
         Queue->PendingAcknowledgments[OutMessage->Header.Id] = OutMessage;
     }
@@ -924,7 +928,18 @@ MessageQueue::TopicData* MessageQueue::GetTopicData(const std::string& TopicName
 
 bool MessageQueue::ValidateMessage(MessagePtr Message)
 {
-    return Message && Message->Header.Type != MessageType::UNKNOWN && !Message->Payload.IsEmpty();
+    bool Ok = Message && Message->Header.Type != MessageType::UNKNOWN && !Message->Payload.IsEmpty();
+    if (!Ok)
+    {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+              "消息校验失败: hasMsg={} type={} empty={} size={} extSize={}",
+              Message != nullptr,
+              Message ? static_cast<int>(Message->Header.Type) : -1,
+              Message ? Message->Payload.IsEmpty() : true,
+              Message ? static_cast<uint64_t>(Message->Payload.Size) : 0ull,
+              Message ? static_cast<uint64_t>(Message->Payload.GetSize()) : 0ull);
+    }
+    return Ok;
 }
 
 bool MessageQueue::ValidateQueueConfig(const QueueConfig& Config)
@@ -1266,14 +1281,61 @@ QueueResult MessageQueue::GetTopicInfo(const std::string& TopicName, TopicConfig
 QueueResult MessageQueue::SendBatchMessages(const std::string& QueueName,
                                             const std::vector<MessagePtr>& Messages)
 {
-    return QueueResult::SUCCESS;
+    // 简单实现：逐条发送，复用已有校验与加密/压缩路径
+    QueueResult LastResult = QueueResult::SUCCESS;
+    for (const auto& Msg : Messages)
+    {
+        QueueResult Result = SendMessage(QueueName, Msg);
+        if (Result != QueueResult::SUCCESS)
+        {
+            // 记录最后一次失败，但继续尝试发送剩余消息
+            LastResult = Result;
+        }
+    }
+    return LastResult;
 }
 QueueResult MessageQueue::ReceiveBatchMessages(const std::string& QueueName,
                                                std::vector<MessagePtr>& OutMessages,
                                                uint32_t MaxCount,
                                                uint32_t TimeoutMs)
 {
-    return QueueResult::SUCCESS;
+    OutMessages.clear();
+
+    // 允许在总超时时间内至少获取一条消息，其后尽量拉满到 MaxCount
+    auto StartTime = std::chrono::steady_clock::now();
+    uint32_t RemainingTimeoutMs = TimeoutMs;
+
+    while (OutMessages.size() < MaxCount)
+    {
+        MessagePtr Message;
+        QueueResult Result = ReceiveMessage(QueueName, Message, RemainingTimeoutMs);
+
+        if (Result == QueueResult::SUCCESS && Message)
+        {
+            OutMessages.push_back(std::move(Message));
+            // 后续拉取不再阻塞（尽量一次性拿满）
+            RemainingTimeoutMs = 0;
+            continue;
+        }
+
+        if (Result == QueueResult::TIMEOUT)
+        {
+            // 如果尚未拿到任何消息，则返回超时；否则认为成功（拿到的作为本次结果）
+            return OutMessages.empty() ? QueueResult::TIMEOUT : QueueResult::SUCCESS;
+        }
+
+        if (Result != QueueResult::SUCCESS)
+        {
+            // 非超时错误：如果已有部分结果，则返回成功；否则返回错误码
+            return OutMessages.empty() ? Result : QueueResult::SUCCESS;
+        }
+
+        // 未成功也未超时（理论上不会到这里），避免死循环
+        break;
+    }
+
+    // 若循环因达到数量上限或没有更多可用消息退出
+    return OutMessages.empty() ? QueueResult::TIMEOUT : QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::PeekMessage(const std::string& QueueName, MessagePtr& OutMessage)
 {
@@ -1306,28 +1368,15 @@ MessageQueue::RejectMessage(const std::string& QueueName, MessageId MessageId, b
                        std::chrono::system_clock::now().time_since_epoch())
                        .count();
         
-        uint32_t RetryDelay = Queue->Config.RetryDelayMs;
-        if (Queue->Config.EnableRetryBackoff)
-        {
-            // 指数退避：延迟时间 = 基础延迟 * (退避倍数 ^ 重试次数)
-            RetryDelay = static_cast<uint32_t>(
-                Queue->Config.RetryDelayMs * 
-                std::pow(Queue->Config.RetryBackoffMultiplier, Message->Header.RetryCount)
-            );
-            
-            // 限制最大延迟时间
-            if (RetryDelay > Queue->Config.MaxRetryDelayMs)
-            {
-                RetryDelay = Queue->Config.MaxRetryDelayMs;
-            }
-        }
-        
-        Message->Header.NextRetryTime = Now + RetryDelay;
+        // 显式事务拒收后重入队：立即可见
+        Message->Header.NextRetryTime = Now;
         Message->IncrementRetry();
         Message->Status = MessageStatus::PENDING;
         
         // 重新添加到队列
         Queue->AddMessage(Message);
+        // 唤醒可能在等待可用消息的接收者
+        Queue->NotifyCondition.notify_one();
         Queue->Stats.RetriedMessages++;
         
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
@@ -2928,7 +2977,8 @@ QueueResult MessageQueue::DeleteQueueInTransaction(TransactionId Id, const std::
 
 QueueResult MessageQueue::AddTransactionOperation(TransactionId Id, const TransactionOperation& Operation)
 {
-    std::shared_lock<std::shared_mutex> Lock(TransactionsMutex);
+    // 写操作需要独占锁，避免并发下读取锁导致未定义行为
+    std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
     
     auto It = Transactions.find(Id);
     if (It == Transactions.end())

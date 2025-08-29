@@ -39,12 +39,10 @@ cc_library(
         "//Shared/RPC:rpc",
         "//ThirdParty:miniz",
         "//ThirdParty:tinyaes",
-        "//ThirdParty/openssl:openssl_headers",
-        "//ThirdParty/openssl:openssl_crypto",
     ],
     linkopts = select({
         "@bazel_tools//src/conditions:windows": [],
-        "//conditions:default": ["-lz"],
+        "//conditions:default": ["-lz", "-lcrypto"],
     }),
     
     visibility = ["//visibility:public"],

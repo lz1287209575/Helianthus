@@ -318,6 +318,11 @@ public:
     QueueResult AbortBatch(uint32_t BatchId) override;
     QueueResult GetBatchInfo(uint32_t BatchId, BatchMessage& OutBatch) const override;
 
+    // 批处理统计查询（用于指标导出）
+    QueueResult GetBatchCounters(const std::string& QueueName,
+                                 uint64_t& OutCommitCount,
+                                 uint64_t& OutMessageCount) const;
+
 private:
     // 一致性哈希分片路由
     class ConsistentHashRing
@@ -394,6 +399,11 @@ private:
     std::unordered_map<std::string, EncryptionStats> EncryptionStatsData;
     mutable std::mutex CompressionStatsMutex;
     mutable std::mutex EncryptionStatsMutex;
+
+    // 批处理统计
+    mutable std::mutex BatchCountersMutex;
+    std::unordered_map<std::string, uint64_t> BatchCommitCountByQueue;
+    std::unordered_map<std::string, uint64_t> BatchMessageCountByQueue;
     
     // 压缩和加密相关方法
     QueueResult ApplyCompression(MessagePtr Message, const std::string& QueueName);

@@ -35,7 +35,8 @@ QueueResult MessageQueue::SendMessageZeroCopy(const std::string& QueueName, cons
     auto StartTime = std::chrono::high_resolution_clock::now();
     auto Msg = std::make_shared<Message>();
     Msg->Header.Type = MessageType::TEXT;
-    Msg->Payload.SetExternal(Buffer.Data, Buffer.Size, /*Owned*/ false, /*Deallocator*/ nullptr);
+    // 为了确保接收端可直接从内部缓冲读取，这里复制为内部数据存储
+    Msg->Payload.SetData(Buffer.Data, Buffer.Size);
     auto Result = SendMessage(QueueName, Msg);
     auto EndTime = std::chrono::high_resolution_clock::now();
     double ElapsedMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
@@ -84,12 +85,8 @@ QueueResult MessageQueue::CreateBatchForQueue(const std::string& QueueName, uint
 
 QueueResult MessageQueue::AddToBatch(uint32_t BatchId, MessagePtr Message)
 {
-    std::shared_lock<std::shared_mutex> BufferCfgLock(BufferConfigMutex);
-    const bool EnableBatching = BufferConfigData.EnableBatching;
-    const uint32_t BatchSize = BufferConfigData.BatchSize;
-    BufferCfgLock.unlock();
-
-    bool ShouldCommit = false;
+    auto T0 = std::chrono::high_resolution_clock::now();
+    // 仅负责将消息加入批处理，不做自动提交；提交由调用方显式触发
     {
         std::lock_guard<std::mutex> BatchesLock(BatchesMutex);
         auto It = ActiveBatches.find(BatchId);
@@ -99,17 +96,15 @@ QueueResult MessageQueue::AddToBatch(uint32_t BatchId, MessagePtr Message)
         }
         auto& Batch = It->second;
         Batch.Messages.push_back(std::move(Message));
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "添加到批处理: batch_id={}, count={}", BatchId, Batch.Messages.size());
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+              "添加到批处理: batch_id={}, queue={}, count={}",
+              BatchId, Batch.QueueName, Batch.Messages.size());
 
-        if (EnableBatching && Batch.Messages.size() >= BatchSize)
-        {
-            ShouldCommit = true;
-        }
+        // 不在此处自动提交，避免调用方在同一批次继续添加时出现批次被提前清空的问题
     }
-    if (ShouldCommit)
-    {
-        return CommitBatch(BatchId);
-    }
+    auto T1 = std::chrono::high_resolution_clock::now();
+    double Ms = std::chrono::duration<double, std::milli>(T1 - T0).count();
+    UpdatePerformanceStats("batch_add", Ms, 1);
     return QueueResult::SUCCESS;
 }
 
@@ -154,7 +149,14 @@ QueueResult MessageQueue::CommitBatch(uint32_t BatchId)
     auto EndTime = std::chrono::high_resolution_clock::now();
     double ElapsedMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
     UpdatePerformanceStats("batch", ElapsedMs, Messages.size());
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "提交批处理: id={}, messages={}", BatchId, Messages.size());
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+          "提交批处理: id={}, queue={}, messages={}", BatchId, QueueName, Messages.size());
+    if (!QueueName.empty())
+    {
+        std::lock_guard<std::mutex> Ck(BatchCountersMutex);
+        BatchCommitCountByQueue[QueueName] += 1;
+        BatchMessageCountByQueue[QueueName] += Messages.size();
+    }
     return Result;
 }
 
@@ -167,6 +169,20 @@ QueueResult MessageQueue::AbortBatch(uint32_t BatchId)
 QueueResult MessageQueue::GetBatchInfo(uint32_t BatchId, BatchMessage& OutBatch) const
 {
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "获取批处理信息: id={}", BatchId);
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::GetBatchCounters(const std::string& QueueName,
+                                           uint64_t& OutCommitCount,
+                                           uint64_t& OutMessageCount) const
+{
+    std::lock_guard<std::mutex> Ck(BatchCountersMutex);
+    OutCommitCount = 0;
+    OutMessageCount = 0;
+    auto ItC = BatchCommitCountByQueue.find(QueueName);
+    if (ItC != BatchCommitCountByQueue.end()) OutCommitCount = ItC->second;
+    auto ItM = BatchMessageCountByQueue.find(QueueName);
+    if (ItM != BatchMessageCountByQueue.end()) OutMessageCount = ItM->second;
     return QueueResult::SUCCESS;
 }
 

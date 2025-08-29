@@ -2,6 +2,8 @@
 
 #include "Shared/Network/Sockets/TcpSocket.h"
 #include "Shared/Network/NetworkTypes.h"
+#include "Shared/Common/LogCategories.h"
+#include "Shared/Common/Logger.h"
 #include <cstring>
 #include "picohttpparser.h"
 
@@ -35,8 +37,17 @@ void PrometheusExporter::ServerLoop(uint16_t Port)
     using namespace Helianthus::Network::Sockets;
     TcpSocket Server;
     NetworkAddress Bind{"0.0.0.0", Port};
-    if (Server.Bind(Bind) != NetworkError::NONE) { Running.store(false); return; }
-    if (Server.Listen(64) != NetworkError::NONE) { Running.store(false); return; }
+    if (Server.Bind(Bind) != NetworkError::NONE) { 
+        std::cout << "Bind failed" << std::endl;
+        Running.store(false); 
+        return; 
+    }
+    if (Server.Listen(64) != NetworkError::NONE) { 
+        std::cout << "Listen failed" << std::endl;
+        Running.store(false); 
+        return; 
+    }
+    std::cout << "Server started successfully on port " << Port << std::endl;
 
     while (Running.load())
     {
@@ -56,27 +67,71 @@ void PrometheusExporter::ServerLoop(uint16_t Port)
         if (ErrRecv == Helianthus::Network::NetworkError::NONE && Recv > 0)
         {
             Req.assign(Buffer, Buffer + Recv);
+            std::cout << "收到请求: " << Req << std::endl;
         }
-        const char* MethodC = nullptr; size_t MethodLen = 0;
-        const char* PathC = nullptr; size_t PathLen = 0; int Minor = 1;
-        phr_header Headers[16]; size_t NumHeaders = 0;
+        else if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            // 非阻塞模式下没有数据可读，等待一下再试
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+        else
+        {
+            std::cout << "接收失败: err=" << static_cast<int>(ErrRecv) << ", recv=" << Recv << ", errno=" << errno << std::endl;
+            continue;
+        }
+        
+        // 使用 picohttpparser 正确解析
+        const char* MethodC = nullptr; 
+        size_t MethodLen = 0;
+        const char* PathC = nullptr; 
+        size_t PathLen = 0; 
+        int Minor = 1;
+        
+        std::cout << "开始解析请求，长度: " << Req.size() << std::endl;
+        std::cout << "请求内容: [" << Req << "]" << std::endl;
+        
+        // 使用正确的 phr_parse_request 调用
+        struct phr_header Headers[16];
+        size_t NumHeaders = 16; // 设置为数组大小
         int ParsedBytes = phr_parse_request(Req.data(), Req.size(), &MethodC, &MethodLen,
                                             &PathC, &PathLen, &Minor, Headers, &NumHeaders, 0);
-        std::string Method;
-        std::string Path;
+        
+        std::string Method, Path;
         bool Parsed = ParsedBytes >= 0;
+        
         if (Parsed)
         {
             Method.assign(MethodC, MethodLen);
             Path.assign(PathC, PathLen);
+            std::cout << "解析成功: method=" << Method << ", path=" << Path << std::endl;
+        }
+        else
+        {
+            std::cout << "解析失败: bytes=" << ParsedBytes << std::endl;
+            // 如果 picohttpparser 失败，使用简单解析作为后备
+            size_t FirstSpace = Req.find(' ');
+            if (FirstSpace != std::string::npos)
+            {
+                Method = Req.substr(0, FirstSpace);
+                size_t SecondSpace = Req.find(' ', FirstSpace + 1);
+                if (SecondSpace != std::string::npos)
+                {
+                    Path = Req.substr(FirstSpace + 1, SecondSpace - FirstSpace - 1);
+                    Parsed = true;
+                    std::cout << "后备解析成功: method=" << Method << ", path=" << Path << std::endl;
+                }
+            }
         }
 
         std::string Resp;
+        std::cout << "开始构建响应" << std::endl;
         if (!Parsed)
         {
             const char* Msg = "Bad Request";
             Resp = std::string("HTTP/1.1 400 Bad Request\r\nContent-Length: ") +
                    std::to_string(strlen(Msg)) + "\r\nConnection: close\r\n\r\n" + Msg;
+            std::cout << "构建了 Bad Request 响应" << std::endl;
         }
         else if (Path == "/metrics")
         {
@@ -108,8 +163,11 @@ void PrometheusExporter::ServerLoop(uint16_t Port)
         }
 
         size_t Sent = 0;
-        Client.Send(Resp.data(), Resp.size(), Sent);
+        std::cout << "准备发送响应，长度: " << Resp.size() << std::endl;
+        auto SendResult = Client.Send(Resp.data(), Resp.size(), Sent);
+        std::cout << "发送结果: " << static_cast<int>(SendResult) << ", 发送字节: " << Sent << std::endl;
         Client.Disconnect();
+        std::cout << "连接已断开" << std::endl;
     }
 }
 

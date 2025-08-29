@@ -271,6 +271,9 @@ NetworkError TcpSocket::Bind(const NetworkAddress& Address)
 #else
         int Opt = 1;
         ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, &Opt, sizeof(Opt));
+        // 确保服务器套接字是阻塞模式
+        int Flags = fcntl(SockImpl->Fd, F_GETFL, 0);
+        fcntl(SockImpl->Fd, F_SETFL, Flags & ~O_NONBLOCK);
 #endif
     }
 
@@ -362,6 +365,11 @@ NetworkError TcpSocket::AcceptClient(TcpSocket& OutClient)
     int ClientFd = ::accept(SockImpl->Fd, reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
     if (ClientFd < 0)
     {
+        int Err = errno;
+        if (Err == EAGAIN || Err == EWOULDBLOCK)
+        {
+            return NetworkError::ACCEPT_FAILED; // 非阻塞模式下没有连接
+        }
         return NetworkError::ACCEPT_FAILED;
     }
     char IpBuf[INET_ADDRSTRLEN] = {0};

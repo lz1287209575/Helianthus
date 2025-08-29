@@ -37,3 +37,85 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "transaction_test",
+    srcs = ["TransactionTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "message_queue_compression_test",
+    srcs = ["MessageQueueCompressionTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "message_queue_batching_test",
+    srcs = ["MessageQueueBatchingTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "prometheus_tx_metrics_test",
+    srcs = ["PrometheusTransactionMetricsTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Monitoring:monitoring",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "prometheus_tx_metrics_extended_test",
+    srcs = ["PrometheusTransactionMetricsExtendedTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Monitoring:monitoring",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "prometheus_http_e2e_test",
+    srcs = ["PrometheusHttpE2eTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Monitoring:monitoring",
+        "//Shared/Network:network",
+        "@googletest//:gtest_main",
+    ],
+)
