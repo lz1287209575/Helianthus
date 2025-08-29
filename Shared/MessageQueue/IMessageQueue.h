@@ -260,7 +260,7 @@ public:
     // 手动压缩和加密
     virtual QueueResult CompressMessage(MessagePtr Message, CompressionAlgorithm Algorithm = CompressionAlgorithm::GZIP) = 0;
     virtual QueueResult DecompressMessage(MessagePtr Message) = 0;
-    virtual QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM) = 0;
+    virtual QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM, const EncryptionConfig& Cfg = EncryptionConfig{}) = 0;
     virtual QueueResult DecryptMessage(MessagePtr Message) = 0;
 
     // 监控告警管理

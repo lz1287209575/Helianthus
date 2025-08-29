@@ -57,8 +57,8 @@
 ### 高优先级 (立即开始)
 
 #### 1. 指标导出细化（高优）
-- [ ] 批处理耗时导出：`helianthus_batch_duration_ms`（avg/p50/p95 或直方图）
-- [ ] 零拷贝耗时导出：`helianthus_zero_copy_duration_ms`
+- [x] 批处理耗时导出：`helianthus_batch_duration_ms`（avg 已实现；p50/p95/直方图 待补）
+- [x] 零拷贝耗时导出：`helianthus_zero_copy_duration_ms`（avg 已实现；p50/p95/直方图 待补）
 - [ ] 事务耗时直方图：提交/回滚耗时分布
 - [ ] 指标分队列聚合的 HELP/TYPE 规范化补全
 

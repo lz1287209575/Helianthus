@@ -267,7 +267,7 @@ public:
     // 手动压缩和加密
     QueueResult CompressMessage(MessagePtr Message, CompressionAlgorithm Algorithm = CompressionAlgorithm::GZIP) override;
     QueueResult DecompressMessage(MessagePtr Message) override;
-    QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM) override;
+    QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM, const EncryptionConfig& Cfg = EncryptionConfig{}) override;
     QueueResult DecryptMessage(MessagePtr Message) override;
 
     // 监控告警管理

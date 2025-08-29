@@ -105,7 +105,9 @@ int main()
     if (GetEncResult == QueueResult::SUCCESS)
     {
         std::cout << "查询加密配置成功: algorithm=" << static_cast<int>(RetrievedEncConfig.Algorithm) 
-                  << ", auto_encrypt=" << RetrievedEncConfig.EnableAutoEncryption << std::endl;
+                  << ", auto_encrypt=" << RetrievedEncConfig.EnableAutoEncryption 
+                  << ", key_size=" << RetrievedEncConfig.Key.size()
+                  << ", iv_size=" << RetrievedEncConfig.IV.size() << std::endl;
     }
 
     // 测试4：手动压缩和加密消息
@@ -142,7 +144,7 @@ int main()
     }
     
     // 加密消息
-    auto EncryptResult = Queue->EncryptMessage(Message, EncryptionAlgorithm::AES_256_GCM);
+    auto EncryptResult = Queue->EncryptMessage(Message, EncryptionAlgorithm::AES_256_GCM, EncConfig);
     if (EncryptResult == QueueResult::SUCCESS)
     {
         std::cout << "消息加密成功，加密后大小: " << Message->Payload.Data.size() << " 字节" << std::endl;
@@ -203,10 +205,23 @@ int main()
     std::string AutoPayload(8192, 'A');
     AutoMsg->Payload.Data = std::vector<char>(AutoPayload.begin(), AutoPayload.end());
     AutoMsg->Payload.Size = AutoMsg->Payload.Data.size();
+    // 检查发送前的消息属性
+    std::cout << "发送前消息属性数量: " << AutoMsg->Header.Properties.size() << std::endl;
+    for (const auto& [Key, Value] : AutoMsg->Header.Properties)
+    {
+        std::cout << "  " << Key << " = " << Value << std::endl;
+    }
+    
     auto AutoSend = Queue->SendMessage(Config.Name, AutoMsg);
     if (AutoSend == QueueResult::SUCCESS)
     {
         std::cout << "自动消息发送成功: id=" << AutoMsg->Header.Id << std::endl;
+        // 检查发送后的消息属性
+        std::cout << "发送后消息属性数量: " << AutoMsg->Header.Properties.size() << std::endl;
+        for (const auto& [Key, Value] : AutoMsg->Header.Properties)
+        {
+            std::cout << "  " << Key << " = " << Value << std::endl;
+        }
     }
     else
     {
@@ -246,6 +261,14 @@ int main()
         auto RecvRes = Queue->ReceiveMessage(Config.Name, RecvMsg, 1000);
         if (RecvRes == QueueResult::SUCCESS && RecvMsg)
         {
+            // 详细检查消息属性
+            std::cout << "接收消息 ID=" << RecvMsg->Header.Id << " size=" << RecvMsg->Payload.Data.size() << std::endl;
+            std::cout << "  属性数量: " << RecvMsg->Header.Properties.size() << std::endl;
+            for (const auto& [Key, Value] : RecvMsg->Header.Properties)
+            {
+                std::cout << "    " << Key << " = " << Value << std::endl;
+            }
+            
             std::string Actual(RecvMsg->Payload.Data.begin(), RecvMsg->Payload.Data.end());
             if (Actual == ExpectA || Actual == ExpectLarge)
             {
@@ -256,7 +279,19 @@ int main()
             else
             {
                 std::cout << "回环验证未命中：size=" << Actual.size() << std::endl;
+                // 显示前100个字符用于调试
+                std::string Preview = Actual.substr(0, std::min(100ul, Actual.size()));
+                std::cout << "  内容预览: " << Preview << std::endl;
+                // 检查是否包含压缩/加密的标记
+                bool HasCompressed = RecvMsg->Header.Properties.count("Compressed");
+                bool HasEncrypted = RecvMsg->Header.Properties.count("Encrypted");
+                std::cout << "  压缩标记: " << (HasCompressed ? "有" : "无") << std::endl;
+                std::cout << "  加密标记: " << (HasEncrypted ? "有" : "无") << std::endl;
             }
+        }
+        else
+        {
+            std::cout << "接收失败: code=" << static_cast<int>(RecvRes) << std::endl;
         }
     }
     if (!Verified)

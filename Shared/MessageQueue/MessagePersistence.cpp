@@ -718,6 +718,23 @@ QueueResult FileBasedPersistence::SerializeMessage(MessagePtr Message, std::vect
         Stream.write(reinterpret_cast<const char*>(&Message->Header.RetryCount), sizeof(Message->Header.RetryCount));
         Stream.write(reinterpret_cast<const char*>(&Message->Header.MaxRetries), sizeof(Message->Header.MaxRetries));
         
+        // 序列化消息属性
+        uint32_t PropertiesCount = static_cast<uint32_t>(Message->Header.Properties.size());
+        Stream.write(reinterpret_cast<const char*>(&PropertiesCount), sizeof(PropertiesCount));
+        for (const auto& [Key, Value] : Message->Header.Properties)
+        {
+            uint32_t KeySize = static_cast<uint32_t>(Key.size());
+            Stream.write(reinterpret_cast<const char*>(&KeySize), sizeof(KeySize));
+            Stream.write(Key.c_str(), KeySize);
+            
+            uint32_t ValueSize = static_cast<uint32_t>(Value.size());
+            Stream.write(reinterpret_cast<const char*>(&ValueSize), sizeof(ValueSize));
+            Stream.write(Value.c_str(), ValueSize);
+        }
+        
+        // 序列化消息状态
+        Stream.write(reinterpret_cast<const char*>(&Message->Status), sizeof(Message->Status));
+        
         // 序列化消息负载
         std::string PayloadStr = Message->Payload.AsString();
         uint32_t PayloadSize = static_cast<uint32_t>(PayloadStr.size());
@@ -756,6 +773,27 @@ QueueResult FileBasedPersistence::DeserializeMessage(const std::vector<uint8_t>&
         Stream.read(reinterpret_cast<char*>(&OutMessage->Header.ExpireTime), sizeof(OutMessage->Header.ExpireTime));
         Stream.read(reinterpret_cast<char*>(&OutMessage->Header.RetryCount), sizeof(OutMessage->Header.RetryCount));
         Stream.read(reinterpret_cast<char*>(&OutMessage->Header.MaxRetries), sizeof(OutMessage->Header.MaxRetries));
+        
+        // 反序列化消息属性
+        uint32_t PropertiesCount;
+        Stream.read(reinterpret_cast<char*>(&PropertiesCount), sizeof(PropertiesCount));
+        for (uint32_t i = 0; i < PropertiesCount; ++i)
+        {
+            uint32_t KeySize;
+            Stream.read(reinterpret_cast<char*>(&KeySize), sizeof(KeySize));
+            std::string Key(KeySize, '\0');
+            Stream.read(&Key[0], KeySize);
+            
+            uint32_t ValueSize;
+            Stream.read(reinterpret_cast<char*>(&ValueSize), sizeof(ValueSize));
+            std::string Value(ValueSize, '\0');
+            Stream.read(&Value[0], ValueSize);
+            
+            OutMessage->Header.Properties[Key] = Value;
+        }
+        
+        // 反序列化消息状态
+        Stream.read(reinterpret_cast<char*>(&OutMessage->Status), sizeof(OutMessage->Status));
         
         // 反序列化消息负载
         uint32_t PayloadSize;

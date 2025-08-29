@@ -101,6 +101,13 @@ static std::string CollectMetrics(MessageQueue& MQ)
         Os << "# HELP helianthus_perf_free_time_avg_ms Average deallocation time in ms\n";
         Os << "# TYPE helianthus_perf_free_time_avg_ms gauge\n";
         Os << "helianthus_perf_free_time_avg_ms " << PS.AverageDeallocationTimeMs << "\n";
+        // 新增：零拷贝/批处理耗时（与 TODO 对齐）
+        Os << "# HELP helianthus_zero_copy_duration_ms Average zero-copy duration in ms\n";
+        Os << "# TYPE helianthus_zero_copy_duration_ms gauge\n";
+        Os << "helianthus_zero_copy_duration_ms " << PS.AverageZeroCopyTimeMs << "\n";
+        Os << "# HELP helianthus_batch_duration_ms Average batch duration in ms\n";
+        Os << "# TYPE helianthus_batch_duration_ms gauge\n";
+        Os << "helianthus_batch_duration_ms " << PS.AverageBatchTimeMs << "\n";
         Os << "# HELP helianthus_perf_zero_time_avg_ms Average zero-copy processing time in ms\n";
         Os << "# TYPE helianthus_perf_zero_time_avg_ms gauge\n";
         Os << "helianthus_perf_zero_time_avg_ms " << PS.AverageZeroCopyTimeMs << "\n";

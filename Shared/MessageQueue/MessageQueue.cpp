@@ -42,6 +42,13 @@ void MessageQueue::QueueData::AddMessage(MessagePtr Message)
     {
         Messages.push(Message);
     }
+    // 存储后快照
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+          "QueueData.AddMessage props={} enc={} comp={} size={}",
+          Message ? Message->Header.Properties.size() : 0,
+          Message ? (int)Message->Header.Properties.count("Encrypted") : 0,
+          Message ? (int)Message->Header.Properties.count("Compressed") : 0,
+          Message ? static_cast<uint64_t>(Message->Payload.Data.size()) : 0ULL);
     Stats.TotalMessages++;
     Stats.PendingMessages++;
 
@@ -69,6 +76,12 @@ MessagePtr MessageQueue::QueueData::GetNextMessage()
 
     if (Message)
     {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+              "QueueData.Dequeue props={} enc={} comp={} size={}",
+              Message->Header.Properties.size(),
+              (int)Message->Header.Properties.count("Encrypted"),
+              (int)Message->Header.Properties.count("Compressed"),
+              static_cast<uint64_t>(Message->Payload.Data.size()));
         Stats.PendingMessages--;
         // 记录出队事件时间戳
         auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -493,9 +506,9 @@ QueueResult MessageQueue::UpdateQueueConfig(const std::string& QueueName, const 
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr Message)
+QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr Msg)
 {
-    if (!ValidateMessage(Message))
+    if (!ValidateMessage(Msg))
     {
         return QueueResult::INVALID_PARAMETER;
     }
@@ -507,24 +520,54 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     }
 
     // 分配消息ID
-    Message->Header.Id = GenerateMessageId();
-    Message->Status = MessageStatus::SENT;
+    Msg->Header.Id = GenerateMessageId();
+    Msg->Status = MessageStatus::SENT;
     // 自动压缩与加密（按队列配置），确保属性被保留
     {
-        auto BeforeSize = Message->Payload.Data.size();
-        auto C1 = ApplyCompression(Message, QueueName);
-        auto C2 = ApplyEncryption(Message, QueueName);
+        auto BeforeSize = Msg->Payload.Data.size();
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+              "Send.Pre size={} props={}", static_cast<uint64_t>(BeforeSize), Msg->Header.Properties.size());
+        auto C1 = ApplyCompression(Msg, QueueName);
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+              "Send.AfterCompress size={} rc={} props={} comp={} enc={}",
+              static_cast<uint64_t>(Msg->Payload.Data.size()), static_cast<int>(C1), Msg->Header.Properties.size(),
+              (int)Msg->Header.Properties.count("Compressed"), (int)Msg->Header.Properties.count("Encrypted"));
+        const auto SizeAfterCompress = Msg->Payload.Data.size();
+        auto C2 = ApplyEncryption(Msg, QueueName);
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+              "Send.AfterEncrypt size={} rc={} props={} comp={} enc={}",
+              static_cast<uint64_t>(Msg->Payload.Data.size()), static_cast<int>(C2), Msg->Header.Properties.size(),
+              (int)Msg->Header.Properties.count("Compressed"), (int)Msg->Header.Properties.count("Encrypted"));
+        // 强校验：若开启自动加密但长度未出现GCM封装额外开销（至少+28），重试一次
+        CompressionConfig __tmpC; GetCompressionConfig(QueueName, __tmpC);
+        EncryptionConfig __ec; GetEncryptionConfig(QueueName, __ec);
+        if (__ec.EnableAutoEncryption && Msg->Header.Properties.count("Compressed"))
+        {
+            const auto ExpectedMin = SizeAfterCompress + 28; // 12B nonce + 16B tag
+            if (!Msg->Header.Properties.count("Encrypted") || Msg->Payload.Data.size() < ExpectedMin)
+            {
+                H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                      "Encrypt sanity check failed, retrying: size_after_comp={}, size_now={}, enc_flag={}",
+                      static_cast<uint64_t>(SizeAfterCompress), static_cast<uint64_t>(Msg->Payload.Data.size()),
+                      (int)Msg->Header.Properties.count("Encrypted"));
+                auto Rretry = ApplyEncryption(Msg, QueueName);
+                H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+                      "Send.AfterEncryptRetry size={} rc={} props={} comp={} enc={}",
+                      static_cast<uint64_t>(Msg->Payload.Data.size()), static_cast<int>(Rretry), Msg->Header.Properties.size(),
+                      (int)Msg->Header.Properties.count("Compressed"), (int)Msg->Header.Properties.count("Encrypted"));
+            }
+        }
         (void)BeforeSize; (void)C1; (void)C2;
         // 再次校验属性存在性
-        if (!Message->Header.Properties.count("CompressionAlgorithm") &&
-            Message->Header.Properties.count("Compressed"))
+        if (!Msg->Header.Properties.count("CompressionAlgorithm") &&
+            Msg->Header.Properties.count("Compressed"))
         {
-            Message->Header.Properties["CompressionAlgorithm"] = "gzip"; // 仅当前实现
+            Msg->Header.Properties["CompressionAlgorithm"] = "gzip"; // 仅当前实现
         }
-        if (Message->Header.Properties.count("Encrypted") &&
-            !Message->Header.Properties.count("EncryptionAlgorithm"))
+        if (Msg->Header.Properties.count("Encrypted") &&
+            !Msg->Header.Properties.count("EncryptionAlgorithm"))
         {
-            Message->Header.Properties["EncryptionAlgorithm"] = "aes-256-gcm"; // 当前实现
+            Msg->Header.Properties["EncryptionAlgorithm"] = "aes-256-gcm"; // 当前实现
         }
     }
     auto enqueueStart = std::chrono::high_resolution_clock::now();
@@ -532,9 +575,9 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
               "发送消息: queue={}, id={}, priority={}, delivery={}",
               QueueName,
-              static_cast<uint64_t>(Message->Header.Id),
-              static_cast<int>(Message->Header.Priority),
-              static_cast<int>(Message->Header.Delivery));
+              static_cast<uint64_t>(Msg->Header.Id),
+              static_cast<int>(Msg->Header.Priority),
+              static_cast<int>(Msg->Header.Delivery));
     }
 
     std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
@@ -548,30 +591,43 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     }
 
     // 检查消息大小（按总字节上限）
-    if (Message->Payload.Size > Queue->Config.MaxSizeBytes)
+    if (Msg->Payload.Size > Queue->Config.MaxSizeBytes)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
               "消息过大: queue={}, size={}, limit={}B", QueueName,
-              static_cast<uint64_t>(Message->Payload.Size),
+              static_cast<uint64_t>(Msg->Payload.Size),
               static_cast<uint64_t>(Queue->Config.MaxSizeBytes));
         return QueueResult::MESSAGE_TOO_LARGE;
     }
 
     // 添加消息到队列
-    Queue->AddMessage(Message);
+    Queue->AddMessage(Msg);
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+          "Enqueue.After props={} enc={} comp={} size={}",
+          Msg->Header.Properties.size(),
+          (int)Msg->Header.Properties.count("Encrypted"),
+          (int)Msg->Header.Properties.count("Compressed"),
+          static_cast<uint64_t>(Msg->Payload.Data.size()));
     // 埋点：入队延迟（近似，当前实现为0，保留接口以便后续扩展）
     auto enqueueEnd = std::chrono::high_resolution_clock::now();
     const double enqueueLatencyMs = std::chrono::duration<double, std::milli>(enqueueEnd - enqueueStart).count();
     RecordLatencySample(Queue, enqueueLatencyMs);
 
     // 如果启用了消息路由，尝试路由消息
-    auto RouteResult = RouteMessage(QueueName, Message);
+    auto RouteResult = RouteMessage(QueueName, Msg);
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+          "Route.After props={} enc={} comp={} size={} rc={}", 
+          Msg->Header.Properties.size(),
+          (int)Msg->Header.Properties.count("Encrypted"),
+          (int)Msg->Header.Properties.count("Compressed"),
+          static_cast<uint64_t>(Msg->Payload.Data.size()),
+          static_cast<int>(RouteResult));
 
     // 模拟复制：根据路由信息尝试复制到副本（占位）
     {
         int ShardIndex = -1;
-        auto ItShard = Message->Header.Properties.find("routed_shard");
-        if (ItShard != Message->Header.Properties.end())
+        auto ItShard = Msg->Header.Properties.find("routed_shard");
+        if (ItShard != Msg->Header.Properties.end())
         {
             try { ShardIndex = std::stoi(ItShard->second); } catch (...) { ShardIndex = -1; }
         }
@@ -585,7 +641,7 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
                     auto& Wal = WalPerShard[static_cast<size_t>(ShardIndex)];
                     WalEntry E;
                     E.Index = Wal.Entries.size() + 1;
-                    E.Id = Message->Header.Id;
+                    E.Id = Msg->Header.Id;
                     E.Queue = QueueName;
                     E.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -593,12 +649,12 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
                 }
             }
 
-            uint32_t Acks = SimulateReplication(static_cast<uint32_t>(ShardIndex), Message->Header.Id);
+            uint32_t Acks = SimulateReplication(static_cast<uint32_t>(ShardIndex), Msg->Header.Id);
             ReplicationEvents.fetch_add(1, std::memory_order_relaxed);
             ReplicationAcksTotal.fetch_add(Acks, std::memory_order_relaxed);
             Helianthus::Common::LogFields F;
             F.AddField("queue", QueueName);
-            F.AddField("message_id", static_cast<uint64_t>(Message->Header.Id));
+            F.AddField("message_id", static_cast<uint64_t>(Msg->Header.Id));
             F.AddField("shard", ShardIndex);
             F.AddField("replication_min_acks", MinReplicationAcks);
             F.AddField("replication_acks", Acks);
@@ -633,7 +689,7 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
                   "复制模拟: shard={} id={}",
                   ShardIndex,
-                  static_cast<uint64_t>(Message->Header.Id));
+                  static_cast<uint64_t>(Msg->Header.Id));
         }
     }
 
@@ -642,12 +698,12 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     // 如果启用了持久化，保存消息到磁盘
     if (PersistenceMgr && Queue->Config.Persistence != PersistenceMode::MEMORY_ONLY)
     {
-        auto PersistenceResult = PersistenceMgr->SaveMessage(QueueName, Message);
+        auto PersistenceResult = PersistenceMgr->SaveMessage(QueueName, Msg);
         if (PersistenceResult != QueueResult::SUCCESS)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
                  "持久化消息失败，继续处理 queue={} id={} code={}",
-                 QueueName, static_cast<uint64_t>(Message->Header.Id), static_cast<int>(PersistenceResult));
+                 QueueName, static_cast<uint64_t>(Msg->Header.Id), static_cast<int>(PersistenceResult));
             // 继续处理，不因为持久化失败而阻塞消息发送
         }
     }
@@ -713,38 +769,52 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
         const auto hasEnc = OutMessage->Header.Properties.find("Encrypted") != OutMessage->Header.Properties.end();
         const auto hasComp = OutMessage->Header.Properties.find("Compressed") != OutMessage->Header.Properties.end();
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
-              "接收前属性: enc={} comp={} size={}",
+              "Recv.AfterDequeue props={} enc={} comp={} size={}",
+              OutMessage->Header.Properties.size(),
               hasEnc ? OutMessage->Header.Properties["Encrypted"] : "0",
               hasComp ? OutMessage->Header.Properties["Compressed"] : "0",
               static_cast<uint64_t>(OutMessage->Payload.Data.size()));
+        // 列出所有属性键值
+        for (const auto& KV : OutMessage->Header.Properties)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+                  "Recv.Prop {}={}", KV.first, KV.second);
+        }
     }
     // 自动解密与解压（按队列配置），并在失败时记录日志
     {
-        // 先尝试标记驱动的解密，其次尝试启发式解密
-        auto R1 = ApplyDecryption(OutMessage, QueueName);
-        if (R1 == QueueResult::SUCCESS)
+        // 尝试顺序 A：解密 -> 解压
+        auto TryDecrypt = [&]() -> QueueResult {
+            // 若无加密标记，直接尝试启发式解密；否则按标记解密
+            if (!OutMessage->Header.Properties.count("Encrypted")) {
+                return ApplyDecryption(OutMessage, QueueName, 0);
+            }
+            return ApplyDecryption(OutMessage, QueueName);
+        };
+        auto TryDecompress = [&]() -> QueueResult {
+            return ApplyDecompression(OutMessage, QueueName);
+        };
+        auto Rdec = TryDecrypt();
+        auto Runc = TryDecompress();
+        bool Ok = (Rdec == QueueResult::SUCCESS && Runc == QueueResult::SUCCESS);
+        if (!Ok)
         {
-            // ok
-        }
-        else
-        {
-            R1 = ApplyDecryption(OutMessage, QueueName, 0);
-        }
-        if (R1 != QueueResult::SUCCESS)
-        {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-                  "自动解密失败: queue={} id={} code={}", QueueName,
-                  static_cast<uint64_t>(OutMessage->Header.Id), static_cast<int>(R1));
-        }
-        auto R2 = ApplyDecompression(OutMessage, QueueName);
-        if (R2 != QueueResult::SUCCESS)
-        {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-                  "自动解压失败: queue={} id={} code={}", QueueName,
-                  static_cast<uint64_t>(OutMessage->Header.Id), static_cast<int>(R2));
+            // 尝试顺序 B：解压 -> 解密（兜底）
+            // 先重试解压（若前一步未成功，函数内部有幂等处理）
+            auto Runc2 = TryDecompress();
+            auto Rdec2 = TryDecrypt();
+            Ok = (Runc2 == QueueResult::SUCCESS && Rdec2 == QueueResult::SUCCESS);
+            if (!Ok)
+            {
+                H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                      "自动解密/解压未完全成功: decA={} uncA={} uncB={} decB={} id={}",
+                      static_cast<int>(Rdec), static_cast<int>(Runc),
+                      static_cast<int>(Runc2), static_cast<int>(Rdec2),
+                      static_cast<uint64_t>(OutMessage->Header.Id));
+            }
         }
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
-              "解密/解压后 size={}", static_cast<uint64_t>(OutMessage->Payload.Data.size()));
+              "解密/解压处理完成 size={}", static_cast<uint64_t>(OutMessage->Payload.Data.size()));
     }
 
     // 检查消息是否过期

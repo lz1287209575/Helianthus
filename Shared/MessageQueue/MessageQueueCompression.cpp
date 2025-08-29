@@ -151,16 +151,30 @@ QueueResult MessageQueue::ApplyEncryption(MessagePtr Message, const std::string&
 {
     EncryptionConfig Cfg{};
     GetEncryptionConfig(QueueName, Cfg);
-    if (!Cfg.EnableAutoEncryption) return QueueResult::SUCCESS;
-    if (Message->Header.Properties.count("Encrypted")) return QueueResult::SUCCESS;
+    if (!Cfg.EnableAutoEncryption) 
+    {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "自动加密未启用: queue={}", QueueName);
+        return QueueResult::SUCCESS;
+    }
+    if (Message->Header.Properties.count("Encrypted")) 
+    {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "消息已加密，跳过: queue={}", QueueName);
+        return QueueResult::SUCCESS;
+    }
 
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "开始自动加密: queue={}, size={}", QueueName, Message->Payload.Data.size());
     const auto Start = std::chrono::high_resolution_clock::now();
-    auto R = EncryptMessage(Message, Cfg.Algorithm);
+    auto R = EncryptMessage(Message, Cfg.Algorithm, Cfg);
     const auto End = std::chrono::high_resolution_clock::now();
     const double Ms = std::chrono::duration<double, std::milli>(End - Start).count();
     if (R == QueueResult::SUCCESS)
     {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "自动加密成功: queue={}, size={}, time={}ms", QueueName, Message->Payload.Data.size(), Ms);
         UpdateEncryptionStats(QueueName, Ms);
+    }
+    else
+    {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "自动加密失败: queue={}, code={}", QueueName, static_cast<int>(R));
     }
     return R;
 }
@@ -370,7 +384,7 @@ QueueResult MessageQueue::DecompressMessage(MessagePtr Message)
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm)
+QueueResult MessageQueue::EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm, const EncryptionConfig& Cfg)
 {
     if (!Message || Message->Payload.Data.empty())
     {
@@ -378,18 +392,6 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message, EncryptionAlgorithm
     }
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
           "加密消息: algorithm={}, size={}", static_cast<int>(Algorithm), Message->Payload.Data.size());
-
-    // 选取一个可用的配置（手动接口没有队列名）
-    EncryptionConfig Cfg{};
-    {
-        std::shared_lock<std::shared_mutex> Lock(EncryptionConfigsMutex);
-        if (!EncryptionConfigs.empty())
-        {
-            auto It = std::find_if(EncryptionConfigs.begin(), EncryptionConfigs.end(),
-                                   [](const auto& P){ return P.second.EnableAutoEncryption; });
-            if (It != EncryptionConfigs.end()) Cfg = It->second; else Cfg = EncryptionConfigs.begin()->second;
-        }
-    }
 
     if (Algorithm == EncryptionAlgorithm::AES_128_CBC)
     {
@@ -419,14 +421,29 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message, EncryptionAlgorithm
     }
     else if (Algorithm == EncryptionAlgorithm::AES_256_GCM)
     {
+        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "开始AES-256-GCM加密: size={}, key_size={}", Message->Payload.Data.size(), Cfg.Key.size());
+        
         uint8_t Key[32] = {0};
         if (!Cfg.Key.empty()) memcpy(Key, Cfg.Key.data(), std::min<size_t>(Cfg.Key.size(), sizeof(Key)));
 
         uint8_t Nonce[12] = {0};
-        if (Cfg.IV.size() >= 12) memcpy(Nonce, Cfg.IV.data(), 12); else RAND_bytes(Nonce, 12);
+        if (Cfg.IV.size() >= 12) 
+        {
+            memcpy(Nonce, Cfg.IV.data(), 12);
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "使用配置的IV");
+        } 
+        else 
+        {
+            int rand_result = RAND_bytes(Nonce, 12);
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "生成随机nonce: result={}", rand_result);
+        }
 
         EVP_CIPHER_CTX* Ctx = EVP_CIPHER_CTX_new();
-        if (!Ctx) return QueueResult::INTERNAL_ERROR;
+        if (!Ctx) 
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "EVP_CIPHER_CTX_new失败");
+            return QueueResult::INTERNAL_ERROR;
+        }
         int Ok = EVP_EncryptInit_ex(Ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr);
         if (Ok != 1) { EVP_CIPHER_CTX_free(Ctx); return QueueResult::INTERNAL_ERROR; }
         Ok = EVP_CIPHER_CTX_ctrl(Ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr);
