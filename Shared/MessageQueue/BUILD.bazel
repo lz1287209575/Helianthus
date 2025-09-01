@@ -34,17 +34,16 @@ cc_library(
         "//Shared/Discovery:discovery",
         "//Shared/Database:database",
         "//Shared/Config:config",
-        "//Shared/Reflection:reflection",
+        "//Shared/Reflection:helianthus_reflection",
         "//Shared/Scripting:scripting",
         "//Shared/RPC:rpc",
         "//ThirdParty:miniz",
         "//ThirdParty:tinyaes",
-        "//ThirdParty/openssl:openssl_headers",
-        "//ThirdParty/openssl:openssl_crypto",
+
     ],
     linkopts = select({
         "@bazel_tools//src/conditions:windows": [],
-        "//conditions:default": ["-lz"],
+        "//conditions:default": ["-lz", "-lssl", "-lcrypto"],
     }),
     
     visibility = ["//visibility:public"],

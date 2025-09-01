@@ -132,3 +132,16 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "simple_transaction_test",
+    srcs = ["SimpleTransactionTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+)

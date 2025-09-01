@@ -5,7 +5,7 @@
 #include "Shared/Common/LogCategories.h"
 #include "Shared/Common/Logger.h"
 #include <cstring>
-#include "picohttpparser.h"
+#include "ThirdParty/picohttpparser/picohttpparser.h"
 
 namespace Helianthus::Monitoring
 {

@@ -4,6 +4,8 @@
 #include <thread>
 #include <chrono>
 #include <random>
+#include <iomanip>
+#include <sstream>
 
 using namespace Helianthus::Network::Asio;
 

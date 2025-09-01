@@ -29,39 +29,29 @@ private:
 
 int GameObject::NextObjectId = 1000;
 
-// 游戏实体类 - 使用HCLASS宏定义
-HCLASS(Scriptable | BlueprintType | Config)
+// 游戏实体类
 class Entity : public GameObject
 {
 public:
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | Category="Stats" | DisplayName="Health Points" | Tooltip="Current health of the entity")
     int Health = 100;
     
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | Category="Stats" | DisplayName="Maximum Health")
     int MaxHealth = 100;
     
-    HPROPERTY(ScriptReadable | BlueprintReadOnly | Category="Identity" | SaveGame)
     std::string Name = "Unnamed Entity";
     
-    HPROPERTY(Config | EditAnywhere | Category="Physics" | Tooltip="Movement speed in units per second")
     float MovementSpeed = 5.0f;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | Category="State")
     bool IsActive = true;
     
-    HPROPERTY(BlueprintReadOnly | Category="Transform")
     float PositionX = 0.0f;
     
-    HPROPERTY(BlueprintReadOnly | Category="Transform")
     float PositionY = 0.0f;
     
-    HPROPERTY(BlueprintReadOnly | Category="Transform")
     float PositionZ = 0.0f;
 
 public:
     Entity() = default;
     
-    HFUNCTION(ScriptCallable | BlueprintCallable | Category="Combat")
     void TakeDamage(int DamageAmount)
     {
         if (DamageAmount > 0 && IsActive)
@@ -74,7 +64,6 @@ public:
         }
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable | Category="Combat")
     void Heal(int HealAmount)
     {
         if (HealAmount > 0 && IsActive)
@@ -83,13 +72,11 @@ public:
         }
     }
     
-    HFUNCTION(BlueprintPure | Category="Combat")
     float GetHealthPercentage() const
     {
         return MaxHealth > 0 ? static_cast<float>(Health) / MaxHealth : 0.0f;
     }
     
-    HFUNCTION(BlueprintCallable | Category="Movement")
     void Move(float DeltaX, float DeltaY, float DeltaZ)
     {
         if (IsActive)
@@ -102,14 +89,12 @@ public:
         }
     }
     
-    HFUNCTION(ScriptEvent | BlueprintEvent | Category="Lifecycle")
     void OnDeath()
     {
         IsActive = false;
         std::cout << Name << " has died!" << std::endl;
     }
     
-    HFUNCTION(BlueprintCallable | Category="Utility")
     std::string GetDebugInfo() const
     {
         return Name + " [ID:" + std::to_string(GetObjectId()) + "] " +
@@ -119,26 +104,19 @@ public:
 };
 
 // 玩家类 - 继承自Entity
-HCLASS(Scriptable | BlueprintType | ConfigClass | DefaultConfig)
 class Player : public Entity
 {
 public:
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | Category="Progress" | SaveGame)
     int Level = 1;
     
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | Category="Progress" | SaveGame)
     int Experience = 0;
     
-    HPROPERTY(Config | EditAnywhere | Category="Player" | Tooltip="Player's chosen class")
     std::string PlayerClass = "Adventurer";
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | Category="Economy")
     int Gold = 0;
     
-    HPROPERTY(BlueprintReadOnly | Category="Progress")
     int ExperienceToNextLevel = 100;
     
-    HPROPERTY(BlueprintReadOnly | Category="Combat")
     int AttackPower = 10;
 
 public:

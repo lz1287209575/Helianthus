@@ -3084,7 +3084,7 @@ QueueResult MessageQueue::ExecuteTransactionOperation(const TransactionOperation
             return AcknowledgeMessage(Operation.QueueName, Operation.TargetMessageId);
             
         case TransactionOperationType::REJECT_MESSAGE:
-            return RejectMessage(Operation.QueueName, Operation.TargetMessageId, true); // 默认重新入队
+            return RejectMessage(Operation.QueueName, Operation.TargetMessageId, false); // 事务中拒收不重新入队
             
         case TransactionOperationType::CREATE_QUEUE:
             return CreateQueue(Operation.TargetQueueConfig);

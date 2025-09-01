@@ -1,0 +1,340 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Helianthus Enhanced Metrics Dashboard",
+    "tags": ["helianthus", "message-queue", "performance"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Batch Processing Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(helianthus_batch_duration_ms_sum[5m]) / rate(helianthus_batch_duration_ms_count[5m])",
+            "legendFormat": "{{queue}} - Avg Duration"
+          },
+          {
+            "expr": "helianthus_batch_duration_p95_ms",
+            "legendFormat": "{{queue}} - P95 Duration"
+          },
+          {
+            "expr": "helianthus_batch_duration_p99_ms",
+            "legendFormat": "{{queue}} - P99 Duration"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Batch Processing Throughput",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(helianthus_batch_count_total[5m])",
+            "legendFormat": "{{queue}} - Batches/sec"
+          },
+          {
+            "expr": "rate(helianthus_batch_messages_total[5m])",
+            "legendFormat": "{{queue}} - Messages/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Throughput",
+            "unit": "ops"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Batch Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "increase(helianthus_batch_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Zero-Copy Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(helianthus_zero_copy_duration_ms_sum[5m]) / rate(helianthus_zero_copy_duration_ms_count[5m])",
+            "legendFormat": "Avg Duration"
+          },
+          {
+            "expr": "helianthus_zero_copy_duration_p95_ms",
+            "legendFormat": "P95 Duration"
+          },
+          {
+            "expr": "helianthus_zero_copy_duration_p99_ms",
+            "legendFormat": "P99 Duration"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 5,
+        "title": "Zero-Copy Operations",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(helianthus_zero_copy_operations_total[5m])",
+            "legendFormat": "Operations/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Operations/sec",
+            "unit": "ops"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Zero-Copy Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "increase(helianthus_zero_copy_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 7,
+        "title": "Transaction Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(helianthus_transaction_commit_duration_ms_sum[5m]) / rate(helianthus_transaction_commit_duration_ms_count[5m])",
+            "legendFormat": "Avg Commit Time"
+          },
+          {
+            "expr": "helianthus_transaction_commit_duration_p95_ms",
+            "legendFormat": "P95 Commit Time"
+          },
+          {
+            "expr": "helianthus_transaction_commit_duration_p99_ms",
+            "legendFormat": "P99 Commit Time"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 8,
+        "title": "Transaction Success Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "helianthus_transaction_success_rate * 100",
+            "legendFormat": "Success Rate"
+          },
+          {
+            "expr": "helianthus_transaction_rollback_rate * 100",
+            "legendFormat": "Rollback Rate"
+          },
+          {
+            "expr": "helianthus_transaction_timeout_rate * 100",
+            "legendFormat": "Timeout Rate"
+          },
+          {
+            "expr": "helianthus_transaction_failure_rate * 100",
+            "legendFormat": "Failure Rate"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Rate (%)",
+            "unit": "percent"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 9,
+        "title": "Transaction Commit Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "increase(helianthus_transaction_commit_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 10,
+        "title": "Transaction Rollback Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "increase(helianthus_transaction_rollback_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 48
+        }
+      },
+      {
+        "id": 11,
+        "title": "Queue Performance Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "helianthus_queue_pending",
+            "legendFormat": "{{queue}} - Pending"
+          },
+          {
+            "expr": "helianthus_queue_total",
+            "legendFormat": "{{queue}} - Total"
+          },
+          {
+            "expr": "helianthus_queue_processed",
+            "legendFormat": "{{queue}} - Processed"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 24,
+          "x": 0,
+          "y": 56
+        }
+      },
+      {
+        "id": 12,
+        "title": "System Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "helianthus_up",
+            "legendFormat": "Exporter Status"
+          },
+          {
+            "expr": "helianthus_tx_total",
+            "legendFormat": "Total Transactions"
+          },
+          {
+            "expr": "helianthus_batch_count_total",
+            "legendFormat": "Total Batches"
+          },
+          {
+            "expr": "helianthus_zero_copy_operations_total",
+            "legendFormat": "Total Zero-Copy Ops"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 24,
+          "x": 0,
+          "y": 60
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s"
+  }
+}

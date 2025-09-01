@@ -1,63 +1,17 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
-    name = "reflection",
-    visibility = ["//visibility:public"],
-    hdrs = [
-        "ReflectionTypes.h",
-        "ReflectionMacros.h",
-        "AutoRegistration.h",
-        "CompileTimeReflection.h",
-        "CodeGenerator.h",
-        "ScriptBinding.h",
-    ],
-    srcs = [
-        "ReflectionSystem.cpp",
-        "ScriptBinding.cpp",
-    ],
-    deps = [
-        "//Shared/Scripting:scripting",
-    ],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20", "-fPIC"],
-    }),
-)
-
-cc_library(
-    name = "ue_style_reflection",
-    visibility = ["//visibility:public"],
-    hdrs = [
-        "UE_Style_Reflection.h",
-        "UE_Style_CodeGenerator.h",
-    ],
-    deps = [
-        ":reflection",
-    ],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20", "-fPIC"],
-    }),
-)
-
-cc_library(
     name = "helianthus_reflection",
     visibility = ["//visibility:public"],
     hdrs = [
-        "HelianthusReflection.h",
-        "HelianthusCodeGenerator.h",
-        "HClass.h",
-        "HObject.h",
-        "HClassMacros.h",
-        "MetaSystem.h",
-        "MetaTags.h",
-        "AttributeMacros.h",
+        "Reflection.h",
+        "Macros.h",
     ],
-    deps = [
-        ":reflection",
+    srcs = [
+        "Reflection.cpp",
     ],
     copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std=c++20", "/utf-8"],
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": ["-std=c++20", "-fPIC"],
     }),
 )

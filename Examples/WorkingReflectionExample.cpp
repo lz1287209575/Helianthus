@@ -9,37 +9,22 @@
 using namespace std;
 
 // 简单游戏实体 - 使用正确的反射宏
-HCLASS(Scriptable | BlueprintType)
-class GameEntity : public Helianthus::Reflection::HObject
+class GameEntity
 {
 public:
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | SaveGame)
     int Health = 100;
-    
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | SaveGame)
     int MaxHealth = 100;
-    
-    HPROPERTY(ScriptReadable | BlueprintReadWrite)
     string Name = "Entity";
-    
-    HPROPERTY(Config | EditAnywhere)
     float Speed = 5.0f;
-    
-    HPROPERTY(VisibleAnywhere | SaveGame)
     bool IsActive = true;
-    
-    HPROPERTY(VisibleAnywhere)
     float X = 0.0f;
-    
-    HPROPERTY(VisibleAnywhere)
     float Y = 0.0f;
     
     GameEntity()
     {
-        SetName("GameEntity");
+        Name = "GameEntity";
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable)
     void TakeDamage(int Damage)
     {
         if (Damage > 0 && IsActive)
@@ -54,7 +39,6 @@ public:
         }
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable)
     void Heal(int Amount)
     {
         if (Amount > 0 && IsActive)
@@ -64,13 +48,11 @@ public:
         }
     }
     
-    HFUNCTION(BlueprintPure)
     float GetHealthPercentage() const
     {
         return MaxHealth > 0 ? static_cast<float>(Health) / MaxHealth : 0.0f;
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable)
     void Move(float DeltaX, float DeltaY)
     {
         if (IsActive)
@@ -81,14 +63,12 @@ public:
         }
     }
     
-    HFUNCTION(ScriptEvent | BlueprintEvent)
     void OnDeath()
     {
         IsActive = false;
         cout << Name << " has died!" << endl;
     }
     
-    HFUNCTION(BlueprintCallable)
     void PrintStatus()
     {
         cout << "=== " << Name << " ===" << endl;
@@ -101,20 +81,12 @@ public:
 };
 
 // 玩家类 - 使用反射系统
-HCLASS(Scriptable | BlueprintType | SaveGame)
 class Player : public GameEntity
 {
 public:
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | SaveGame)
     int Level = 1;
-    
-    HPROPERTY(ScriptReadable | BlueprintReadWrite | SaveGame)
     int Experience = 0;
-    
-    HPROPERTY(Config | EditAnywhere)
     string PlayerClass = "Adventurer";
-    
-    HPROPERTY(SaveGame | BlueprintReadWrite)
     int Gold = 0;
     
     Player()
@@ -124,7 +96,6 @@ public:
         Health = MaxHealth;
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable)
     void AddExperience(int Exp)
     {
         if (Exp <= 0) return;
@@ -139,7 +110,6 @@ public:
         }
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable)
     void LevelUp()
     {
         Level++;
@@ -149,7 +119,6 @@ public:
         cout << "   Health increased to " << MaxHealth << endl;
     }
     
-    HFUNCTION(BlueprintCallable)
     void PrintPlayerInfo()
     {
         cout << "=== Player Info ===" << endl;
@@ -164,17 +133,11 @@ public:
 };
 
 // 敌人类 - 使用反射系统
-HCLASS(Scriptable | BlueprintType)
 class Enemy : public GameEntity
 {
 public:
-    HPROPERTY(BlueprintReadOnly)
     int AttackPower = 10;
-    
-    HPROPERTY(BlueprintReadOnly)
     int ExperienceReward = 25;
-    
-    HPROPERTY(BlueprintReadOnly)
     int GoldReward = 15;
     
     Enemy()
@@ -184,7 +147,6 @@ public:
         Health = MaxHealth;
     }
     
-    HFUNCTION(BlueprintCallable)
     void Configure(const string& EnemyName, int Tier)
     {
         Name = EnemyName + " Lv" + to_string(Tier);
@@ -195,7 +157,6 @@ public:
         GoldReward = 15 + Tier * 5;
     }
     
-    HFUNCTION(ScriptCallable | BlueprintCallable)
     void Attack(Player* Target)
     {
         if (Target && Target->IsActive)

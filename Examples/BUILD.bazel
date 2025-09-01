@@ -1,11 +1,12 @@
 cc_binary(
     name = "performance_benchmark",
-    srcs = ["PerformanceBenchmark.cpp"],
+    srcs = ["PerformanceBenchmarkExample.cpp"],
     copts = select({
         "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8", "/DHELIANTHUS_ENABLE_LOGGING=1"],
         "//conditions:default": ["-std=c++20", "-DHELIANTHUS_ENABLE_LOGGING=1"],
     }),
     deps = [
+        "//Shared/Monitoring:enhanced_prometheus_exporter",
         "//Shared/MessageQueue:message_queue",
         "//Shared/Common:common",
     ],
@@ -304,20 +305,7 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
-cc_binary(
-    name = "reflection_example",
-    srcs = ["ReflectionExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:reflection",
-        "//Shared/Scripting:scripting",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
+
 
 cc_binary(
     name = "multi_language_scripting_example",
@@ -333,35 +321,11 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
-cc_binary(
-    name = "smart_reflection_example",
-    srcs = ["SmartReflectionExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
 
 
 
-cc_binary(
-    name = "helianthus_reflection_example",
-    srcs = ["HelianthusReflectionExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:helianthus_reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
+
+
 
 cc_binary(
     name = "dead_letter_queue_example",
@@ -735,9 +699,49 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
+# Temporarily disabled due to macro issues
+# cc_binary(
+#     name = "advanced_reflection_example",
+#     srcs = ["AdvancedReflectionExample.cpp"],
+#     copts = select({
+#         "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+#         "//conditions:default": ["-std=c++20"],
+#     }),
+#     deps = [
+#         "//Shared/Reflection:helianthus_reflection",
+#         "//Shared/Common:common",
+#     ],
+#     visibility = ["//visibility:public"],
+# )
+
+
+
+
+
+
+
+
+
+
+
 cc_binary(
-    name = "advanced_reflection_example",
-    srcs = ["AdvancedReflectionExample.cpp"],
+    name = "enhanced_prometheus_example",
+    srcs = ["EnhancedPrometheusExample.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
+        "//conditions:default": ["-std=c++20"],
+    }),
+    deps = [
+        "//Shared/Monitoring:enhanced_prometheus_exporter",
+        "//Shared/MessageQueue:message_queue",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "helianthus_reflection_test",
+    srcs = ["HelianthusReflectionTest.cpp"],
     copts = select({
         "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
         "//conditions:default": ["-std=c++20"],
@@ -749,71 +753,5 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
-cc_binary(
-    name = "attribute_metadata_example",
-    srcs = ["AttributeMetadataExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:helianthus_reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
 
-cc_binary(
-    name = "simple_reflection_example",
-    srcs = ["SimpleReflectionExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:helianthus_reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
 
-cc_binary(
-    name = "simple_attribute_test",
-    srcs = ["SimpleAttributeTest.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-cc_binary(
-    name = "working_reflection_example",
-    srcs = ["WorkingReflectionExample.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std=c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:helianthus_reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-cc_binary(
-    name = "reflection_test",
-    srcs = ["ReflectionTest.cpp"],
-    copts = select({
-        "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],
-        "//conditions:default": ["-std:c++20"],
-    }),
-    deps = [
-        "//Shared/Reflection:helianthus_reflection",
-        "//Shared/Common:common",
-    ],
-    visibility = ["//visibility:public"],
-)

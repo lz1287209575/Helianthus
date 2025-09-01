@@ -4,40 +4,29 @@
 
 // 包含反射系统头文件
 #include "Shared/Reflection/HObject.h"
-#include "Shared/Reflection/AttributeMacros.h"
 
 using namespace std;
 
-// 测试类 - 使用简化版本的反射标签
-class TestPlayer : public Helianthus::Reflection::HObject
+// 测试类 - 简化版本
+class TestPlayer
 {
 public:
-    // 使用属性标签
-    HPROPERTY()
+    // 属性
     int Health = 100;
     
-    HPROPERTY()
-    HREADONLY()
     string Name = "TestPlayer";
     
-    HPROPERTY()
-    HDESCRIPTION("Player level affects stats")
     int Level = 1;
     
-    HPROPERTY()
-    HBLUEPRINTREADWRITE()
     float Experience = 0.0f;
     
-    // 使用函数标签
-    HFUNCTION()
+    // 方法
     void TakeDamage(int Damage)
     {
         Health = max(0, Health - Damage);
         cout << Name << " took " << Damage << " damage, health now: " << Health << endl;
     }
     
-    HFUNCTION()
-    HDESCRIPTION("Add experience to level up")
     void AddExperience(float Exp)
     {
         Experience += Exp;
@@ -49,7 +38,6 @@ public:
         }
     }
     
-    HFUNCTION()
     void LevelUp()
     {
         Level++;

@@ -11,57 +11,44 @@
 // 使用Helianthus反射宏
 using namespace Helianthus::Reflection;
 
-// 自定义属性标记
-#define CATEGORY(name) Category="name"
-#define DISPLAY_NAME(name) DisplayName="name"
-#define TOOLTIP(text) Tooltip="text"
-#define RANGE(min, max) Range="min,max"
-#define DEFAULT_VALUE(value) Default="value"
+// 自定义属性标记 - 这些宏需要正确定义
+#define CATEGORY(name) 
+#define DISPLAY_NAME(name) 
+#define TOOLTIP(text) 
+#define RANGE(min, max) 
+#define DEFAULT_VALUE(value)
 
 // 游戏配置类
 class GameConfiguration
 {
 public:
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Graphics") | DISPLAY_NAME("Screen Width") | RANGE(640, 3840) | DEFAULT_VALUE(1920))
     int ScreenWidth = 1920;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Graphics") | DISPLAY_NAME("Screen Height") | RANGE(480, 2160) | DEFAULT_VALUE(1080))
     int ScreenHeight = 1080;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Graphics") | DISPLAY_NAME("Fullscreen Mode") | TOOLTIP("Enable fullscreen mode for better performance"))
     bool Fullscreen = false;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Graphics") | DISPLAY_NAME("VSync") | TOOLTIP("Enable vertical synchronization to prevent screen tearing"))
     bool VSync = true;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Audio") | DISPLAY_NAME("Master Volume") | RANGE(0.0f, 1.0f) | DEFAULT_VALUE(0.8f))
     float MasterVolume = 0.8f;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Audio") | DISPLAY_NAME("Music Volume") | RANGE(0.0f, 1.0f) | DEFAULT_VALUE(0.6f))
     float MusicVolume = 0.6f;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Audio") | DISPLAY_NAME("SFX Volume") | RANGE(0.0f, 1.0f) | DEFAULT_VALUE(0.9f))
     float SFXVolume = 0.9f;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Gameplay") | DISPLAY_NAME("Difficulty") | TOOLTIP("Game difficulty affects enemy strength and rewards"))
     std::string Difficulty = "Normal";
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Gameplay") | DISPLAY_NAME("Auto-Save") | TOOLTIP("Automatically save game progress"))
     bool AutoSave = true;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Network") | DISPLAY_NAME("Server Port") | RANGE(1024, 65535) | DEFAULT_VALUE(7777))
     int ServerPort = 7777;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Network") | DISPLAY_NAME("Max Players") | RANGE(1, 100) | DEFAULT_VALUE(20))
     int MaxPlayers = 20;
     
-    HPROPERTY(Config | EditAnywhere | CATEGORY("Network") | DISPLAY_NAME("Enable UPnP") | TOOLTIP("Automatically configure router for hosting"))
     bool EnableUPnP = false;
 
 public:
     GameConfiguration() = default;
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Utility"))
     void ResetToDefaults()
     {
         ScreenWidth = 1920;
@@ -80,20 +67,17 @@ public:
         std::cout << "✅ Configuration reset to defaults" << std::endl;
     }
     
-    HFUNCTION(BlueprintPure | CATEGORY("Utility"))
     std::string GetResolutionString() const
     {
         return std::to_string(ScreenWidth) + "x" + std::to_string(ScreenHeight);
     }
     
-    HFUNCTION(BlueprintPure | CATEGORY("Utility"))
     bool IsValidResolution() const
     {
         return ScreenWidth >= 640 && ScreenWidth <= 3840 &&
                ScreenHeight >= 480 && ScreenHeight <= 2160;
     }
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Validation"))
     bool ValidateConfiguration()
     {
         bool IsValid = true;
@@ -125,7 +109,6 @@ public:
         return IsValid;
     }
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Serialization"))
     void PrintConfiguration() const
     {
         std::cout << "🎮 Game Configuration:" << std::endl;
@@ -156,43 +139,31 @@ public:
 class PlayerData
 {
 public:
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Identity") | DISPLAY_NAME("Player Name"))
     std::string PlayerName = "Player";
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Progress") | DISPLAY_NAME("Character Level"))
     int Level = 1;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Progress") | DISPLAY_NAME("Experience Points"))
     int Experience = 0;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Stats") | DISPLAY_NAME("Health Points"))
     int Health = 100;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Stats") | DISPLAY_NAME("Mana Points"))
     int Mana = 50;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Inventory") | DISPLAY_NAME("Gold Amount"))
     int Gold = 0;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Settings") | DISPLAY_NAME("Preferred Language"))
     std::string Language = "English";
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Settings") | DISPLAY_NAME("Tutorial Completed"))
     bool TutorialCompleted = false;
     
-    HPROPERTY(SaveGame | BlueprintReadWrite | CATEGORY("Achievements") | DISPLAY_NAME("Total Play Time (minutes)"))
     int TotalPlayTime = 0;
     
-    HPROPERTY(SaveGame | BlueprintReadOnly | CATEGORY("Metadata") | DISPLAY_NAME("Save Version"))
     std::string SaveVersion = "1.0.0";
     
-    HPROPERTY(SaveGame | BlueprintReadOnly | CATEGORY("Metadata") | DISPLAY_NAME("Last Saved"))
     std::string LastSaved = "";
 
 public:
     PlayerData() = default;
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Progress"))
     void AddExperience(int Amount)
     {
         if (Amount > 0)
@@ -209,7 +180,6 @@ public:
         }
     }
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Progress"))
     void LevelUp()
     {
         Level++;
@@ -220,13 +190,11 @@ public:
         std::cout << "   Health: " << Health << ", Mana: " << Mana << std::endl;
     }
     
-    HFUNCTION(BlueprintPure | CATEGORY("Progress"))
     int GetExperienceForNextLevel() const
     {
         return Level * 100;
     }
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Inventory"))
     void AddGold(int Amount)
     {
         if (Amount > 0)
@@ -236,13 +204,11 @@ public:
         }
     }
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Utility"))
     void UpdateLastSaved()
     {
         LastSaved = "2024-08-28 15:30:00"; // 模拟时间
     }
     
-    HFUNCTION(BlueprintPure | CATEGORY("Info"))
     std::string GetPlayerSummary() const
     {
         return PlayerName + " (Level " + std::to_string(Level) + ") - " +
@@ -251,7 +217,6 @@ public:
                "Gold: " + std::to_string(Gold);
     }
     
-    HFUNCTION(BlueprintCallable | CATEGORY("Serialization"))
     void PrintPlayerData() const
     {
         std::cout << "👤 Player Data:" << std::endl;
