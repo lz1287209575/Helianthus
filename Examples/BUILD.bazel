@@ -753,5 +753,15 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
+cc_binary(
+    name = "config_example",
+    srcs = ["ConfigExample.cpp"],
+    deps = [
+        "//Shared/Config:config",
+        "//Shared/Common:common",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 
 

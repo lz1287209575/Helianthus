@@ -39,6 +39,48 @@ cc_test(
 )
 
 cc_test(
+    name = "message_queue_comprehensive_test",
+    srcs = ["MessageQueueComprehensiveTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++17"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+    timeout = "long",
+)
+
+cc_test(
+    name = "message_queue_boundary_test",
+    srcs = ["MessageQueueBoundaryTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++17"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+    timeout = "long",
+)
+
+cc_test(
+    name = "message_queue_memory_test",
+    srcs = ["MessageQueueMemoryTest.cpp"],
+    copts = select({
+        "@bazel_tools//src/conditions:windows": ["/std:c++20"],
+        "//conditions:default": ["-std=c++17"],
+    }),
+    deps = [
+        "//Shared/MessageQueue:message_queue",
+        "@googletest//:gtest_main",
+    ],
+    timeout = "long",
+)
+
+cc_test(
     name = "transaction_test",
     srcs = ["TransactionTest.cpp"],
     copts = select({

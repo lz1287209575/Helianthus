@@ -17,6 +17,7 @@ cc_library(
         "StructuredLogger.h",
         "CommandLineParser.h",
         "ResourceMonitor.h",
+        "Utils.h",
     ],
     strip_include_prefix = ".",
     include_prefix = "Common",

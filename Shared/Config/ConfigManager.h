@@ -1,208 +1,247 @@
 #pragma once
 
-#include "IConfigProvider.h"
+#include "../Common/Types.h"
+#include <atomic>
+#include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <thread>
-#include <atomic>
-#include <chrono>
-#include <functional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace Helianthus::Config
 {
-    // 配置管理器配置
-    struct ConfigManagerConfig
-    {
-        bool EnableHotReload = true;                    // 是否启用热更新
-        std::chrono::milliseconds HotReloadInterval = std::chrono::milliseconds(1000); // 热更新检查间隔
-        bool EnableAutoSave = false;                    // 是否启用自动保存
-        std::chrono::milliseconds AutoSaveInterval = std::chrono::minutes(5);          // 自动保存间隔
-        bool EnableConfigValidation = true;            // 是否启用配置验证
-    };
 
-    // 配置验证器类型
-    using ConfigValidator = std::function<bool(const std::string& Key, const ConfigValue& Value, std::string& ErrorMessage)>;
+// 配置值类型
+enum class ConfigValueType : uint8_t
+{
+    STRING = 0,
+    INTEGER = 1,
+    FLOAT = 2,
+    BOOLEAN = 3,
+    ARRAY = 4,
+    OBJECT = 5
+};
 
-    // 配置管理器 - 单例模式
-    class ConfigManager
-    {
-    public:
-        // 获取单例实例
-        static ConfigManager& Instance();
+// 配置值结构
+struct ConfigValue
+{
+    ConfigValueType Type = ConfigValueType::STRING;
+    std::string StringValue;
+    int64_t IntValue = 0;
+    double FloatValue = 0.0;
+    bool BoolValue = false;
+    std::vector<std::string> ArrayValue;
+    std::unordered_map<std::string, std::string> ObjectValue;
 
-        // 禁用拷贝和赋值
-        ConfigManager(const ConfigManager&) = delete;
-        ConfigManager& operator=(const ConfigManager&) = delete;
+    ConfigValue() = default;
+    
+    // 构造函数
+    ConfigValue(const std::string& Value) : Type(ConfigValueType::STRING), StringValue(Value) {}
+    ConfigValue(int64_t Value) : Type(ConfigValueType::INTEGER), IntValue(Value) {}
+    ConfigValue(double Value) : Type(ConfigValueType::FLOAT), FloatValue(Value) {}
+    ConfigValue(bool Value) : Type(ConfigValueType::BOOLEAN), BoolValue(Value) {}
+    ConfigValue(const std::vector<std::string>& Value) : Type(ConfigValueType::ARRAY), ArrayValue(Value) {}
+    ConfigValue(const std::unordered_map<std::string, std::string>& Value) : Type(ConfigValueType::OBJECT), ObjectValue(Value) {}
 
-        // 初始化配置管理器
-        bool Initialize(std::unique_ptr<IConfigProvider> Provider, const ConfigManagerConfig& Config = ConfigManagerConfig());
+    // 类型转换方法
+    std::string AsString() const;
+    int64_t AsInt() const;
+    double AsFloat() const;
+    bool AsBool() const;
+    std::vector<std::string> AsArray() const;
+    std::unordered_map<std::string, std::string> AsObject() const;
 
-        // 关闭配置管理器
-        void Shutdown();
+    // 验证方法
+    bool IsValid() const;
+    std::string ToString() const;
+};
 
-        // 检查是否已初始化
-        bool IsInitialized() const;
+// 配置项结构
+struct ConfigItem
+{
+    std::string Key;
+    ConfigValue Value;
+    std::string Description;
+    std::string DefaultValue;
+    bool Required = false;
+    bool ReadOnly = false;
+    std::vector<std::string> AllowedValues;
+    std::function<bool(const ConfigValue&)> Validator;
 
-        // 重新加载配置
-        bool ReloadConfig();
+    ConfigItem() = default;
+    ConfigItem(const std::string& InKey, const ConfigValue& InValue, const std::string& InDescription = "")
+        : Key(InKey), Value(InValue), Description(InDescription) {}
+};
 
-        // 获取配置值
-        template<typename T>
-        T GetValue(const std::string& Key, const T& DefaultValue = T{}) const
-        {
-            std::lock_guard<std::mutex> Lock(ProviderMutex);
-            if (Provider)
-            {
-                return Provider->GetValue<T>(Key, DefaultValue);
-            }
-            return DefaultValue;
-        }
+// 配置变更回调
+using ConfigChangeCallback = std::function<void(const std::string& Key, const ConfigValue& OldValue, const ConfigValue& NewValue)>;
 
-        // 获取配置值（可选类型）
-        std::optional<ConfigValue> GetValue(const std::string& Key) const;
+// 配置验证器
+using ConfigValidator = std::function<bool(const std::string& Key, const ConfigValue& Value)>;
 
-        // 设置配置值
-        bool SetValue(const std::string& Key, const ConfigValue& Value);
+// 配置管理器类
+class ConfigManager
+{
+public:
+    ConfigManager();
+    ~ConfigManager();
 
-        // 检查配置键是否存在
-        bool HasKey(const std::string& Key) const;
+    // 禁用拷贝，允许移动
+    ConfigManager(const ConfigManager&) = delete;
+    ConfigManager& operator=(const ConfigManager&) = delete;
+    ConfigManager(ConfigManager&& Other) noexcept;
+    ConfigManager& operator=(ConfigManager&& Other) noexcept;
 
-        // 获取所有配置键
-        std::vector<std::string> GetAllKeys() const;
+    // 初始化和生命周期
+    bool Initialize(const std::string& ConfigPath = "config/");
+    void Shutdown();
+    bool IsInitialized() const;
 
-        // 获取配置节
-        std::unordered_map<std::string, ConfigValue> GetSection(const std::string& Prefix) const;
+    // 配置文件操作
+    bool LoadFromFile(const std::string& FilePath);
+    bool SaveToFile(const std::string& FilePath) const;
+    bool LoadFromEnvironment();
+    bool LoadFromCommandLine(int Argc, char* Argv[]);
 
-        // 注册配置变更回调
-        void RegisterChangeCallback(const std::string& Key, ConfigChangeCallback Callback);
+    // 配置项操作
+    bool SetValue(const std::string& Key, const ConfigValue& Value);
+    bool SetString(const std::string& Key, const std::string& Value);
+    bool SetInt(const std::string& Key, int64_t Value);
+    bool SetFloat(const std::string& Key, double Value);
+    bool SetBool(const std::string& Key, bool Value);
+    bool SetArray(const std::string& Key, const std::vector<std::string>& Value);
+    bool SetObject(const std::string& Key, const std::unordered_map<std::string, std::string>& Value);
 
-        // 注销配置变更回调
-        void UnregisterChangeCallback(const std::string& Key);
+    ConfigValue GetValue(const std::string& Key) const;
+    std::string GetString(const std::string& Key, const std::string& Default = "") const;
+    int64_t GetInt(const std::string& Key, int64_t Default = 0) const;
+    double GetFloat(const std::string& Key, double Default = 0.0) const;
+    bool GetBool(const std::string& Key, bool Default = false) const;
+    std::vector<std::string> GetArray(const std::string& Key) const;
+    std::unordered_map<std::string, std::string> GetObject(const std::string& Key) const;
 
-        // 注册配置验证器
-        void RegisterValidator(const std::string& KeyPattern, ConfigValidator Validator);
+    // 配置项管理
+    bool AddConfigItem(const ConfigItem& Item);
+    bool RemoveConfigItem(const std::string& Key);
+    bool HasConfigItem(const std::string& Key) const;
+    ConfigItem GetConfigItem(const std::string& Key) const;
+    std::vector<std::string> GetAllKeys() const;
 
-        // 注销配置验证器
-        void UnregisterValidator(const std::string& KeyPattern);
+    // 配置验证
+    bool ValidateConfig() const;
+    bool ValidateConfigItem(const std::string& Key) const;
+    bool ValidateConfigItemUnlocked(const std::string& Key) const;
+    void AddValidator(const std::string& Key, ConfigValidator Validator);
+    void RemoveValidator(const std::string& Key);
 
-        // 保存配置
-        bool SaveConfig(const std::string& Destination = "");
+    // 配置变更通知
+    void AddChangeCallback(const std::string& Key, ConfigChangeCallback Callback);
+    void RemoveChangeCallback(const std::string& Key);
+    void AddGlobalChangeCallback(ConfigChangeCallback Callback);
+    void RemoveGlobalChangeCallback();
 
-        // 获取配置源信息
-        std::string GetConfigSource() const;
+    // 配置模板
+    void LoadDefaultConfig();
+    void LoadMessageQueueConfig();
+    void LoadNetworkConfig();
+    void LoadLoggingConfig();
+    void LoadMonitoringConfig();
 
-        // 获取最后错误信息
-        std::string GetLastError() const;
+    // 配置导出
+    std::string ExportToJson() const;
+    std::string ExportToYaml() const;
+    std::string ExportToIni() const;
 
-        // 获取配置统计信息
-        struct ConfigStats
-        {
-            size_t TotalKeys = 0;
-            size_t ReloadCount = 0;
-            size_t SaveCount = 0;
-            size_t ValidationErrors = 0;
-            std::chrono::system_clock::time_point LastReloadTime;
-            std::chrono::system_clock::time_point LastSaveTime;
-        };
-        ConfigStats GetStats() const;
+    // 配置导入
+    bool ImportFromJson(const std::string& JsonData);
+    bool ImportFromYaml(const std::string& YamlData);
+    bool ImportFromIni(const std::string& IniData);
 
-        // 手动触发配置验证
-        bool ValidateAllConfigs(std::vector<std::string>& ValidationErrors);
+    // 配置统计
+    size_t GetConfigItemCount() const;
+    std::vector<std::string> GetModifiedKeys() const;
+    void ClearModifiedFlags();
+    
+    // 重新加载配置
+    bool ReloadConfig();
 
-        // 设置全局配置前缀（用于命名空间隔离）
-        void SetGlobalPrefix(const std::string& Prefix);
+    // 配置锁定
+    void LockConfig();
+    void UnlockConfig();
+    bool IsConfigLocked() const;
 
-        // 获取全局配置前缀
-        std::string GetGlobalPrefix() const;
+private:
+    // 内部辅助方法
+    bool ValidateValue(const std::string& Key, const ConfigValue& Value) const;
+    void NotifyChangeCallbacks(const std::string& Key, const ConfigValue& OldValue, const ConfigValue& NewValue);
+    bool ParseConfigLine(const std::string& Line, std::string& Key, ConfigValue& Value);
+    std::string EscapeString(const std::string& Str) const;
+    std::string UnescapeString(const std::string& Str) const;
+    bool IsValidKey(const std::string& Key) const;
+    std::string NormalizeKey(const std::string& Key) const;
 
-    private:
-        ConfigManager() = default;
-        ~ConfigManager();
+private:
+    // 配置存储
+    std::unordered_map<std::string, ConfigItem> ConfigItems;
+    mutable std::mutex ConfigMutex;
 
-        // 配置提供者
-        std::unique_ptr<IConfigProvider> Provider;
-        mutable std::mutex ProviderMutex;
+    // 状态管理
+    std::atomic<bool> InitializedFlag = false;
+    std::atomic<bool> ConfigLocked = false;
 
-        // 配置管理器配置
-        ConfigManagerConfig Config;
+    // 配置路径
+    std::string ConfigPath;
+    std::vector<std::string> ConfigFiles;
 
-        // 热更新线程
-        std::thread HotReloadThread;
-        std::atomic<bool> ShouldStop{false};
-        std::atomic<bool> IsInitializedFlag{false};
+    // 验证器
+    std::unordered_map<std::string, ConfigValidator> Validators;
 
-        // 自动保存线程
-        std::thread AutoSaveThread;
+    // 变更回调
+    std::unordered_map<std::string, std::vector<ConfigChangeCallback>> ChangeCallbacks;
+    std::vector<ConfigChangeCallback> GlobalChangeCallbacks;
 
-        // 配置验证器
-        std::unordered_map<std::string, ConfigValidator> Validators;
-        mutable std::mutex ValidatorMutex;
+    // 修改跟踪
+    std::vector<std::string> ModifiedKeys;
+};
 
-        // 统计信息
-        mutable ConfigStats Stats;
-        mutable std::mutex StatsMutex;
+// 全局配置管理器实例
+extern std::unique_ptr<ConfigManager> GlobalConfigManager;
 
-        // 全局前缀
-        std::string GlobalPrefix;
-        mutable std::mutex PrefixMutex;
+// 便捷的全局配置访问函数
+namespace Global
+{
+    bool InitializeConfig(const std::string& ConfigPath = "config/");
+    void ShutdownConfig();
+    
+    // 便捷的配置访问
+    std::string GetString(const std::string& Key, const std::string& Default = "");
+    int64_t GetInt(const std::string& Key, int64_t Default = 0);
+    double GetFloat(const std::string& Key, double Default = 0.0);
+    bool GetBool(const std::string& Key, bool Default = false);
+    
+    // 配置设置
+    bool SetString(const std::string& Key, const std::string& Value);
+    bool SetInt(const std::string& Key, int64_t Value);
+    bool SetFloat(const std::string& Key, double Value);
+    bool SetBool(const std::string& Key, bool Value);
+    
+    // 配置验证
+    bool ValidateConfig();
+    bool ReloadConfig();
+}
 
-        // 最后错误信息
-        mutable std::string LastError;
-        mutable std::mutex ErrorMutex;
-
-        // 私有方法
-        void HotReloadWorker();
-        void AutoSaveWorker();
-        bool ValidateConfig(const std::string& Key, const ConfigValue& Value, std::string& ErrorMessage);
-        std::string ApplyGlobalPrefix(const std::string& Key) const;
-        std::string RemoveGlobalPrefix(const std::string& Key) const;
-        void UpdateStats(const std::function<void(ConfigStats&)>& Updater) const;
-        void SetLastError(const std::string& Error) const;
-    };
-
-    // 便捷的全局函数
-    namespace GlobalConfig
-    {
-        // 初始化全局配置
-        bool Initialize(const std::string& ConfigFile, ConfigFormat Format = ConfigFormat::AUTO_DETECT, const ConfigManagerConfig& Config = ConfigManagerConfig());
-
-        // 获取配置值
-        template<typename T>
-        T Get(const std::string& Key, const T& DefaultValue = T{})
-        {
-            return ConfigManager::Instance().GetValue<T>(Key, DefaultValue);
-        }
-
-        // 设置配置值
-        bool Set(const std::string& Key, const ConfigValue& Value);
-
-        // 检查配置键是否存在
-        bool Has(const std::string& Key);
-
-        // 重新加载配置
-        bool Reload();
-
-        // 保存配置
-        bool Save();
-
-        // 关闭配置系统
-        void Shutdown();
-    }
+// 配置模板类
+class ConfigTemplate
+{
+public:
+    static void LoadMessageQueueDefaults(ConfigManager& Manager);
+    static void LoadNetworkDefaults(ConfigManager& Manager);
+    static void LoadLoggingDefaults(ConfigManager& Manager);
+    static void LoadMonitoringDefaults(ConfigManager& Manager);
+    static void LoadSecurityDefaults(ConfigManager& Manager);
+    static void LoadPerformanceDefaults(ConfigManager& Manager);
+};
 
 } // namespace Helianthus::Config
-
-// 便捷宏定义
-#define HELIANTHUS_CONFIG_GET(key, default_value) \
-    Helianthus::Config::GlobalConfig::Get(key, default_value)
-
-#define HELIANTHUS_CONFIG_SET(key, value) \
-    Helianthus::Config::GlobalConfig::Set(key, value)
-
-#define HELIANTHUS_CONFIG_HAS(key) \
-    Helianthus::Config::GlobalConfig::Has(key)
-
-#define HELIANTHUS_CONFIG_RELOAD() \
-    Helianthus::Config::GlobalConfig::Reload()
-
-#define HELIANTHUS_CONFIG_SAVE() \
-    Helianthus::Config::GlobalConfig::Save()
