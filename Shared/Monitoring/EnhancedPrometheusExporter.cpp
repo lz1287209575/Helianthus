@@ -717,6 +717,16 @@ std::string EnhancedPrometheusExporter::ExportBatchMetrics() const
     Oss << "# HELP helianthus_batch_count_total Total number of batches\n";
     Oss << "# TYPE helianthus_batch_count_total counter\n";
     
+    // 添加分位数指标的 HELP/TYPE 注释
+    Oss << "# HELP helianthus_batch_duration_p50_ms 50th percentile of batch processing duration in milliseconds\n";
+    Oss << "# TYPE helianthus_batch_duration_p50_ms gauge\n";
+    Oss << "# HELP helianthus_batch_duration_p95_ms 95th percentile of batch processing duration in milliseconds\n";
+    Oss << "# TYPE helianthus_batch_duration_p95_ms gauge\n";
+    Oss << "# HELP helianthus_batch_duration_p99_ms 99th percentile of batch processing duration in milliseconds\n";
+    Oss << "# TYPE helianthus_batch_duration_p99_ms gauge\n";
+    Oss << "# HELP helianthus_batch_duration_avg_ms Average batch processing duration in milliseconds\n";
+    Oss << "# TYPE helianthus_batch_duration_avg_ms gauge\n";
+    
     std::lock_guard<std::mutex> Lock(BatchStatsMutex);
     for (const auto& Pair : BatchStatsByQueue)
     {
@@ -755,6 +765,16 @@ std::string EnhancedPrometheusExporter::ExportZeroCopyMetrics() const
     Oss << "# TYPE helianthus_zero_copy_duration_ms histogram\n";
     Oss << "# HELP helianthus_zero_copy_operations_total Total number of zero-copy operations\n";
     Oss << "# TYPE helianthus_zero_copy_operations_total counter\n";
+    
+    // 添加分位数指标的 HELP/TYPE 注释
+    Oss << "# HELP helianthus_zero_copy_duration_p50_ms 50th percentile of zero-copy operation duration in milliseconds\n";
+    Oss << "# TYPE helianthus_zero_copy_duration_p50_ms gauge\n";
+    Oss << "# HELP helianthus_zero_copy_duration_p95_ms 95th percentile of zero-copy operation duration in milliseconds\n";
+    Oss << "# TYPE helianthus_zero_copy_duration_p95_ms gauge\n";
+    Oss << "# HELP helianthus_zero_copy_duration_p99_ms 99th percentile of zero-copy operation duration in milliseconds\n";
+    Oss << "# TYPE helianthus_zero_copy_duration_p99_ms gauge\n";
+    Oss << "# HELP helianthus_zero_copy_duration_avg_ms Average zero-copy operation duration in milliseconds\n";
+    Oss << "# TYPE helianthus_zero_copy_duration_avg_ms gauge\n";
     
     std::lock_guard<std::mutex> Lock(ZeroCopyStatsMutex);
     
@@ -796,6 +816,35 @@ std::string EnhancedPrometheusExporter::ExportTransactionMetrics() const
     Oss << "# TYPE helianthus_transaction_timeout_total counter\n";
     Oss << "# HELP helianthus_transaction_failed_total Total number of failed transactions\n";
     Oss << "# TYPE helianthus_transaction_failed_total counter\n";
+    
+    // 添加分位数指标的 HELP/TYPE 注释
+    Oss << "# HELP helianthus_transaction_commit_duration_p50_ms 50th percentile of transaction commit duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_commit_duration_p50_ms gauge\n";
+    Oss << "# HELP helianthus_transaction_commit_duration_p95_ms 95th percentile of transaction commit duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_commit_duration_p95_ms gauge\n";
+    Oss << "# HELP helianthus_transaction_commit_duration_p99_ms 99th percentile of transaction commit duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_commit_duration_p99_ms gauge\n";
+    Oss << "# HELP helianthus_transaction_commit_duration_avg_ms Average transaction commit duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_commit_duration_avg_ms gauge\n";
+    
+    Oss << "# HELP helianthus_transaction_rollback_duration_p50_ms 50th percentile of transaction rollback duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_rollback_duration_p50_ms gauge\n";
+    Oss << "# HELP helianthus_transaction_rollback_duration_p95_ms 95th percentile of transaction rollback duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_rollback_duration_p95_ms gauge\n";
+    Oss << "# HELP helianthus_transaction_rollback_duration_p99_ms 99th percentile of transaction rollback duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_rollback_duration_p99_ms gauge\n";
+    Oss << "# HELP helianthus_transaction_rollback_duration_avg_ms Average transaction rollback duration in milliseconds\n";
+    Oss << "# TYPE helianthus_transaction_rollback_duration_avg_ms gauge\n";
+    
+    // 添加比率指标的 HELP/TYPE 注释
+    Oss << "# HELP helianthus_transaction_success_rate Success rate of transactions (0.0-1.0)\n";
+    Oss << "# TYPE helianthus_transaction_success_rate gauge\n";
+    Oss << "# HELP helianthus_transaction_rollback_rate Rollback rate of transactions (0.0-1.0)\n";
+    Oss << "# TYPE helianthus_transaction_rollback_rate gauge\n";
+    Oss << "# HELP helianthus_transaction_timeout_rate Timeout rate of transactions (0.0-1.0)\n";
+    Oss << "# TYPE helianthus_transaction_timeout_rate gauge\n";
+    Oss << "# HELP helianthus_transaction_failure_rate Failure rate of transactions (0.0-1.0)\n";
+    Oss << "# TYPE helianthus_transaction_failure_rate gauge\n";
     
     std::lock_guard<std::mutex> Lock(TransactionStatsMutex);
     

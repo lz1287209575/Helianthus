@@ -12,15 +12,6 @@ using namespace Helianthus::Common;
 // 使用简化的运行时反射宏定义类
 HELIANTHUS_CLASS(HPlayer, HObject)
 {
-    HELIANTHUS_PROPERTY(Health, int32_t)
-    HELIANTHUS_PROPERTY(Speed, float)
-    HELIANTHUS_PROPERTY(Name, std::string)
-    
-    HELIANTHUS_FUNCTION(TakeDamage, void, int32_t damage)
-    HELIANTHUS_FUNCTION(Heal, void, int32_t amount)
-    HELIANTHUS_FUNCTION(GetStatus, std::string)
-    HELIANTHUS_FUNCTION(SetName, void, const std::string& name)
-    
 public:
     HPlayer() : Health(100), Speed(5.0f), Name("DefaultPlayer") {}
     
@@ -49,7 +40,13 @@ public:
         std::cout << "Player name set to: " << Name << std::endl;
     }
     
-HELIANTHUS_GENERATED_BODY()
+    // 属性声明
+    HELIANTHUS_PROPERTY(Health, int32_t)
+    HELIANTHUS_PROPERTY(Speed, float)
+    HELIANTHUS_PROPERTY(Name, std::string)
+    
+    HELIANTHUS_GENERATED_BODY()
+};
 
 // 实现运行时反射方法
 void* HPlayer::GetProperty(const std::string& PropertyName)
@@ -87,13 +84,6 @@ void* HPlayer::CallFunction(const std::string& FunctionName, const std::vector<v
 // 第二个类
 HELIANTHUS_CLASS(HWeapon, HObject)
 {
-    HELIANTHUS_PROPERTY(WeaponName, std::string)
-    HELIANTHUS_PROPERTY(Damage, int32_t)
-    HELIANTHUS_PROPERTY(Range, float)
-    
-    HELIANTHUS_FUNCTION(Upgrade, void)
-    HELIANTHUS_FUNCTION(GetWeaponInfo, std::string)
-    
 public:
     HWeapon() : WeaponName("DefaultWeapon"), Damage(10), Range(100.0f) {}
     
@@ -109,7 +99,13 @@ public:
         return "Weapon: " + WeaponName + ", Damage: " + std::to_string(Damage) + ", Range: " + std::to_string(Range);
     }
     
-HELIANTHUS_GENERATED_BODY()
+    // 属性声明
+    HELIANTHUS_PROPERTY(WeaponName, std::string)
+    HELIANTHUS_PROPERTY(Damage, int32_t)
+    HELIANTHUS_PROPERTY(Range, float)
+    
+    HELIANTHUS_GENERATED_BODY()
+};
 
 // 实现运行时反射方法
 void* HWeapon::GetProperty(const std::string& PropertyName)

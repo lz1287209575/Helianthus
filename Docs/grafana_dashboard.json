@@ -1,0 +1,252 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Helianthus Message Queue Dashboard",
+    "tags": ["helianthus", "message-queue", "prometheus"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Transaction Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "helianthus_transaction_success_rate * 100",
+            "legendFormat": "Success Rate (%)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 80},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Transaction Counters",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "helianthus_transaction_total",
+            "legendFormat": "Total Transactions"
+          },
+          {
+            "expr": "helianthus_transaction_committed_total",
+            "legendFormat": "Committed"
+          },
+          {
+            "expr": "helianthus_transaction_rolled_back_total",
+            "legendFormat": "Rolled Back"
+          },
+          {
+            "expr": "helianthus_transaction_timeout_total",
+            "legendFormat": "Timeout"
+          },
+          {
+            "expr": "helianthus_transaction_failed_total",
+            "legendFormat": "Failed"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Transaction Commit Duration",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "helianthus_transaction_commit_duration_avg_ms",
+            "legendFormat": "Avg Commit Time"
+          },
+          {
+            "expr": "helianthus_transaction_commit_duration_p50_ms",
+            "legendFormat": "P50 Commit Time"
+          },
+          {
+            "expr": "helianthus_transaction_commit_duration_p95_ms",
+            "legendFormat": "P95 Commit Time"
+          },
+          {
+            "expr": "helianthus_transaction_commit_duration_p99_ms",
+            "legendFormat": "P99 Commit Time"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Batch Processing Duration",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "helianthus_batch_duration_avg_ms",
+            "legendFormat": "Avg Batch Time"
+          },
+          {
+            "expr": "helianthus_batch_duration_p50_ms",
+            "legendFormat": "P50 Batch Time"
+          },
+          {
+            "expr": "helianthus_batch_duration_p95_ms",
+            "legendFormat": "P95 Batch Time"
+          },
+          {
+            "expr": "helianthus_batch_duration_p99_ms",
+            "legendFormat": "P99 Batch Time"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Zero-Copy Operation Duration",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "helianthus_zero_copy_duration_avg_ms",
+            "legendFormat": "Avg Zero-Copy Time"
+          },
+          {
+            "expr": "helianthus_zero_copy_duration_p50_ms",
+            "legendFormat": "P50 Zero-Copy Time"
+          },
+          {
+            "expr": "helianthus_zero_copy_duration_p95_ms",
+            "legendFormat": "P95 Zero-Copy Time"
+          },
+          {
+            "expr": "helianthus_zero_copy_duration_p99_ms",
+            "legendFormat": "P99 Zero-Copy Time"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 6,
+        "title": "Batch Counters",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "helianthus_batch_count_total",
+            "legendFormat": "Total Batches"
+          },
+          {
+            "expr": "helianthus_batch_messages_total",
+            "legendFormat": "Total Messages"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 32}
+      },
+      {
+        "id": 7,
+        "title": "Zero-Copy Operations",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "helianthus_zero_copy_operations_total",
+            "legendFormat": "Total Operations"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 32}
+      },
+      {
+        "id": 8,
+        "title": "Transaction Commit Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(helianthus_transaction_commit_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "scheme"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40}
+      },
+      {
+        "id": 9,
+        "title": "Batch Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(helianthus_batch_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "scheme"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48}
+      },
+      {
+        "id": 10,
+        "title": "Zero-Copy Duration Histogram",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(helianthus_zero_copy_duration_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "scheme"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 56}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s"
+  }
+}
