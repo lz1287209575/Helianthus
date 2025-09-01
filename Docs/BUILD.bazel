@@ -1,0 +1,18 @@
+# Docs 模块构建文件
+
+# 性能基准测试报告
+exports_files([
+    "PerformanceBenchmarkReport.md",
+    "DistributedTransactionValidationReport.md",
+    "GrafanaDashboardSetup.md",
+], visibility = ["//visibility:public"])
+
+# 所有文档文件
+filegroup(
+    name = "all_docs",
+    srcs = glob([
+        "*.md",
+        "*.json",
+    ]),
+    visibility = ["//visibility:public"],
+)

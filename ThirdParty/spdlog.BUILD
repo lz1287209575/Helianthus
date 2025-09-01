@@ -4,6 +4,7 @@ cc_library(
         "include/**/*.h",
     ]),
     includes = ["include"],
+    strip_include_prefix = "include",
     visibility = ["//visibility:public"],
     copts = [
         "-DSPDLOG_COMPILED_LIB",

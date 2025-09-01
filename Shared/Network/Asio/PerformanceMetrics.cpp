@@ -1,11 +1,9 @@
 #include "Shared/Network/Asio/PerformanceMetrics.h"
 #include "Common/LogCategory.h"
+#include "Common/LogCategories.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
-
-// 创建本地日志类别实例
-H_DEFINE_LOG_CATEGORY(Perf, Helianthus::Common::LogVerbosity::Log);
 
 namespace Helianthus::Network::Asio
 {

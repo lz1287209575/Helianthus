@@ -51,5 +51,4 @@ cc_library(
     }),
     deps = [],
     visibility = ["//visibility:public"],
-    strip_include_prefix = ".",
 )

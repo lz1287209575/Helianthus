@@ -21,6 +21,7 @@ cc_library(
     ],
     strip_include_prefix = ".",
     include_prefix = "Common",
+    includes = ["."],
     deps = [
         "//:helianthus_config",
         "@spdlog//:spdlog",

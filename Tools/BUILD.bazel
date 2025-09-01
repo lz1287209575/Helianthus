@@ -2,11 +2,10 @@
 
 genrule(
     name = "api_docs",
-    srcs = glob([
-        "../Shared/**/*.h",
-        "../Shared/**/*.cpp",
-        "../Shared/**/*.hpp",
-    ]),
+    srcs = [
+        "//Shared:all_headers",
+        "//Shared:all_sources",
+    ],
     outs = ["docs_generated"],
     cmd = """
         # 创建输出目录
@@ -29,7 +28,7 @@ HAVE_DOT = YES
 UML_LOOK = YES
 CALL_GRAPH = YES
 CALLER_GRAPH = YES
-INPUT = ../Shared/
+INPUT = Shared/
 FILE_PATTERNS = *.h *.cpp *.hpp
 RECURSIVE = YES
 EXCLUDE_PATTERNS = */ThirdParty/* */Tests/*
@@ -48,7 +47,7 @@ EOF
             touch $@
         fi
     """,
-    tools = ["//tools:generate_docs.sh"],
+    tools = ["//Tools:generate_docs.sh"],
 )
 
 # 文档生成脚本
@@ -62,9 +61,9 @@ filegroup(
 genrule(
     name = "user_guides",
     srcs = [
-        "../Docs/PerformanceBenchmarkReport.md",
-        "../Docs/DistributedTransactionValidationReport.md",
-        "../Docs/Grafana_Setup_Guide.md",
+        "//Docs:PerformanceBenchmarkReport.md",
+        "//Docs:DistributedTransactionValidationReport.md",
+        "//Docs:GrafanaDashboardSetup.md",
     ],
     outs = ["guides_generated"],
     cmd = """
@@ -72,9 +71,9 @@ genrule(
         mkdir -p docs/reports
         
         # 复制现有文档
-        cp $(location ../Docs/PerformanceBenchmarkReport.md) docs/reports/
-        cp $(location ../Docs/DistributedTransactionValidationReport.md) docs/reports/
-        cp $(location ../Docs/Grafana_Setup_Guide.md) docs/guides/
+        cp $(location //Docs:PerformanceBenchmarkReport.md) docs/reports/
+        cp $(location //Docs:DistributedTransactionValidationReport.md) docs/reports/
+        cp $(location //Docs:GrafanaDashboardSetup.md) docs/guides/
         
         # 创建用户指南
         cat > docs/guides/installation.md << 'EOF'
