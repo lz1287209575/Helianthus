@@ -35,3 +35,13 @@ cc_library(
     copts = ["-IAES"],
     visibility = ["//visibility:public"],
 )
+
+# picohttpparser (provide at top-level to avoid subpackage lookup issues)
+cc_library(
+    name = "picohttpparser",
+    srcs = ["picohttpparser/picohttpparser.c"],
+    hdrs = ["picohttpparser/picohttpparser.h"],
+    includes = ["picohttpparser"],
+    copts = ["-Ipicohttpparser"],
+    visibility = ["//visibility:public"],
+)
