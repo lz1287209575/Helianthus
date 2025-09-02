@@ -21,8 +21,7 @@ cc_library(
         "miniz/miniz_tinfl.h",
         "miniz/miniz_zip.h",
     ],
-    strip_include_prefix = "miniz",
-    include_prefix = "ThirdParty/miniz",
+    includes = ["miniz"],
     visibility = ["//visibility:public"],
 )
 
