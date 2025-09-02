@@ -23,6 +23,7 @@ cc_library(
         "miniz/miniz_zip.h",
     ],
     includes = ["miniz"],
+    include_prefix = "ThirdParty",
     visibility = ["//visibility:public"],
 )
 
