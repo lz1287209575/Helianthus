@@ -21,7 +21,8 @@ cc_library(
         "miniz/miniz_tinfl.h",
         "miniz/miniz_zip.h",
     ],
-    includes = ["miniz"],
+    includes = [".", "miniz"],
+    copts = ["-IThirdParty/miniz"],
     visibility = ["//visibility:public"],
 )
 
