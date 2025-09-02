@@ -1,11 +1,8 @@
-#include "Shared/Monitoring/PrometheusExporter.h"
-
-#include "Shared/Network/Sockets/TcpSocket.h"
-#include "Shared/Network/NetworkTypes.h"
+#include "PrometheusExporter.h"
 #include "Shared/Common/LogCategories.h"
-#include "Shared/Common/Logger.h"
-#include <cstring>
-#include "ThirdParty/picohttpparser/picohttpparser.h"
+#include <Network/Sockets/TcpSocket.h>
+#include <Network/NetworkTypes.h>
+#include <picohttpparser.h>
 
 namespace Helianthus::Monitoring
 {
