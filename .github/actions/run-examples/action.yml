@@ -1,0 +1,60 @@
+name: 'Run Examples'
+description: 'Run Helianthus examples with custom configuration'
+inputs:
+  example-targets:
+    description: 'Example targets to run (comma-separated)'
+    required: false
+    default: '//Examples:config_example'
+  timeout:
+    description: 'Example timeout in minutes'
+    required: false
+    default: '10'
+  output-format:
+    description: 'Output format for examples'
+    required: false
+    default: 'text'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Run examples'
+      shell: bash
+      run: |
+        EXAMPLE_TARGETS="${{ inputs.example-targets }}"
+        TIMEOUT="${{ inputs.timeout }}"
+        OUTPUT_FORMAT="${{ inputs.output-format }}"
+        
+        echo "Running examples: $EXAMPLE_TARGETS"
+        echo "Timeout: $TIMEOUT minutes"
+        echo "Output format: $OUTPUT_FORMAT"
+        
+        # 分割多个示例目标
+        IFS=',' read -ra TARGETS <<< "$EXAMPLE_TARGETS"
+        
+        for target in "${TARGETS[@]}"; do
+          echo "Running example: $target"
+          
+          # 设置超时
+          timeout ${TIMEOUT}m bazel run $target || {
+            echo "Example $target failed or timed out"
+            exit 1
+          }
+          
+          echo "Example $target completed successfully"
+        done
+        
+        echo "All examples completed successfully"
+
+    - name: 'Verify example outputs'
+      shell: bash
+      run: |
+        echo "Verifying example outputs..."
+        
+        # 检查示例是否生成了预期的输出
+        if [ -f "/tmp/helianthus_modified.conf" ]; then
+          echo "✅ Config example generated output file"
+        else
+          echo "⚠️ Config example may not have generated output file"
+        fi
+        
+        echo "Example output verification completed"

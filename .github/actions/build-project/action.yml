@@ -1,0 +1,80 @@
+name: 'Build Project'
+description: 'Build Helianthus project with custom configuration'
+inputs:
+  build-targets:
+    description: 'Build targets (comma-separated)'
+    required: false
+    default: '//...'
+  build-config:
+    description: 'Build configuration'
+    required: false
+    default: 'fastbuild'
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
+  cache:
+    description: 'Enable Bazel cache'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Build project'
+      shell: bash
+      run: |
+        BUILD_TARGETS="${{ inputs.build-targets }}"
+        BUILD_CONFIG="${{ inputs.build-config }}"
+        VERBOSE="${{ inputs.verbose }}"
+        CACHE="${{ inputs.cache }}"
+        
+        echo "Building targets: $BUILD_TARGETS"
+        echo "Build config: $BUILD_CONFIG"
+        echo "Verbose: $VERBOSE"
+        echo "Cache: $CACHE"
+        
+        BUILD_ARGS="--config=$BUILD_CONFIG"
+        
+        if [ "$VERBOSE" = "true" ]; then
+          BUILD_ARGS="$BUILD_ARGS --verbose_failures"
+        fi
+        
+        if [ "$CACHE" = "false" ]; then
+          BUILD_ARGS="$BUILD_ARGS --noexperimental_remote_cache"
+        fi
+        
+        echo "Build command: bazel build $BUILD_TARGETS $BUILD_ARGS"
+        
+        bazel build $BUILD_TARGETS $BUILD_ARGS
+        
+        echo "Build completed successfully"
+
+    - name: 'Verify build artifacts'
+      shell: bash
+      run: |
+        echo "Verifying build artifacts..."
+        
+        # 检查核心组件是否构建成功
+        if [ -f "bazel-bin/Shared/Config/libconfig.a" ]; then
+          echo "✅ Config library built successfully"
+        else
+          echo "❌ Config library build failed"
+          exit 1
+        fi
+        
+        if [ -f "bazel-bin/Shared/Common/libcommon.a" ]; then
+          echo "✅ Common library built successfully"
+        else
+          echo "❌ Common library build failed"
+          exit 1
+        fi
+        
+        if [ -f "bazel-bin/Shared/MessageQueue/libmessage_queue.a" ]; then
+          echo "✅ Message Queue library built successfully"
+        else
+          echo "❌ Message Queue library build failed"
+          exit 1
+        fi
+        
+        echo "All core components built successfully"

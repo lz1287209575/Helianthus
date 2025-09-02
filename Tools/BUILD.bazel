@@ -2,10 +2,7 @@
 
 genrule(
     name = "api_docs",
-    srcs = [
-        "//Shared:all_headers",
-        "//Shared:all_sources",
-    ],
+    srcs = [],
     outs = ["docs_generated"],
     cmd = """
         # 创建输出目录
@@ -60,20 +57,15 @@ filegroup(
 # 用户指南生成
 genrule(
     name = "user_guides",
-    srcs = [
-        "//Docs:PerformanceBenchmarkReport.md",
-        "//Docs:DistributedTransactionValidationReport.md",
-        "//Docs:GrafanaDashboardSetup.md",
-    ],
+    srcs = [],
     outs = ["guides_generated"],
     cmd = """
         mkdir -p docs/guides
         mkdir -p docs/reports
         
-        # 复制现有文档
-        cp $(location //Docs:PerformanceBenchmarkReport.md) docs/reports/
-        cp $(location //Docs:DistributedTransactionValidationReport.md) docs/reports/
-        cp $(location //Docs:GrafanaDashboardSetup.md) docs/guides/
+        # 创建文档目录结构
+        mkdir -p docs/reports
+        mkdir -p docs/guides
         
         # 创建用户指南
         cat > docs/guides/installation.md << 'EOF'

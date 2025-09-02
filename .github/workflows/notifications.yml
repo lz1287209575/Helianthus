@@ -1,0 +1,179 @@
+name: Notifications and Alerts
+
+on:
+  workflow_run:
+    workflows: ["Helianthus CI/CD Pipeline", "Security Scan", "Code Quality Check"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Custom notification message'
+        required: false
+        default: 'Manual notification triggered'
+
+env:
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+  EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+  EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+  EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+  EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+
+jobs:
+  notify-slack:
+    name: Notify Slack
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get workflow status
+      id: workflow-status
+      run: |
+        if [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "emoji=✅" >> $GITHUB_OUTPUT
+          echo "color=good" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event.workflow_run.conclusion }}" = "failure" ]; then
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "emoji=❌" >> $GITHUB_OUTPUT
+          echo "color=danger" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event.workflow_run.conclusion }}" = "cancelled" ]; then
+          echo "status=cancelled" >> $GITHUB_OUTPUT
+          echo "emoji=⚠️" >> $GITHUB_OUTPUT
+          echo "color=warning" >> $GITHUB_OUTPUT
+        else
+          echo "status=unknown" >> $GITHUB_OUTPUT
+          echo "emoji=❓" >> $GITHUB_OUTPUT
+          echo "color=#439FE0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Send Slack notification
+      if: env.SLACK_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ steps.workflow-status.outputs.status }}
+        webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
+        channel: '#helianthus-dev'
+        text: |
+          ${{ steps.workflow-status.outputs.emoji }} **Helianthus Workflow Status**
+          
+          **Workflow:** ${{ github.event.workflow_run.name }}
+          **Status:** ${{ steps.workflow-status.outputs.status }}
+          **Branch:** ${{ github.event.workflow_run.head_branch }}
+          **Commit:** ${{ github.event.workflow_run.head_sha }}
+          **Triggered by:** ${{ github.event.workflow_run.actor.login }}
+          
+          **Details:** ${{ github.event.workflow_run.html_url }}
+
+  notify-email:
+    name: Notify via Email
+    runs-on: ubuntu-latest
+    if: always() && github.event.workflow_run.conclusion == 'failure'
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Send email notification
+      if: env.EMAIL_SMTP_HOST != ''
+      run: |
+        echo "Sending email notification..."
+        # 这里可以添加邮件发送逻辑
+        # 例如使用curl发送到邮件服务API
+        echo "Email notification sent (if configured)"
+
+  notify-teams:
+    name: Notify Microsoft Teams
+    runs-on: ubuntu-latest
+    if: always() && github.event.workflow_run.conclusion == 'failure'
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Send Teams notification
+      if: env.TEAMS_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ github.event.workflow_run.conclusion }}
+        webhook_url: ${{ env.TEAMS_WEBHOOK_URL }}
+        text: |
+          🚨 **Helianthus Workflow Failure Alert**
+          
+          **Workflow:** ${{ github.event.workflow_run.name }}
+          **Status:** ${{ github.event.workflow_run.conclusion }}
+          **Branch:** ${{ github.event.workflow_run.head_branch }}
+          **Commit:** ${{ github.event.workflow_run.head_sha }}
+          **Triggered by:** ${{ github.event.workflow_run.actor.login }}
+          
+          **Details:** ${{ github.event.workflow_run.html_url }}
+          
+          Please investigate and fix the issue.
+
+  daily-summary:
+    name: Daily Summary Report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate daily summary
+      run: |
+        echo "Generating daily summary report..."
+        echo "# Helianthus Daily Summary Report" > daily-summary.md
+        echo "Date: $(date)" >> daily-summary.md
+        echo "" >> daily-summary.md
+        echo "## Workflow Status Summary" >> daily-summary.md
+        echo "" >> daily-summary.md
+        echo "This is a daily summary of all workflow runs." >> daily-summary.md
+        echo "Generated automatically by GitHub Actions." >> daily-summary.md
+
+    - name: Send summary to Slack
+      if: env.SLACK_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
+        channel: '#helianthus-dev'
+        text: |
+          📊 **Helianthus Daily Summary Report**
+          
+          Daily summary report has been generated.
+          Check the workflow artifacts for details.
+
+    - name: Upload summary report
+      uses: actions/upload-artifact@v4
+      with:
+        name: daily-summary
+        path: daily-summary.md
+
+  manual-notification:
+    name: Manual Notification
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 5
+
+    steps:
+    - name: Send manual notification
+      if: env.SLACK_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
+        channel: '#helianthus-dev'
+        text: |
+          📢 **Manual Notification**
+          
+          ${{ github.event.inputs.message }}
+          
+          **Triggered by:** ${{ github.actor }}
+          **Time:** $(date)

@@ -1,0 +1,227 @@
+name: Code Quality Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * 1'  # 每周一凌晨2点运行
+  workflow_dispatch:
+
+env:
+  BAZEL_VERSION: 8.3.1
+
+jobs:
+  static-analysis:
+    name: Static Code Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install analysis tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cppcheck \
+          clang-tidy \
+          clang-format \
+          valgrind \
+          python3-pip
+
+    - name: Install Python tools
+      run: |
+        pip3 install cpplint
+
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --std=c++17 --language=c++ \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedFunction \
+          --suppress=unmatchedSuppression \
+          --suppress=unusedStructMember \
+          Shared/ Tests/ Examples/ \
+          --xml --xml-version=2 \
+          --output-file=cppcheck-result.xml \
+          --quiet
+        echo "cppcheck completed"
+
+    - name: Run clang-tidy
+      run: |
+        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
+        head -50 | xargs -I {} clang-tidy {} \
+          -checks=*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type \
+          -- -std=c++17 -I. || true
+        echo "clang-tidy completed"
+
+    - name: Run cpplint
+      run: |
+        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
+        xargs python3 -m cpplint --filter=-build/include_order,-build/namespaces,-readability/todo,-runtime/references || true
+        echo "cpplint completed"
+
+    - name: Check code formatting
+      run: |
+        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
+        xargs clang-format --dry-run --Werror || {
+          echo "Code formatting check failed. Please run: clang-format -i **/*.{cpp,h}"
+          exit 1
+        }
+        echo "Code formatting check passed"
+
+    - name: Check file headers
+      run: |
+        echo "Checking file headers..."
+        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
+        while read file; do
+          if ! head -1 "$file" | grep -q "Copyright\|pragma once\|#pragma once"; then
+            echo "Warning: $file may be missing proper header"
+          fi
+        done
+        echo "File header check completed"
+
+    - name: Check for TODO/FIXME comments
+      run: |
+        echo "Checking for TODO/FIXME comments..."
+        grep -r -i "TODO\|FIXME\|HACK\|XXX" Shared/ Tests/ Examples/ || {
+          echo "No TODO/FIXME comments found"
+        }
+        echo "TODO/FIXME check completed"
+
+    - name: Upload analysis results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: static-analysis-results
+        path: |
+          cppcheck-result.xml
+        retention-days: 30
+
+  complexity-analysis:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install complexity tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-pip \
+          python3-dev
+
+    - name: Install Python complexity tools
+      run: |
+        pip3 install radon mccabe
+
+    - name: Analyze code complexity
+      run: |
+        echo "Analyzing code complexity..."
+        
+        # 使用radon分析代码复杂度
+        radon cc Shared/ -a -nc -o radon-cc.txt || true
+        radon mi Shared/ -o radon-mi.txt || true
+        radon hal Shared/ -o radon-hal.txt || true
+        
+        # 使用mccabe分析圈复杂度
+        find Shared/ -name "*.cpp" -o -name "*.h" | \
+        xargs python3 -m mccabe --min 10 || true
+        
+        echo "Complexity analysis completed"
+
+    - name: Upload complexity results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: complexity-analysis-results
+        path: |
+          radon-*.txt
+        retention-days: 30
+
+  dependency-check:
+    name: Dependency Security Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Run OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'Helianthus'
+        path: '.'
+        format: 'HTML'
+        out: 'reports'
+        args: >
+          --failOnCVSS 8
+          --enableRetired
+          --suppression suppression.xml
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-security-report
+        path: reports/
+        retention-days: 90
+
+  quality-report:
+    name: Generate Quality Report
+    runs-on: ubuntu-latest
+    needs: [static-analysis, complexity-analysis, dependency-check]
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate quality summary
+      run: |
+        echo "# Code Quality Report" > quality-report.md
+        echo "Generated: $(date)" >> quality-report.md
+        echo "" >> quality-report.md
+        
+        echo "## Summary" >> quality-report.md
+        echo "- Static Analysis: ${{ needs.static-analysis.result }}" >> quality-report.md
+        echo "- Complexity Analysis: ${{ needs.complexity-analysis.result }}" >> quality-report.md
+        echo "- Dependency Check: ${{ needs.dependency-check.result }}" >> quality-report.md
+        echo "" >> quality-report.md
+        
+        echo "## Recommendations" >> quality-report.md
+        if [ "${{ needs.static-analysis.result }}" != "success" ]; then
+          echo "- Review static analysis results" >> quality-report.md
+        fi
+        if [ "${{ needs.complexity-analysis.result }}" != "success" ]; then
+          echo "- Review code complexity" >> quality-report.md
+        fi
+        if [ "${{ needs.dependency-check.result }}" != "success" ]; then
+          echo "- Review dependency security issues" >> quality-report.md
+        fi
+        
+        echo "Report generated successfully"
+
+    - name: Upload quality report
+      uses: actions/upload-artifact@v4
+      with:
+        name: quality-report
+        path: quality-report.md
+        retention-days: 30

@@ -1,0 +1,43 @@
+version: 2
+updates:
+  # 启用对 GitHub Actions 的更新
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "lz1287209575"
+    assignees:
+      - "lz1287209575"
+
+  # 启用对 Bazel 依赖的更新
+  - package-ecosystem: "bazel"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "lz1287209575"
+    assignees:
+      - "lz1287209575"
+
+  # 启用对 Python 依赖的更新（如果有的话）
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "lz1287209575"
+    assignees:
+      - "lz1287209575"

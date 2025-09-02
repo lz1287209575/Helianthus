@@ -1,0 +1,76 @@
+name: Quick Build & Test
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ develop, feature/* ]
+  workflow_dispatch:
+
+env:
+  BAZEL_VERSION: 8.3.1
+
+jobs:
+  quick-build:
+    name: Quick Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libssl-dev \
+          libcurl4-openssl-dev \
+          libmysqlclient-dev \
+          libmongoc-dev \
+          libbson-dev \
+          libhiredis-dev
+
+    - name: Cache Bazel
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/bazel
+          ~/.bazel
+        key: quick-${{ github.repository }}-${{ github.sha }}-bazel
+        restore-keys: |
+          quick-${{ github.repository }}-${{ github.sha }}-bazel-
+
+    - name: Build core components
+      run: |
+        bazel build //Shared/Config:config
+        bazel build //Shared/Common:common
+        bazel build //Shared/MessageQueue:message_queue
+        echo "Core components built successfully"
+
+    - name: Run critical tests
+      run: |
+        bazel test //Tests/Config:config_manager_test --test_output=all
+        echo "Critical tests passed"
+
+    - name: Build examples
+      run: |
+        bazel build //Examples:config_example
+        echo "Examples built successfully"
+
+    - name: Check build artifacts
+      run: |
+        ls -la bazel-bin/Shared/Config/
+        ls -la bazel-bin/Shared/Common/
+        ls -la bazel-bin/Shared/MessageQueue/
+        echo "Build artifacts verified"

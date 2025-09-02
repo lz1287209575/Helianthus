@@ -1,0 +1,194 @@
+name: Documentation Generation and Deployment
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Shared/**'
+      - 'Tools/**'
+      - 'Docs/**'
+      - 'Examples/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'Shared/**'
+      - 'Tools/**'
+      - 'Docs/**'
+      - 'Examples/**'
+  workflow_dispatch:
+
+env:
+  BAZEL_VERSION: 8.3.1
+
+jobs:
+  generate-docs:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install documentation tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libssl-dev \
+          libcurl4-openssl-dev \
+          libmysqlclient-dev \
+          libmongoc-dev \
+          libbson-dev \
+          libhiredis-dev \
+          doxygen \
+          graphviz \
+          python3-pip
+
+    - name: Install Python documentation tools
+      run: |
+        pip3 install sphinx sphinx-rtd-theme
+
+    - name: Build project
+      run: |
+        bazel build //... --verbose_failures
+        echo "Project built successfully"
+
+    - name: Generate API documentation
+      run: |
+        echo "Generating API documentation..."
+        # 使用Doxygen生成C++ API文档
+        if [ -f Doxyfile ]; then
+          doxygen Doxyfile
+        else
+          # 创建默认的Doxyfile
+          doxygen -g
+          sed -i 's/PROJECT_NAME.*/PROJECT_NAME = "Helianthus"/' Doxyfile
+          sed -i 's/OUTPUT_DIRECTORY.*/OUTPUT_DIRECTORY = docs\/api/' Doxyfile
+          sed -i 's/INPUT.*/INPUT = Shared Tests Examples/' Doxyfile
+          sed -i 's/EXTRACT_ALL.*/EXTRACT_ALL = YES/' Doxyfile
+          sed -i 's/EXTRACT_PRIVATE.*/EXTRACT_PRIVATE = YES/' Doxyfile
+          sed -i 's/EXTRACT_STATIC.*/EXTRACT_STATIC = YES/' Doxyfile
+          doxygen Doxyfile
+        fi
+        echo "API documentation generated"
+
+    - name: Generate user guides
+      run: |
+        echo "Generating user guides..."
+        # 这里可以添加用户指南生成逻辑
+        mkdir -p docs/user-guides
+        echo "# Helianthus User Guide" > docs/user-guides/index.md
+        echo "" >> docs/user-guides/index.md
+        echo "## Getting Started" >> docs/user-guides/index.md
+        echo "" >> docs/user-guides/index.md
+        echo "### Installation" >> docs/user-guides/index.md
+        echo "" >> docs/user-guides/index.md
+        echo "```bash" >> docs/user-guides/index.md
+        echo "git clone https://github.com/your-repo/helianthus.git" >> docs/user-guides/index.md
+        echo "cd helianthus" >> docs/user-guides/index.md
+        echo "bazel build //..." >> docs/user-guides/index.md
+        echo "```" >> docs/user-guides/index.md
+        echo "User guides generated"
+
+    - name: Generate examples documentation
+      run: |
+        echo "Generating examples documentation..."
+        mkdir -p docs/examples
+        echo "# Helianthus Examples" > docs/examples/index.md
+        echo "" >> docs/examples/index.md
+        echo "## Available Examples" >> docs/examples/index.md
+        echo "" >> docs/examples/index.md
+        # 列出所有示例
+        find Examples -name "*.cpp" -type f | while read file; do
+          example_name=$(basename "$file" .cpp)
+          echo "- [$example_name]($example_name.md)" >> docs/examples/index.md
+        done
+        echo "Examples documentation generated"
+
+    - name: Create documentation index
+      run: |
+        echo "Creating documentation index..."
+        cat > docs/index.md << 'EOF'
+        # Helianthus Documentation
+
+        Welcome to the Helianthus project documentation.
+
+        ## Quick Navigation
+
+        - [API Reference](api/html/index.html) - Complete API documentation
+        - [User Guides](user-guides/index.md) - Getting started and usage guides
+        - [Examples](examples/index.md) - Code examples and tutorials
+        - [Development](development/index.md) - Contributing and development guides
+
+        ## Project Overview
+
+        Helianthus is a high-performance C++ framework for building scalable applications.
+
+        ## Getting Help
+
+        - [GitHub Issues](https://github.com/your-repo/helianthus/issues)
+        - [Discussions](https://github.com/your-repo/helianthus/discussions)
+        - [Wiki](https://github.com/your-repo/helianthus/wiki)
+
+        ---
+        *Last updated: $(date)*
+        EOF
+        echo "Documentation index created"
+
+    - name: Upload documentation artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: documentation
+        path: docs/
+
+  deploy-docs:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: generate-docs
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download documentation artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: documentation
+        path: docs/
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Upload to GitHub Pages
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs/
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+    - name: Documentation deployment summary
+      run: |
+        echo "📚 Documentation deployed successfully!"
+        echo "URL: ${{ steps.deployment.outputs.page_url }}"
+        echo "Deployment completed at: $(date)"

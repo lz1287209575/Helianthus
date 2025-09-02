@@ -1,0 +1,51 @@
+name: 'Setup Bazel'
+description: 'Setup Bazel build system with custom configuration'
+inputs:
+  version:
+    description: 'Bazel version to use'
+    required: false
+    default: '8.3.1'
+  platform:
+    description: 'Platform to install Bazel for'
+    required: false
+    default: 'linux'
+  cache-key:
+    description: 'Cache key for Bazel cache'
+    required: false
+    default: 'bazel-cache'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Download Bazel'
+      shell: bash
+      run: |
+        BAZEL_VERSION="${{ inputs.version }}"
+        PLATFORM="${{ inputs.platform }}"
+        
+        if [ "$PLATFORM" = "linux" ]; then
+          BAZEL_URL="https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh"
+        elif [ "$PLATFORM" = "macos" ]; then
+          BAZEL_URL="https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-installer-darwin-x86_64.sh"
+        else
+          echo "Unsupported platform: $PLATFORM"
+          exit 1
+        fi
+        
+        echo "Downloading Bazel $BAZEL_VERSION for $PLATFORM..."
+        curl -L -o bazel-installer.sh "$BAZEL_URL"
+        chmod +x bazel-installer.sh
+
+    - name: 'Install Bazel'
+      shell: bash
+      run: |
+        echo "Installing Bazel..."
+        ./bazel-installer.sh --user
+        echo 'export PATH="$HOME/bin:$PATH"' >> $GITHUB_ENV
+
+    - name: 'Verify Bazel installation'
+      shell: bash
+      run: |
+        echo "Verifying Bazel installation..."
+        $HOME/bin/bazel --version
+        echo "Bazel setup completed successfully"

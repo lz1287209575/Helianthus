@@ -1,0 +1,61 @@
+name: 'Run Tests'
+description: 'Run Helianthus test suite with custom configuration'
+inputs:
+  test-targets:
+    description: 'Test targets to run (comma-separated)'
+    required: false
+    default: '//Tests/...'
+  test-output:
+    description: 'Test output format'
+    required: false
+    default: 'all'
+  timeout:
+    description: 'Test timeout in minutes'
+    required: false
+    default: '30'
+  parallel:
+    description: 'Run tests in parallel'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Run tests'
+      shell: bash
+      run: |
+        TEST_TARGETS="${{ inputs.test-targets }}"
+        TEST_OUTPUT="${{ inputs.test-output }}"
+        TIMEOUT="${{ inputs.timeout }}"
+        PARALLEL="${{ inputs.parallel }}"
+        
+        echo "Running tests: $TEST_TARGETS"
+        echo "Test output: $TEST_OUTPUT"
+        echo "Timeout: $TIMEOUT minutes"
+        echo "Parallel: $PARALLEL"
+        
+        if [ "$PARALLEL" = "true" ]; then
+          bazel test $TEST_TARGETS \
+            --test_output=$TEST_OUTPUT \
+            --test_timeout=${TIMEOUT}m \
+            --jobs=auto \
+            --verbose_failures
+        else
+          bazel test $TEST_TARGETS \
+            --test_output=$TEST_OUTPUT \
+            --test_timeout=${TIMEOUT}m \
+            --jobs=1 \
+            --verbose_failures
+        fi
+        
+        echo "Tests completed successfully"
+
+    - name: 'Generate test report'
+      shell: bash
+      run: |
+        echo "Generating test report..."
+        bazel query "tests(${{ inputs.test-targets }})" > test_targets.txt
+        echo "Test targets saved to test_targets.txt"
+        
+        # 这里可以添加更详细的测试报告生成逻辑
+        echo "Test report generated"

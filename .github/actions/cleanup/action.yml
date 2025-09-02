@@ -1,0 +1,141 @@
+name: 'Cleanup'
+description: 'Clean up build artifacts and temporary files'
+inputs:
+  cleanup-type:
+    description: 'Type of cleanup to perform'
+    required: false
+    default: 'build'
+  keep-artifacts:
+    description: 'Keep important artifacts'
+    required: false
+    default: 'true'
+  cleanup-cache:
+    description: 'Clean up Bazel cache'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Clean build artifacts'
+      shell: bash
+      if: inputs.cleanup-type == 'build' || inputs.cleanup-type == 'all'
+      run: |
+        echo "Cleaning build artifacts..."
+        
+        # 清理Bazel构建输出
+        if [ "${{ inputs.cleanup-cache }}" = "true" ]; then
+          echo "Cleaning Bazel cache..."
+          bazel clean --expunge || true
+        else
+          echo "Cleaning Bazel build output..."
+          bazel clean || true
+        fi
+        
+        # 清理临时文件
+        find . -name "*.tmp" -delete || true
+        find . -name "*.log" -delete || true
+        find . -name "*.out" -delete || true
+        
+        # 清理测试输出
+        rm -rf test-results/ || true
+        rm -rf coverage/ || true
+        
+        echo "Build artifacts cleaned successfully"
+
+    - name: 'Clean documentation artifacts'
+      shell: bash
+      if: inputs.cleanup-type == 'docs' || inputs.cleanup-type == 'all'
+      run: |
+        echo "Cleaning documentation artifacts..."
+        
+        # 清理生成的文档
+        rm -rf docs/doxygen/ || true
+        rm -rf docs/generated/ || true
+        
+        # 保留用户创建的文档
+        if [ "${{ inputs.keep-artifacts }}" = "true" ]; then
+          echo "Keeping user-created documentation"
+        else
+          echo "Removing all documentation artifacts"
+          rm -rf docs/ || true
+        fi
+        
+        echo "Documentation artifacts cleaned successfully"
+
+    - name: 'Clean test artifacts'
+      shell: bash
+      if: inputs.cleanup-type == 'tests' || inputs.cleanup-type == 'all'
+      run: |
+        echo "Cleaning test artifacts..."
+        
+        # 清理测试输出
+        rm -rf bazel-testlogs/ || true
+        rm -rf bazel-out/ || true
+        
+        # 清理测试数据
+        rm -rf test_data/ || true
+        rm -rf benchmark_results/ || true
+        
+        echo "Test artifacts cleaned successfully"
+
+    - name: 'Clean performance artifacts'
+      shell: bash
+      if: inputs.cleanup-type == 'performance' || inputs.cleanup-type == 'all'
+      run: |
+        echo "Cleaning performance artifacts..."
+        
+        # 清理性能测试输出
+        rm -f massif.out || true
+        rm -f massif_analysis.txt || true
+        rm -f benchmark_*.json || true
+        rm -f performance_*.html || true
+        rm -f performance_*.csv || true
+        
+        echo "Performance artifacts cleaned successfully"
+
+    - name: 'Clean system artifacts'
+      shell: bash
+      if: inputs.cleanup-type == 'system' || inputs.cleanup-type == 'all'
+      run: |
+        echo "Cleaning system artifacts..."
+        
+        # 清理系统临时文件
+        sudo rm -rf /tmp/helianthus_* || true
+        sudo rm -rf /var/tmp/helianthus_* || true
+        
+        # 清理日志文件
+        sudo find /var/log -name "*helianthus*" -delete || true
+        
+        echo "System artifacts cleaned successfully"
+
+    - name: 'Verify cleanup'
+      shell: bash
+      run: |
+        echo "Verifying cleanup..."
+        
+        # 检查重要文件是否保留
+        if [ "${{ inputs.keep-artifacts }}" = "true" ]; then
+          if [ -f "WORKSPACE" ]; then
+            echo "✅ WORKSPACE file preserved"
+          else
+            echo "❌ WORKSPACE file missing"
+            exit 1
+          fi
+          
+          if [ -d "Shared" ]; then
+            echo "✅ Shared directory preserved"
+          else
+            echo "❌ Shared directory missing"
+            exit 1
+          fi
+          
+          if [ -d "Tests" ]; then
+            echo "✅ Tests directory preserved"
+          else
+            echo "❌ Tests directory missing"
+            exit 1
+          fi
+        fi
+        
+        echo "Cleanup verification completed successfully"

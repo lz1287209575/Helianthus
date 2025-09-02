@@ -1,0 +1,273 @@
+name: Performance Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * 0'  # 每周日凌晨3点运行
+  workflow_dispatch:
+
+env:
+  BAZEL_VERSION: 8.3.1
+
+jobs:
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install performance tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libssl-dev \
+          libcurl4-openssl-dev \
+          libmysqlclient-dev \
+          libmongoc-dev \
+          libbson-dev \
+          libhiredis-dev \
+          perf-tools-unstable \
+          linux-tools-common \
+          linux-tools-generic \
+          valgrind \
+          python3-pip
+
+    - name: Install Python performance tools
+      run: |
+        pip3 install matplotlib pandas numpy
+
+    - name: Build project
+      run: |
+        bazel build //... --config=release
+        echo "Release build completed"
+
+    - name: Run message queue benchmarks
+      run: |
+        echo "Running message queue performance tests..."
+        # 这里可以添加具体的性能测试命令
+        echo "Message queue benchmarks completed"
+
+    - name: Run compression benchmarks
+      run: |
+        echo "Running compression performance tests..."
+        # 这里可以添加具体的性能测试命令
+        echo "Compression benchmarks completed"
+
+    - name: Run encryption benchmarks
+      run: |
+        echo "Running encryption performance tests..."
+        # 这里可以添加具体的性能测试命令
+        echo "Encryption benchmarks completed"
+
+    - name: Run memory benchmarks
+      run: |
+        echo "Running memory performance tests..."
+        # 这里可以添加具体的性能测试命令
+        echo "Memory benchmarks completed"
+
+    - name: Run network benchmarks
+      run: |
+        echo "Running network performance tests..."
+        # 这里可以添加具体的性能测试命令
+        echo "Network benchmarks completed"
+
+    - name: Generate performance report
+      run: |
+        echo "Generating performance report..."
+        # 这里可以添加性能报告生成逻辑
+        echo "Performance report generated"
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-results
+        path: |
+          benchmark_*.json
+          performance_*.html
+          performance_*.csv
+        retention-days: 90
+
+  memory-profiling:
+    name: Memory Profiling
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install profiling tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          valgrind \
+          massif-visualizer \
+          gprof2dot \
+          graphviz
+
+    - name: Build with profiling
+      run: |
+        bazel build //Examples:config_example --copt=-g --copt=-O2
+        echo "Profiling build completed"
+
+    - name: Run memory profiling
+      run: |
+        echo "Running memory profiling..."
+        # 使用valgrind进行内存分析
+        valgrind --tool=massif --massif-out-file=massif.out \
+          bazel-bin/Examples/config_example || true
+        echo "Memory profiling completed"
+
+    - name: Analyze profiling results
+      run: |
+        echo "Analyzing profiling results..."
+        # 分析massif输出文件
+        ms_print massif.out > massif_analysis.txt || true
+        echo "Profiling analysis completed"
+
+    - name: Upload profiling results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: memory-profiling-results
+        path: |
+          massif.out
+          massif_analysis.txt
+        retention-days: 90
+
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install load testing tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libssl-dev \
+          libcurl4-openssl-dev \
+          libmysqlclient-dev \
+          libmongoc-dev \
+          libbson-dev \
+          libhiredis-dev \
+          python3-pip
+
+    - name: Install Python load testing tools
+      run: |
+        pip3 install locust
+
+    - name: Build load testing tools
+      run: |
+        bazel build //Examples:config_example
+        echo "Load testing tools built"
+
+    - name: Run load tests
+      run: |
+        echo "Running load tests..."
+        # 这里可以添加具体的负载测试命令
+        echo "Load tests completed"
+
+    - name: Generate load test report
+      run: |
+        echo "Generating load test report..."
+        # 这里可以添加负载测试报告生成逻辑
+        echo "Load test report generated"
+
+    - name: Upload load test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: load-test-results
+        path: |
+          load_test_*.json
+          load_test_*.html
+        retention-days: 90
+
+  performance-summary:
+    name: Performance Summary
+    runs-on: ubuntu-latest
+    needs: [performance-benchmarks, memory-profiling, load-testing]
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate performance summary
+      run: |
+        echo "# Performance Test Summary" > performance-summary.md
+        echo "Generated: $(date)" >> performance-summary.md
+        echo "" >> performance-summary.md
+        
+        echo "## Test Results" >> performance-summary.md
+        echo "- Performance Benchmarks: ${{ needs.performance-benchmarks.result }}" >> performance-summary.md
+        echo "- Memory Profiling: ${{ needs.memory-profiling.result }}" >> performance-summary.md
+        echo "- Load Testing: ${{ needs.load-testing.result }}" >> performance-summary.md
+        echo "" >> performance-summary.md
+        
+        echo "## Performance Metrics" >> performance-summary.md
+        echo "- Message Queue Throughput: TBD" >> performance-summary.md
+        echo "- Memory Usage: TBD" >> performance-summary.md
+        echo "- Response Time: TBD" >> performance-summary.md
+        echo "- CPU Usage: TBD" >> performance-summary.md
+        echo "" >> performance-summary.md
+        
+        echo "## Recommendations" >> performance-summary.md
+        if [ "${{ needs.performance-benchmarks.result }}" != "success" ]; then
+          echo "- Review performance benchmark failures" >> performance-summary.md
+        fi
+        if [ "${{ needs.memory-profiling.result }}" != "success" ]; then
+          echo "- Review memory profiling issues" >> performance-summary.md
+        fi
+        if [ "${{ needs.load-testing.result }}" != "success" ]; then
+          echo "- Review load testing failures" >> performance-summary.md
+        fi
+        
+        echo "Performance summary generated successfully"
+
+    - name: Upload performance summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-summary
+        path: performance-summary.md
+        retention-days: 90

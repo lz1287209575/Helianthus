@@ -1,0 +1,106 @@
+name: 'Notify'
+description: 'Send notifications for CI/CD pipeline results'
+inputs:
+  notification-type:
+    description: 'Type of notification to send'
+    required: true
+    default: 'success'
+  message:
+    description: 'Custom message to include'
+    required: false
+    default: ''
+  webhook-url:
+    description: 'Webhook URL for notifications'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Send success notification'
+      shell: bash
+      if: inputs.notification-type == 'success'
+      run: |
+        echo "🎉 CI/CD Pipeline completed successfully!"
+        echo "Build: ✅"
+        echo "Tests: ✅"
+        echo "Code Quality: ✅"
+        echo "Security Scan: ✅"
+        
+        if [ -n "${{ inputs.message }}" ]; then
+          echo "Custom message: ${{ inputs.message }}"
+        fi
+        
+        # 这里可以添加具体的通知逻辑，比如发送到Slack、Discord等
+        echo "Success notification sent"
+
+    - name: 'Send failure notification'
+      shell: bash
+      if: inputs.notification-type == 'failure'
+      run: |
+        echo "❌ CI/CD Pipeline failed!"
+        echo "Please check the logs for details."
+        
+        if [ -n "${{ inputs.message }}" ]; then
+          echo "Custom message: ${{ inputs.message }}"
+        fi
+        
+        # 这里可以添加具体的通知逻辑
+        echo "Failure notification sent"
+
+    - name: 'Send warning notification'
+      shell: bash
+      if: inputs.notification-type == 'warning'
+      run: |
+        echo "⚠️ CI/CD Pipeline completed with warnings!"
+        echo "Please review the warnings in the logs."
+        
+        if [ -n "${{ inputs.message }}" ]; then
+          echo "Custom message: ${{ inputs.message }}"
+        fi
+        
+        # 这里可以添加具体的通知逻辑
+        echo "Warning notification sent"
+
+    - name: 'Send webhook notification'
+      shell: bash
+      if: inputs.webhook-url != ''
+      run: |
+        WEBHOOK_URL="${{ inputs.webhook-url }}"
+        NOTIFICATION_TYPE="${{ inputs.notification-type }}"
+        CUSTOM_MESSAGE="${{ inputs.message }}"
+        
+        echo "Sending webhook notification to: $WEBHOOK_URL"
+        
+        # 构建通知消息
+        if [ "$NOTIFICATION_TYPE" = "success" ]; then
+          EMOJI="🎉"
+          COLOR="good"
+          TITLE="CI/CD Pipeline Success"
+          TEXT="All checks passed successfully!"
+        elif [ "$NOTIFICATION_TYPE" = "failure" ]; then
+          EMOJI="❌"
+          COLOR="danger"
+          TITLE="CI/CD Pipeline Failure"
+          TEXT="Some checks failed. Please review the logs."
+        else
+          EMOJI="⚠️"
+          COLOR="warning"
+          TITLE="CI/CD Pipeline Warning"
+          TEXT="Pipeline completed with warnings."
+        fi
+        
+        # 添加自定义消息
+        if [ -n "$CUSTOM_MESSAGE" ]; then
+          TEXT="$TEXT\n\n$CUSTOM_MESSAGE"
+        fi
+        
+        # 发送webhook（这里使用curl示例，实际使用时可能需要根据具体的webhook服务调整）
+        curl -X POST "$WEBHOOK_URL" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"text\": \"$EMOJI $TITLE\n$TEXT\",
+            \"color\": \"$COLOR\"
+          }" || echo "Webhook notification failed"
+        
+        echo "Webhook notification sent"

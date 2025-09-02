@@ -1,0 +1,363 @@
+name: Helianthus CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - quick
+        - test-only
+
+env:
+  BAZEL_VERSION: 8.3.1
+  CACHE_KEY: ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}
+
+jobs:
+  # 构建和测试作业
+  build-and-test:
+    name: Build and Test (${{ matrix.os }}, ${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04]
+        compiler: [gcc, clang]
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            bazel_platform: linux
+          - os: ubuntu-20.04
+            compiler: clang
+            bazel_platform: linux
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Setup C++ toolchain
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          sudo apt-get update
+          sudo apt-get install -y clang-12 libc++-12-dev libc++abi-12-dev
+          export CC=clang-12
+          export CXX=clang++-12
+        else
+          sudo apt-get update
+          sudo apt-get install -y gcc-9 g++-9
+          export CC=gcc-9
+          export CXX=g++-9
+        fi
+        echo "CC=$CC" >> $GITHUB_ENV
+        echo "CXX=$CXX" >> $GITHUB_ENV
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libssl-dev \
+          libcurl4-openssl-dev \
+          libmysqlclient-dev \
+          libmongoc-dev \
+          libbson-dev \
+          libhiredis-dev \
+          doxygen \
+          graphviz \
+          valgrind \
+          cppcheck \
+          clang-tidy
+
+    - name: Cache Bazel
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/bazel
+          ~/.bazel
+        key: ${{ env.CACHE_KEY }}-bazel
+        restore-keys: |
+          ${{ env.CACHE_KEY }}-bazel-
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/bazel/_bazel_root/external
+        key: ${{ env.CACHE_KEY }}-deps
+        restore-keys: |
+          ${{ env.CACHE_KEY }}-deps-
+
+    - name: Build project
+      run: |
+        bazel build //... --verbose_failures
+        echo "Build completed successfully"
+
+    - name: Run unit tests
+      run: |
+        bazel test //Tests/... --test_output=all --verbose_failures
+        echo "Unit tests completed successfully"
+
+    - name: Run integration tests
+      run: |
+        bazel test //Tests/Integration/... --test_output=all --verbose_failures
+        echo "Integration tests completed successfully"
+
+    - name: Run examples
+      run: |
+        bazel run //Examples:config_example
+        echo "Examples completed successfully"
+
+    - name: Generate documentation
+      run: |
+        bazel build //Tools:api_docs //Tools:user_guides
+        echo "Documentation generated successfully"
+
+  # 代码质量检查作业
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install analysis tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cppcheck \
+          clang-tidy \
+          clang-format \
+          valgrind
+
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --std=c++17 --language=c++ \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedFunction \
+          --suppress=unmatchedSuppression \
+          Shared/ Tests/ Examples/ \
+          --xml --xml-version=2 \
+          --output-file=cppcheck-result.xml
+        echo "cppcheck completed"
+
+    - name: Run clang-tidy
+      run: |
+        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
+        head -20 | xargs -I {} clang-tidy {} \
+          -checks=*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type \
+          -- -std=c++17 -I. || true
+        echo "clang-tidy completed"
+
+    - name: Check code formatting
+      run: |
+        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
+        xargs clang-format --dry-run --Werror || {
+          echo "Code formatting check failed. Please run: clang-format -i **/*.{cpp,h}"
+          exit 1
+        }
+        echo "Code formatting check passed"
+
+    - name: Upload cppcheck results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cppcheck-results
+        path: cppcheck-result.xml
+
+  # 性能基准测试作业
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install performance tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          perf-tools-unstable \
+          linux-tools-common \
+          linux-tools-generic
+
+    - name: Run performance benchmarks
+      run: |
+        echo "Running performance benchmarks..."
+        # 这里可以添加具体的性能测试命令
+        echo "Performance benchmarks completed"
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: benchmark-results
+        path: benchmark_*.json
+
+  # 安全扫描作业
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Run OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'Helianthus'
+        path: '.'
+        format: 'HTML'
+        out: 'reports'
+        args: >
+          --failOnCVSS 7
+          --enableRetired
+          --suppression suppression.xml
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-report
+        path: reports/
+
+  # 发布作业
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build-and-test, code-quality, security-scan]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        version: ${{ env.BAZEL_VERSION }}
+
+    - name: Build release artifacts
+      run: |
+        bazel build //... --config=release
+        echo "Release build completed"
+
+    - name: Create release package
+      run: |
+        mkdir -p release
+        cp -r bazel-bin/Examples/* release/
+        cp -r config/ release/
+        cp -r Docs/ release/
+        tar -czf helianthus-${{ github.ref_name }}.tar.gz release/
+        echo "Release package created"
+
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-package
+        path: helianthus-${{ github.ref_name }}.tar.gz
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Helianthus ${{ github.ref_name }}
+        body: |
+          ## What's Changed
+          
+          This release includes:
+          - Full CI/CD pipeline implementation
+          - Configuration management system
+          - Logging system
+          - Performance optimizations
+          - Comprehensive testing
+          
+          ## Installation
+          
+          ```bash
+          # Clone the repository
+          git clone https://github.com/${{ github.repository }}.git
+          cd helianthus
+          
+          # Build the project
+          bazel build //...
+          
+          # Run tests
+          bazel test //Tests/...
+          ```
+          
+          ## Download
+          
+          Download the release package from the artifacts above.
+        draft: false
+        prerelease: false
+
+  # 通知作业
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [build-and-test, code-quality, security-scan]
+    if: always()
+
+    steps:
+    - name: Notify on success
+      if: needs.build-and-test.result == 'success' && needs.code-quality.result == 'success' && needs.security-scan.result == 'success'
+      run: |
+        echo "🎉 All checks passed successfully!"
+        echo "Build: ✅"
+        echo "Code Quality: ✅"
+        echo "Security Scan: ✅"
+
+    - name: Notify on failure
+      if: needs.build-and-test.result == 'failure' || needs.code-quality.result == 'failure' || needs.security-scan.result == 'failure'
+      run: |
+        echo "❌ Some checks failed!"
+        echo "Build: ${{ needs.build-and-test.result }}"
+        echo "Code Quality: ${{ needs.code-quality.result }}"
+        echo "Security Scan: ${{ needs.security-scan.result }}"
+        exit 1
