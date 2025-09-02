@@ -126,7 +126,7 @@ jobs:
           ${{ matrix.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\bazel' || '~/.cache/bazel' }}
           ${{ matrix.os == 'windows-latest' && 'C:\Users\runneradmin\.bazel' || '~/.bazel' }}
         key: >-
-          ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-bazel
+          ${{ github.repository }}-${{ github.ref }}-${{ github.sha }}-${{ matrix.os }}-${{ matrix.compiler }}-bazel
         restore-keys: |
           >-
           ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-bazel-
@@ -137,10 +137,15 @@ jobs:
         path: |
           ${{ matrix.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\bazel\_bazel_runneradmin\external' || '~/.cache/bazel/_bazel_root/external' }}
         key: >-
-          ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-deps
+          ${{ github.repository }}-${{ github.ref }}-${{ github.sha }}-${{ matrix.os }}-${{ matrix.compiler }}-deps
         restore-keys: |
           >-
           ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-deps-
+
+    - name: Bazel clean (avoid stale deleted_packages)
+      run: |
+        bazel --version || true
+        bazel clean --expunge || true
 
     - name: Build project
       run: |

@@ -49,7 +49,7 @@ matrix:
 ### 2. 路径处理
 - **缓存路径**: `C:\Users\runneradmin\.cache\bazel`
 - **Bazel路径**: `C:\Users\runneradmin\.bazel`
-- **依赖路径**: `C:\Users\runneradmin\.cache\bazel\_bazel_runneradmin\external`
+- **依赖路径**: `C:\Users\runneradmin\.cache\bazel\_bazel_runneradmin\external` 
 
 ### 3. 依赖管理
 - **系统依赖**: Windows环境通常已包含必要工具

@@ -1,10 +1,9 @@
-# 忽略第三方源码与外部依赖目录，避免 //... 扫描时被解析
-ThirdParty
-third_party
-third-party
-thirdparty
-# 常见的外部子模块目录名
-external
+# 仅忽略非构建目录，避免影响 new_local_repository 等依赖获取
+# 注意：不要忽略 ThirdParty，否则 MODULE.bazel 中的本地仓库会失败
+
 # 文档与杂项（不含 Bazel 目标）
 Docs
 wiki
+
+# 外部缓存目录（若存在）
+external

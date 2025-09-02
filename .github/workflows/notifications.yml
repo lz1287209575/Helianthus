@@ -14,6 +14,9 @@ on:
 env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+  WECHAT_WORK_WEBHOOK: ${{ secrets.WECHAT_WORK_WEBHOOK }}
+  PUSHDEER_KEY: ${{ secrets.PUSHDEER_KEY }}
+  SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
   EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
   EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
   EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
@@ -84,7 +87,6 @@ jobs:
       run: |
         echo "Sending email notification..."
         # 这里可以添加邮件发送逻辑
-        # 例如使用curl发送到邮件服务API
         echo "Email notification sent (if configured)"
 
   notify-teams:
@@ -115,6 +117,44 @@ jobs:
           **Details:** ${{ github.event.workflow_run.html_url }}
           
           Please investigate and fix the issue.
+
+  notify-wecom:
+    name: Notify WeCom (企业微信)
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+    - name: Send WeCom notification (markdown)
+      if: env.WECHAT_WORK_WEBHOOK != ''
+      run: |
+        STATUS='${{ github.event.workflow_run.conclusion }}'
+        if [ "$STATUS" = "success" ]; then ICON='✅'; elif [ "$STATUS" = "failure" ]; then ICON='❌'; else ICON='ℹ️'; fi
+        CONTENT="${ICON} Helianthus 构建通知\n> Workflow: ${{ github.event.workflow_run.name }}\n> 状态: ${STATUS}\n> 分支: ${{ github.event.workflow_run.head_branch }}\n> 提交: ${{ github.event.workflow_run.head_sha }}\n> 触发: ${{ github.event.workflow_run.actor.login }}\n[查看详情](${{ github.event.workflow_run.html_url }})"
+        curl -sS -H 'Content-Type: application/json' -d "{\"msgtype\":\"markdown\",\"markdown\":{\"content\":\"${CONTENT//\"/\\\"}\"}}" "$WECHAT_WORK_WEBHOOK" | tee /dev/stderr
+
+  notify-wechat:
+    name: Notify WeChat (PushDeer/Server酱 可选)
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+    - name: Send via PushDeer
+      if: env.PUSHDEER_KEY != ''
+      run: |
+        TITLE="Helianthus 构建: ${{ github.event.workflow_run.conclusion }}"
+        DESP="Workflow: ${{ github.event.workflow_run.name }}%0A分支: ${{ github.event.workflow_run.head_branch }}%0A提交: ${{ github.event.workflow_run.head_sha }}%0A详情: ${{ github.event.workflow_run.html_url }}"
+        curl -sS "https://api2.pushdeer.com/message/push?pushkey=${PUSHDEER_KEY}&text=${TITLE}&desp=${DESP}" | tee /dev/stderr
+
+    - name: Send via ServerChan
+      if: env.SERVERCHAN_SENDKEY != ''
+      run: |
+        TITLE="Helianthus 构建: ${{ github.event.workflow_run.conclusion }}"
+        DESP="Workflow: ${{ github.event.workflow_run.name }}\n分支: ${{ github.event.workflow_run.head_branch }}\n提交: ${{ github.event.workflow_run.head_sha }}\n详情: ${{ github.event.workflow_run.html_url }}"
+        curl -sS "https://sctapi.ftqq.com/${SERVERCHAN_SENDKEY}.send" \
+          -d "title=${TITLE}" \
+          -d "desp=${DESP}" | tee /dev/stderr
 
   daily-summary:
     name: Daily Summary Report
