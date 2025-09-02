@@ -12,6 +12,7 @@ cc_library(
         "miniz/miniz_tinfl.c",
         "miniz/miniz_tdef.c",
         "miniz/miniz_zip.c",
+        "miniz/miniz_export.h",
     ],
     hdrs = [
         "miniz/miniz.h",
@@ -22,7 +23,6 @@ cc_library(
         "miniz/miniz_zip.h",
     ],
     includes = ["miniz"],
-    copts = ["-Iminiz"],
     visibility = ["//visibility:public"],
 )
 
