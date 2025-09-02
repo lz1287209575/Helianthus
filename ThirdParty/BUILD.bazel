@@ -12,7 +12,6 @@ cc_library(
         "miniz/miniz_tinfl.c",
         "miniz/miniz_tdef.c",
         "miniz/miniz_zip.c",
-        "miniz/miniz_export.h",
     ],
     hdrs = [
         "miniz/miniz.h",
@@ -22,8 +21,8 @@ cc_library(
         "miniz/miniz_tinfl.h",
         "miniz/miniz_zip.h",
     ],
-    includes = ["miniz"],
-    include_prefix = "ThirdParty",
+    strip_include_prefix = "miniz",
+    include_prefix = "ThirdParty/miniz",
     visibility = ["//visibility:public"],
 )
 
