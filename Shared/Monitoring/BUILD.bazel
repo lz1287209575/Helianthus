@@ -11,7 +11,6 @@ cc_library(
     includes = ["."],
     deps = [
         "//Shared/Network:network",
-        "//ThirdParty/picohttpparser:picohttpparser",
     ],
     visibility = ["//visibility:public"],
 )
@@ -27,7 +26,6 @@ cc_library(
     includes = ["."],
     deps = [
         "//Shared/Network:network",
-        "//ThirdParty/picohttpparser:picohttpparser",
     ],
     visibility = ["//visibility:public"],
 )

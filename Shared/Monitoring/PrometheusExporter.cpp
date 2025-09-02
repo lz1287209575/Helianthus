@@ -2,7 +2,6 @@
 #include "Shared/Common/LogCategories.h"
 #include <Network/Sockets/TcpSocket.h>
 #include <Network/NetworkTypes.h>
-#include <picohttpparser.h>
 
 namespace Helianthus::Monitoring
 {
@@ -78,46 +77,21 @@ void PrometheusExporter::ServerLoop(uint16_t Port)
             continue;
         }
         
-        // 使用 picohttpparser 正确解析
-        const char* MethodC = nullptr; 
-        size_t MethodLen = 0;
-        const char* PathC = nullptr; 
-        size_t PathLen = 0; 
-        int Minor = 1;
-        
+        // 简单字符串解析（替代 picohttpparser）
         std::cout << "开始解析请求，长度: " << Req.size() << std::endl;
         std::cout << "请求内容: [" << Req << "]" << std::endl;
-        
-        // 使用正确的 phr_parse_request 调用
-        struct phr_header Headers[16];
-        size_t NumHeaders = 16; // 设置为数组大小
-        int ParsedBytes = phr_parse_request(Req.data(), Req.size(), &MethodC, &MethodLen,
-                                            &PathC, &PathLen, &Minor, Headers, &NumHeaders, 0);
-        
         std::string Method, Path;
-        bool Parsed = ParsedBytes >= 0;
-        
-        if (Parsed)
+        bool Parsed = false;
+        size_t FirstSpace = Req.find(' ');
+        if (FirstSpace != std::string::npos)
         {
-            Method.assign(MethodC, MethodLen);
-            Path.assign(PathC, PathLen);
-            std::cout << "解析成功: method=" << Method << ", path=" << Path << std::endl;
-        }
-        else
-        {
-            std::cout << "解析失败: bytes=" << ParsedBytes << std::endl;
-            // 如果 picohttpparser 失败，使用简单解析作为后备
-            size_t FirstSpace = Req.find(' ');
-            if (FirstSpace != std::string::npos)
+            Method = Req.substr(0, FirstSpace);
+            size_t SecondSpace = Req.find(' ', FirstSpace + 1);
+            if (SecondSpace != std::string::npos)
             {
-                Method = Req.substr(0, FirstSpace);
-                size_t SecondSpace = Req.find(' ', FirstSpace + 1);
-                if (SecondSpace != std::string::npos)
-                {
-                    Path = Req.substr(FirstSpace + 1, SecondSpace - FirstSpace - 1);
-                    Parsed = true;
-                    std::cout << "后备解析成功: method=" << Method << ", path=" << Path << std::endl;
-                }
+                Path = Req.substr(FirstSpace + 1, SecondSpace - FirstSpace - 1);
+                Parsed = true;
+                std::cout << "解析成功: method=" << Method << ", path=" << Path << std::endl;
             }
         }
 
