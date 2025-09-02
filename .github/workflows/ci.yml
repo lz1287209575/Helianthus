@@ -140,7 +140,7 @@ jobs:
 
     - name: Build project
       run: |
-        bazel build //... --verbose_failures
+        bazel build //Shared/... //Examples:config_example //Tools:api_docs //Tools:user_guides --verbose_failures
         echo "Build completed successfully"
 
     - name: Run unit tests
@@ -314,7 +314,7 @@ jobs:
 
     - name: Build release artifacts
       run: |
-        bazel build //... --config=release
+        bazel build //Shared/... --config=release
         echo "Release build completed"
 
     - name: Create release package

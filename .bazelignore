@@ -1,0 +1,10 @@
+# 忽略第三方源码与外部依赖目录，避免 //... 扫描时被解析
+ThirdParty
+third_party
+third-party
+thirdparty
+# 常见的外部子模块目录名
+external
+# 文档与杂项（不含 Bazel 目标）
+Docs
+wiki
