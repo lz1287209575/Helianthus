@@ -19,7 +19,7 @@ on:
           - test-only
 
 env:
-  BAZEL_VERSION: 8.3.1
+  BAZEL_VERSION: 8.4.0
 
 jobs:
   # 构建和测试作业
@@ -29,15 +29,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-20.04]
-        compiler: [gcc, clang]
+        os: [ubuntu-latest, ubuntu-22.04, ubuntu-24.04, windows-latest]
+        compiler: [gcc, clang, msvc]
         include:
           - os: ubuntu-latest
             compiler: gcc
             bazel_platform: linux
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             compiler: clang
             bazel_platform: linux
+          - os: ubuntu-24.04
+            compiler: gcc
+            bazel_platform: linux
+          - os: windows-latest
+            compiler: msvc
+            bazel_platform: windows
 
     steps:
     - name: Checkout code
@@ -53,21 +59,37 @@ jobs:
 
     - name: Setup C++ toolchain
       run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          # Windows环境使用MSVC
+          echo "Using MSVC on Windows"
+          echo "CC=cl.exe" >> $GITHUB_ENV
+          echo "CXX=cl.exe" >> $GITHUB_ENV
+        elif [ "${{ matrix.compiler }}" = "clang" ]; then
+          # Linux环境使用Clang
           sudo apt-get update
-          sudo apt-get install -y clang-12 libc++-12-dev libc++abi-12-dev
-          export CC=clang-12
-          export CXX=clang++-12
+          # 添加LLVM官方仓库以获取最新版本
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh
+          # 安装最新的Clang 18和相关库
+          sudo apt-get install -y clang-18 libc++-18-dev libc++abi-18-dev
+          export CC=clang-18
+          export CXX=clang++-18
+          echo "CC=$CC" >> $GITHUB_ENV
+          echo "CXX=$CXX" >> $GITHUB_ENV
         else
+          # Linux环境使用GCC
           sudo apt-get update
-          sudo apt-get install -y gcc-9 g++-9
-          export CC=gcc-9
-          export CXX=g++-9
+          # 安装最新的GCC版本
+          sudo apt-get install -y gcc g++
+          export CC=gcc
+          export CXX=g++
+          echo "CC=$CC" >> $GITHUB_ENV
+          echo "CXX=$CXX" >> $GITHUB_ENV
         fi
-        echo "CC=$CC" >> $GITHUB_ENV
-        echo "CXX=$CXX" >> $GITHUB_ENV
 
     - name: Install system dependencies
+      if: matrix.os != 'windows-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -86,12 +108,19 @@ jobs:
           cppcheck \
           clang-tidy
 
+    - name: Install Windows dependencies
+      if: matrix.os == 'windows-latest'
+      run: |
+        # Windows环境通常已经包含了必要的工具
+        echo "Windows environment setup completed"
+        # 可以在这里添加Windows特定的依赖安装
+
     - name: Cache Bazel
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cache/bazel
-          ~/.bazel
+          ${{ matrix.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\bazel' || '~/.cache/bazel' }}
+          ${{ matrix.os == 'windows-latest' && 'C:\Users\runneradmin\.bazel' || '~/.bazel' }}
         key: >-
           ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-bazel
         restore-keys: |
@@ -102,7 +131,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cache/bazel/_bazel_root/external
+          ${{ matrix.os == 'windows-latest' && 'C:\Users\runneradmin\.cache\bazel\_bazel_runneradmin\external' || '~/.cache/bazel/_bazel_root/external' }}
         key: >-
           ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-deps
         restore-keys: |

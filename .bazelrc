@@ -1,3 +1,9 @@
+# Enable Bzlmod (required for Bazel 8+)
+common --enable_bzlmod
+
+# Disable legacy WORKSPACE (required for Bazel 8+)
+common --noenable_workspace
+
 build:linux --repo_env=CC=gcc
 build:linux --repo_env=CXX=g++
 build:linux --repo_env=BAZEL_COPTS=-std=c11

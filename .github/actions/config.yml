@@ -3,11 +3,12 @@
 
 # 工具版本配置
 tool_versions:
-  bazel: "8.3.1"
-  gcc: "9"
-  clang: "12"
-  cmake: "3.16"
-  python: "3.8"
+  bazel: "8.4.0"
+  gcc: "latest"
+  clang: "18"
+  msvc: "latest"
+  cmake: "3.28"
+  python: "3.12"
 
 # 构建配置
 build_config:
@@ -80,6 +81,17 @@ environments:
     auto_approve: false
     required_checks: ["ci", "security-scan", "performance", "dependency-scan"]
 
+# 平台支持配置
+platforms:
+  linux:
+    - ubuntu-latest
+    - ubuntu-22.04
+    - ubuntu-24.04
+  windows:
+    - windows-latest
+  macos:
+    - macos-latest  # 可选添加
+
 # 分支保护规则
 branch_protection:
   main:
@@ -115,10 +127,20 @@ resource_limits:
     memory: "8GB"
     disk: "20GB"
   
-  ubuntu_20_04:
-    cpu: "2"
-    memory: "4GB"
-    disk: "15GB"
+  ubuntu_22_04:
+    cpu: "4"
+    memory: "8GB"
+    disk: "20GB"
+  
+  ubuntu_24_04:
+    cpu: "4"
+    memory: "8GB"
+    disk: "20GB"
+  
+  windows_latest:
+    cpu: "4"
+    memory: "8GB"
+    disk: "20GB"
 
 # 错误处理配置
 error_handling:
