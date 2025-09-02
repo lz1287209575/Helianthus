@@ -52,3 +52,6 @@
 [submodule "ThirdParty/AES"]
 	path = ThirdParty/AES
 	url = https://github.com/dhuertas/AES.git
+[submodule "wiki"]
+	path = wiki
+	url = https://github.com/lz1287209575/Helianthus.wiki.git

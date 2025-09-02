@@ -2,10 +2,10 @@ name: Helianthus CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, feature/* ]
-    tags: [ 'v*' ]
+    branches: [main, develop, feature/*]
+    tags: ['v*']
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   workflow_dispatch:
     inputs:
       build_type:
@@ -14,13 +14,12 @@ on:
         default: 'full'
         type: choice
         options:
-        - full
-        - quick
-        - test-only
+          - full
+          - quick
+          - test-only
 
 env:
   BAZEL_VERSION: 8.3.1
-  CACHE_KEY: ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}
 
 jobs:
   # 构建和测试作业
@@ -93,18 +92,22 @@ jobs:
         path: |
           ~/.cache/bazel
           ~/.bazel
-        key: ${{ env.CACHE_KEY }}-bazel
+        key: >-
+          ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-bazel
         restore-keys: |
-          ${{ env.CACHE_KEY }}-bazel-
+          >-
+          ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-bazel-
 
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
         path: |
           ~/.cache/bazel/_bazel_root/external
-        key: ${{ env.CACHE_KEY }}-deps
+        key: >-
+          ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-deps
         restore-keys: |
-          ${{ env.CACHE_KEY }}-deps-
+          >-
+          ${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.compiler }}-deps-
 
     - name: Build project
       run: |
