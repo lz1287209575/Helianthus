@@ -29,8 +29,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04, ubuntu-24.04, windows-latest]
-        compiler: [gcc, clang, msvc]
         include:
           - os: ubuntu-latest
             compiler: gcc
