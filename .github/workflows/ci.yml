@@ -55,40 +55,38 @@ jobs:
       with:
         version: ${{ env.BAZEL_VERSION }}
 
-    - name: Setup C++ toolchain
+    - name: Setup C++ toolchain (Linux)
+      if: matrix.os != 'windows-latest'
+      shell: bash
       run: |
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          echo "Using MSVC on Windows"
-          echo "CC=cl.exe" >> $GITHUB_ENV
-          echo "CXX=cl.exe" >> $GITHUB_ENV
-        elif [ "${{ matrix.compiler }}" = "clang" ]; then
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
           sudo apt-get update
-          # 选择Clang版本：22.04使用16，24.04/最新使用18
           CLANG_VER=18
           if [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
             CLANG_VER=16
           fi
-          # 添加LLVM官方仓库并安装指定版本
           curl -fsSL https://apt.llvm.org/llvm.sh -o llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${CLANG_VER}
-          # 安装libc++与libc++abi（优先版本化，失败则非版本化回退）
           if ! sudo apt-get install -y libc++-${CLANG_VER}-dev libc++abi-${CLANG_VER}-dev; then
             sudo apt-get install -y libc++-dev libc++abi-dev || true
           fi
-          export CC=clang-${CLANG_VER}
-          export CXX=clang++-${CLANG_VER}
-          echo "CC=$CC" >> $GITHUB_ENV
-          echo "CXX=$CXX" >> $GITHUB_ENV
+          echo "CC=clang-${CLANG_VER}" >> $GITHUB_ENV
+          echo "CXX=clang++-${CLANG_VER}" >> $GITHUB_ENV
         else
-          # Linux下GCC
           sudo apt-get update
           sudo apt-get install -y gcc g++
-          export CC=gcc
-          export CXX=g++
-          echo "CC=$CC" >> $GITHUB_ENV
-          echo "CXX=$CXX" >> $GITHUB_ENV
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV
         fi
+
+    - name: Setup C++ toolchain (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        Write-Host "Using MSVC on Windows"
+        echo "CC=cl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "CXX=cl.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
     - name: Install system dependencies
       if: matrix.os != 'windows-latest'
