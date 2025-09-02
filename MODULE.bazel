@@ -29,7 +29,6 @@ bazel_dep(name = "rules_foreign_cc", version = "0.10.1")
 
 # Provide legacy repo names that some third-party expect
 bazel_dep(name = "abseil-cpp", version = "20240722.0", repo_name = "com_google_absl")
-# protobuf via BCR may not provide legacy repo_name; we will add http_archive fallback below
 
 # Introduce tcmalloc as a module and override to upstream repo
 bazel_dep(name = "tcmalloc")
@@ -41,27 +40,28 @@ archive_override(
     strip_prefix = "tcmalloc-master",
 )
 
-# Non-module dependencies using extension
-deps = use_extension("@bazel_tools//tools/build_defs/repo:non_module_dependencies.bzl", "non_module_dependencies")
+# zlib from BCR (official)
+bazel_dep(name = "zlib", version = "1.3.1")
 
-# Import http_archive and new_local_repository functions
+# spdlog from BCR
+bazel_dep(name = "spdlog", version = "1.12.0")
+
+# Import repo rules for use in MODULE.bazel
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
-# spdlog dependency (using Gitee mirror)
+# -------- Non-BCR, pinned via http_archive (with BUILD adapters) --------
+# hiredis (BCR 暂无) – use http_archive and local BUILD adapter
 http_archive(
-    name = "spdlog",
-    build_file = "//ThirdParty:spdlog.BUILD",
-    sha256 = "697f91700237dbae2326b90469be32b876b2b44888302afbc7aceb68bcfe8224",
-    strip_prefix = "spdlog-1.10.0",
+    name = "hiredis",
+    strip_prefix = "hiredis-1.1.0",
     urls = [
-        #        "https://gitee.com/mirrors/spdlog/repository/archive/v1.10.0.tar.gz",
-        "https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz",  # fallback
+        "https://github.com/redis/hiredis/archive/v1.1.0.tar.gz",
     ],
+    build_file = "//ThirdParty:hiredis.BUILD",
 )
 
-# Mongo C Driver (dependency of mongo-cxx-driver), pulled from GitHub.
-# Note: sha256 omitted for convenience; add it for reproducible builds.
+# Mongo C Driver
 http_archive(
     name = "mongo_c_driver_src",
     strip_prefix = "mongo-c-driver-1.24.4",
@@ -69,6 +69,16 @@ http_archive(
         "https://github.com/mongodb/mongo-c-driver/archive/refs/tags/1.24.4.tar.gz",
     ],
     build_file = "//ThirdParty:mongo_c_driver.BUILD",
+)
+
+# Mongo C++ Driver
+http_archive(
+    name = "mongo_cxx_driver_src",
+    strip_prefix = "mongo-cxx-driver-r3.8.0",
+    urls = [
+        "https://github.com/mongodb/mongo-cxx-driver/archive/refs/tags/r3.8.0.tar.gz",
+    ],
+    build_file = "//ThirdParty:mongo_cxx_driver.BUILD",
 )
 
 # Legacy gperftools kept (not used when module tcmalloc works)
@@ -91,22 +101,13 @@ http_archive(
 )
 
 ########################################
-# Prebuilt libraries via local repos   #
+# Local/prebuilt (to be migrated later) #
 ########################################
+# mysql_prebuilt – keep for now (后续迁移至 http_archive + rules_foreign_cc)
 new_local_repository(
     name = "mysql_prebuilt",
-    path = "ThirdParty/mariadb_prebuilt",  # You will create/copy this folder
+    path = "ThirdParty/mariadb_prebuilt",
     build_file = "//ThirdParty:mariadb_prebuilt.BUILD",
 )
 
-new_local_repository(
-    name = "mongo_prebuilt",
-    path = "ThirdParty/mongo_prebuilt",    # You will create/copy this folder
-    build_file = "//ThirdParty:mongo_prebuilt.BUILD",
-)
-
-new_local_repository(
-    name = "hiredis",
-    path = "ThirdParty/hiredis",
-    build_file = "//ThirdParty:hiredis.BUILD",
-)
+# Removed: mongo_prebuilt (已迁移为 http_archive mongo_cxx_driver_src)

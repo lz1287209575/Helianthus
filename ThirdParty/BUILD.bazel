@@ -4,28 +4,6 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# miniz submodule
-cc_library(
-    name = "miniz",
-    srcs = [
-        "miniz/miniz.c",
-        "miniz/miniz_tinfl.c",
-        "miniz/miniz_tdef.c",
-        "miniz/miniz_zip.c",
-    ],
-    hdrs = [
-        "miniz/miniz.h",
-        "miniz/miniz_export.h",
-        "miniz/miniz_common.h",
-        "miniz/miniz_tdef.h",
-        "miniz/miniz_tinfl.h",
-        "miniz/miniz_zip.h",
-    ],
-    includes = [".", "miniz"],
-    copts = ["-IThirdParty/miniz"],
-    visibility = ["//visibility:public"],
-)
-
 # tiny-AES-c submodule
 cc_library(
     name = "tinyaes",
@@ -33,15 +11,5 @@ cc_library(
     hdrs = ["AES/aes.h", "AES/gmult.h"],
     includes = ["AES"],
     copts = ["-IAES"],
-    visibility = ["//visibility:public"],
-)
-
-# picohttpparser (provide at top-level to avoid subpackage lookup issues)
-cc_library(
-    name = "picohttpparser",
-    srcs = ["picohttpparser/picohttpparser.c"],
-    hdrs = ["picohttpparser/picohttpparser.h"],
-    includes = ["picohttpparser"],
-    copts = ["-Ipicohttpparser"],
     visibility = ["//visibility:public"],
 )

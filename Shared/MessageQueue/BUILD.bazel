@@ -37,13 +37,13 @@ cc_library(
         "//Shared/Reflection:helianthus_reflection",
         "//Shared/Scripting:scripting",
         "//Shared/RPC:rpc",
-        "//ThirdParty:miniz",
+        "@zlib//:zlib",
         "//ThirdParty:tinyaes",
 
     ],
     linkopts = select({
         "@bazel_tools//src/conditions:windows": [],
-        "//conditions:default": ["-lz", "-lssl", "-lcrypto"],
+        "//conditions:default": ["-lssl", "-lcrypto"],
     }),
     
     visibility = ["//visibility:public"],
