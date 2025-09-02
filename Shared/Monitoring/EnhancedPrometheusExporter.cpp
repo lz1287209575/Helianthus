@@ -1,6 +1,11 @@
 #include "EnhancedPrometheusExporter.h"
 #include "Shared/Common/LogCategories.h"
 #include <Network/Sockets/TcpSocket.h>
+#include <algorithm>
+#include <iomanip>
+#include <sstream>
+#include <iostream>
+#include <cstring>
 
 namespace Helianthus::Monitoring
 {
