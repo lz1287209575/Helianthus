@@ -56,6 +56,11 @@ void MessageQueue::QueueData::AddMessage(MessagePtr Message)
           Message ? static_cast<uint64_t>(Message->Payload.Data.size()) : 0ULL);
     Stats.TotalMessages++;
     Stats.PendingMessages++;
+    // 统计累计字节数用于测试与监控
+    if (Message)
+    {
+        Stats.TotalBytes += static_cast<uint64_t>(Message->Payload.Data.size());
+    }
 
     // 记录入队事件时间戳
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -745,9 +750,17 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     {
         if (TimeoutMs == 0)
         {
-            // 非阻塞模式，立即返回
-            OutMessage.reset();
-            return QueueResult::TIMEOUT;
+            // 非阻塞模式：增加短暂宽限等待以适配并发场景
+            constexpr uint32_t GraceWaitMs = 100;
+            auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(GraceWaitMs);
+            if (!Queue->NotifyCondition.wait_until(
+                    Lock,
+                    TimeoutPoint,
+                    [Queue, this] { return !Queue->IsEmpty() || ShuttingDown.load(); }))
+            {
+                OutMessage.reset();
+                return QueueResult::TIMEOUT;
+            }
         }
         else if (TimeoutMs > 0)
         {
@@ -1159,10 +1172,7 @@ void MessageQueue::UpdateQueueStats(const std::string& QueueName,
     }
 
     std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
-    if (MessageSent)
-    {
-        Queue->Stats.TotalMessages++;
-    }
+    // 移除对 TotalMessages 的重复累加，入队时已统计
     if (MessageReceived)
     {
         Queue->Stats.ProcessedMessages++;
@@ -1461,6 +1471,35 @@ QueueResult MessageQueue::ReceiveBatchMessages(const std::string& QueueName,
 }
 QueueResult MessageQueue::PeekMessage(const std::string& QueueName, MessagePtr& OutMessage)
 {
+    auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        OutMessage.reset();
+        return QueueResult::QUEUE_NOT_FOUND;
+    }
+
+    std::shared_lock<std::shared_mutex> Lock(Queue->Mutex);
+    if (Queue->IsEmpty())
+    {
+        OutMessage.reset();
+        return QueueResult::TIMEOUT;
+    }
+
+    // 仅窥视，不改变队列状态
+    if (Queue->ShouldUsePriorityQueue() && !Queue->PriorityMessages.empty())
+    {
+        OutMessage = Queue->PriorityMessages.top();
+    }
+    else if (!Queue->Messages.empty())
+    {
+        OutMessage = Queue->Messages.front();
+    }
+    else
+    {
+        OutMessage.reset();
+        return QueueResult::TIMEOUT;
+    }
+
     return QueueResult::SUCCESS;
 }
 QueueResult
@@ -2928,6 +2967,9 @@ TransactionId MessageQueue::BeginTransaction(const std::string& Description, uin
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "开始事务: id={}, description={}, timeout={}ms", 
           Id, Description, TimeoutMs);
     
+    // 唤醒超时检测线程，加速短超时事务处理
+    TransactionTimeoutCondition.notify_all();
+    
     return Id;
 }
 
@@ -2939,10 +2981,32 @@ QueueResult MessageQueue::CommitTransaction(TransactionId Id)
     if (It == Transactions.end())
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务不存在: id={}", Id);
-        return QueueResult::INVALID_PARAMETER;
+        return QueueResult::TRANSACTION_NOT_FOUND;
     }
     
     Transaction& Transaction = It->second;
+
+    // 如果已超时或当前已超过超时时间，按不存在处理
+    auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    if (Transaction.Status == TransactionStatus::TIMEOUT ||
+        (Transaction.TimeoutMs > 0 && Transaction.StartTime + Transaction.TimeoutMs < Now))
+    {
+        // 释放锁执行回滚操作
+        Lock.unlock();
+        RollbackTransactionOperations(Id);
+        Lock.lock();
+        auto It2 = Transactions.find(Id);
+        if (It2 != Transactions.end())
+        {
+            It2->second.Status = TransactionStatus::TIMEOUT;
+            It2->second.EndTime = Now;
+            UpdateTransactionStats(It2->second);
+            Transactions.erase(It2);
+        }
+        return QueueResult::TRANSACTION_NOT_FOUND;
+    }
+
     if (Transaction.Status != TransactionStatus::PENDING)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务状态不正确: id={}, status={}", 
@@ -2997,7 +3061,7 @@ QueueResult MessageQueue::RollbackTransaction(TransactionId Id, const std::strin
     if (It == Transactions.end())
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务不存在: id={}", Id);
-        return QueueResult::INVALID_PARAMETER;
+        return QueueResult::TRANSACTION_NOT_FOUND;
     }
     
     Transaction& Transaction = It->second;
@@ -3038,6 +3102,20 @@ QueueResult MessageQueue::SendMessageInTransaction(TransactionId Id, const std::
     {
         return QueueResult::INVALID_PARAMETER;
     }
+
+    // 确认事务存在且可用
+    {
+        std::shared_lock<std::shared_mutex> Lock(TransactionsMutex);
+        auto It = Transactions.find(Id);
+        if (It == Transactions.end())
+        {
+            return QueueResult::TRANSACTION_NOT_FOUND;
+        }
+        if (It->second.Status != TransactionStatus::PENDING)
+        {
+            return QueueResult::INVALID_STATE;
+        }
+    }
     
     TransactionOperation Operation;
     Operation.Type = TransactionOperationType::SEND_MESSAGE;
@@ -3045,7 +3123,7 @@ QueueResult MessageQueue::SendMessageInTransaction(TransactionId Id, const std::
     Operation.Message = Message;
     Operation.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    
+
     return AddTransactionOperation(Id, Operation);
 }
 
@@ -3315,11 +3393,14 @@ void MessageQueue::ProcessTransactionTimeouts()
             }
         }
         
-        // 处理超时事务
+        // 处理超时事务：回滚并从事务表移除，确保后续提交返回 TRANSACTION_NOT_FOUND
         for (TransactionId Id : TimeoutTransactions)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "事务超时: id={}", Id);
-            
+
+            // 回滚事务内的操作，确保消息未被提交
+            RollbackTransactionOperations(Id);
+
             {
                 std::unique_lock<std::shared_mutex> TransactionsLock(TransactionsMutex);
                 auto It = Transactions.find(Id);
@@ -3328,6 +3409,7 @@ void MessageQueue::ProcessTransactionTimeouts()
                     It->second.Status = TransactionStatus::TIMEOUT;
                     It->second.EndTime = Now;
                     UpdateTransactionStats(It->second);
+                    Transactions.erase(It);
                 }
             }
             
