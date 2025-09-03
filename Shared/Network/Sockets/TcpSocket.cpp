@@ -271,6 +271,10 @@ NetworkError TcpSocket::Bind(const NetworkAddress& Address)
 #else
         int Opt = 1;
         ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEADDR, &Opt, sizeof(Opt));
+        // 允许端口复用，减少端口占用带来的绑定失败
+#ifdef SO_REUSEPORT
+        ::setsockopt(SockImpl->Fd, SOL_SOCKET, SO_REUSEPORT, &Opt, sizeof(Opt));
+#endif
         // 确保服务器套接字是阻塞模式
         int Flags = fcntl(SockImpl->Fd, F_GETFL, 0);
         fcntl(SockImpl->Fd, F_SETFL, Flags & ~O_NONBLOCK);

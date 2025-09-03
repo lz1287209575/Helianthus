@@ -60,8 +60,10 @@ public:
 
     // 消息接收（消费者）
     virtual QueueResult ReceiveMessage(const std::string& QueueName,
+                                       MessagePtr& OutMessage) = 0;
+    virtual QueueResult ReceiveMessage(const std::string& QueueName,
                                        MessagePtr& OutMessage,
-                                       uint32_t TimeoutMs = 0) = 0;
+                                       uint32_t TimeoutMs) = 0;
     virtual QueueResult ReceiveBatchMessages(const std::string& QueueName,
                                              std::vector<MessagePtr>& OutMessages,
                                              uint32_t MaxCount = 10,

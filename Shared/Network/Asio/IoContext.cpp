@@ -156,7 +156,7 @@ void IoContext::ProcessDelayedTasks()
                                DelayedTaskQueue.end());
     }
 
-    // 执行到期的任务
+    // 执行到期的任务（在执行前再次检查取消标记，以避免极端竞态）
     for (auto& Task : ReadyTasks)
     {
         Task();
@@ -357,7 +357,22 @@ IoContext::TaskId IoContext::PostWithCancel(std::function<void()> Task, CancelTo
         } else {
             Node.Token = Token;
         }
-        Node.Task = std::move(Task);
+        // 包装任务：在执行时再次检查取消标记，避免竞态
+        auto ExecToken = Node.Token;
+        auto WrappedTask = [this, ExecToken, Id, Task = std::move(Task)]() mutable {
+            bool Cancelled = false;
+            if (ExecToken && ExecToken->load()) {
+                Cancelled = true;
+            }
+            if (!Cancelled && Id != 0) {
+                std::lock_guard<std::mutex> CancelLock(CancelledTaskIdsMutex);
+                Cancelled = (CancelledTaskIds.find(Id) != CancelledTaskIds.end());
+            }
+            if (!Cancelled) {
+                Task();
+            }
+        };
+        Node.Task = std::move(WrappedTask);
         Node.EnqueueTimeNs = PostTimeNs;
         Node.PostingThreadId = PostingThreadId;
         TaskQueue.push(std::move(Node));
@@ -396,7 +411,21 @@ IoContext::TaskId IoContext::PostDelayedWithCancel(std::function<void()> Task, i
     bool ShouldWakeup = false;
     {
         std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
-        DelayedTaskQueue.emplace_back(Id, std::move(Task), ExecuteTime, Token);
+        // 包装延迟任务：执行前再检查取消
+        auto WrappedTask = [this, Token, Id, Task = std::move(Task)]() mutable {
+            bool Cancelled = false;
+            if (Token && Token->load()) {
+                Cancelled = true;
+            }
+            if (!Cancelled && Id != 0) {
+                std::lock_guard<std::mutex> CancelLock(CancelledTaskIdsMutex);
+                Cancelled = (CancelledTaskIds.find(Id) != CancelledTaskIds.end());
+            }
+            if (!Cancelled) {
+                Task();
+            }
+        };
+        DelayedTaskQueue.emplace_back(Id, std::move(WrappedTask), ExecuteTime, Token);
 
         // 按执行时间排序
         std::sort(DelayedTaskQueue.begin(),
@@ -554,7 +583,20 @@ void IoContext::ResetTaskBatchStats()
 void IoContext::RunBatch()
 {
     Running = true;
-    while (Running)
+    auto HasPending = [this]() -> bool {
+        // 检查是否还有待处理任务或延迟任务
+        {
+            std::lock_guard<std::mutex> Lock(TaskQueueMutex);
+            if (!TaskQueue.empty()) return true;
+        }
+        {
+            std::lock_guard<std::mutex> Lock(DelayedTaskQueueMutex);
+            if (!DelayedTaskQueue.empty()) return true;
+        }
+        return false;
+    };
+
+    while (Running || HasPending())
     {
         // 处理任务批处理
         ProcessTaskBatch();
@@ -574,7 +616,7 @@ void IoContext::RunBatch()
         }
         
         // 使用批处理轮询
-        int Timeout = (NextDelay >= 0) ? static_cast<int>(std::min<int64_t>(NextDelay, 10)) : 10;
+        int Timeout = (NextDelay >= 0) ? static_cast<int>(std::min<int64_t>(NextDelay, 1)) : 1; // 降低等待以尽快处理取消
         
         if (ProactorPtr) {
             ProactorPtr->ProcessCompletions(Timeout);

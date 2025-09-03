@@ -70,8 +70,10 @@ public:
 
     // 消息接收（消费者）
     QueueResult ReceiveMessage(const std::string& QueueName,
+                               MessagePtr& OutMessage) override;
+    QueueResult ReceiveMessage(const std::string& QueueName,
                                MessagePtr& OutMessage,
-                               uint32_t TimeoutMs = 0) override;
+                               uint32_t TimeoutMs) override;
     QueueResult ReceiveBatchMessages(const std::string& QueueName,
                                      std::vector<MessagePtr>& OutMessages,
                                      uint32_t MaxCount = 10,

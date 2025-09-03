@@ -142,7 +142,8 @@ enum class QueueResult : uint8_t
     INVALID_CONFIG = 16,
     INVALID_STATE = 17,        // 状态不正确
     OPERATION_FAILED = 18,     // 操作失败
-    TRANSACTION_NOT_FOUND = 19 // 事务不存在
+    TRANSACTION_NOT_FOUND = 19, // 事务不存在
+    CONSUMER_LIMIT_EXCEEDED = 20
 };
 
 // 消息头信息

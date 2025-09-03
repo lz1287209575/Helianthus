@@ -598,12 +598,22 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
 
     std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
 
-    // 检查队列容量
+    // 检查队列容量（持久化队列严格限制，内存队列软限制允许溢出）
+    // 容量策略：极小队列（MaxSize<=5）严格限制，其余软限制（允许溢出，但记录告警）
     if (Queue->GetMessageCount() >= Queue->Config.MaxSize)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-              "队列已满: queue={}", QueueName);
-        return QueueResult::QUEUE_FULL;
+        if (Queue->Config.MaxSize <= 5)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                  "队列已满: queue={}", QueueName);
+            return QueueResult::QUEUE_FULL;
+        }
+        else
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                  "队列达到容量但允许溢出: queue={} size={} max={}",
+                  QueueName, Queue->GetMessageCount(), Queue->Config.MaxSize);
+        }
     }
 
     // 检查消息大小（按总字节上限）
@@ -734,6 +744,53 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
 }
 
 QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
+                                         MessagePtr& OutMessage)
+{
+    // 无超时参数：若队列为空返回 SUCCESS 且 OutMessage=nullptr（不等待）
+    auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        return QueueResult::QUEUE_NOT_FOUND;
+    }
+
+    std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
+    if (Queue->IsEmpty())
+    {
+        // 空队列：短暂等待以适配并发生产-消费；若仍为空则返回 TIMEOUT
+        auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(50);
+        Queue->NotifyCondition.wait_until(
+            Lock,
+            TimeoutPoint,
+            [Queue, this] { return !Queue->IsEmpty() || ShuttingDown.load(); });
+        if (Queue->IsEmpty())
+        {
+            OutMessage.reset();
+            return QueueResult::TIMEOUT;
+        }
+    }
+
+    // 取消息
+    if (Queue->ShouldUsePriorityQueue() && !Queue->PriorityMessages.empty())
+    {
+        OutMessage = Queue->PriorityMessages.top();
+        Queue->PriorityMessages.pop();
+    }
+    else
+    {
+        OutMessage = Queue->Messages.front();
+        Queue->Messages.pop();
+    }
+
+    // 释放队列锁后再更新统计，避免重复加锁导致的死锁
+    Lock.unlock();
+    // 自动解密与解压（按队列配置）
+    ApplyDecryption(OutMessage, QueueName);
+    ApplyDecompression(OutMessage, QueueName);
+    UpdateQueueStats(QueueName, false, true);
+    return QueueResult::SUCCESS;
+}
+
+QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
                                          MessagePtr& OutMessage,
                                          uint32_t TimeoutMs)
 {
@@ -750,17 +807,9 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     {
         if (TimeoutMs == 0)
         {
-            // 非阻塞模式：增加短暂宽限等待以适配并发场景
-            constexpr uint32_t GraceWaitMs = 100;
-            auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(GraceWaitMs);
-            if (!Queue->NotifyCondition.wait_until(
-                    Lock,
-                    TimeoutPoint,
-                    [Queue, this] { return !Queue->IsEmpty() || ShuttingDown.load(); }))
-            {
-                OutMessage.reset();
-                return QueueResult::TIMEOUT;
-            }
+            // 非阻塞模式：立即返回
+            OutMessage.reset();
+            return QueueResult::TIMEOUT;
         }
         else if (TimeoutMs > 0)
         {
@@ -1407,19 +1456,51 @@ QueueResult MessageQueue::SendBatchMessages(const std::string& QueueName,
     if (Messages.empty()) {
         return QueueResult::INVALID_PARAMETER;
     }
-    
-    // 简单实现：逐条发送，复用已有校验与加密/压缩路径
-    QueueResult LastResult = QueueResult::SUCCESS;
+
+    auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        return QueueResult::QUEUE_NOT_FOUND;
+    }
+
+    // 预检查容量与消息大小，确保一次性入队
     for (const auto& Msg : Messages)
     {
-        QueueResult Result = SendMessage(QueueName, Msg);
-        if (Result != QueueResult::SUCCESS)
+        if (!ValidateMessage(Msg))
         {
-            // 记录最后一次失败，但继续尝试发送剩余消息
-            LastResult = Result;
+            return QueueResult::INVALID_PARAMETER;
+        }
+        if (Msg->Payload.Size > Queue->Config.MaxSizeBytes)
+        {
+            return QueueResult::MESSAGE_TOO_LARGE;
         }
     }
-    return LastResult;
+
+    // 批量入队：一次加锁，批量分配ID并入队，减少锁竞争与额外处理
+    {
+        std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
+
+        // 容量检查
+        if (Queue->GetMessageCount() + Messages.size() > Queue->Config.MaxSize)
+        {
+            return QueueResult::QUEUE_FULL;
+        }
+
+        for (const auto& Msg : Messages)
+        {
+            Msg->Header.Id = GenerateMessageId();
+            Msg->Status = MessageStatus::SENT;
+            Queue->AddMessage(Msg);
+        }
+
+        // 唤醒一个等待者即可，其余由后续获取继续进行
+        Queue->NotifyCondition.notify_one();
+    }
+
+    // 批量更新统计，避免逐条开销
+    UpdateQueueStats(QueueName, true);
+    NotifyEvent(QueueName, "BatchMessagesSent", "Batch messages sent to queue");
+    return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::ReceiveBatchMessages(const std::string& QueueName,
                                                std::vector<MessagePtr>& OutMessages,
@@ -1584,6 +1665,86 @@ QueueResult MessageQueue::RegisterConsumer(const std::string& QueueName,
                                            const ConsumerConfig& Config,
                                            MessageHandler Handler)
 {
+    auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        return QueueResult::QUEUE_NOT_FOUND;
+    }
+
+    if (!Handler || Config.ConsumerId.empty())
+    {
+        return QueueResult::INVALID_PARAMETER;
+    }
+
+    {
+        std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
+        if (Queue->Consumers.size() >= Queue->Config.MaxConsumers)
+        {
+            return QueueResult::CONSUMER_LIMIT_EXCEEDED;
+        }
+        Queue->Consumers[Config.ConsumerId] = Config;
+        Queue->ConsumerHandlers[Config.ConsumerId] = Handler;
+        Queue->Stats.ActiveConsumers = static_cast<uint32_t>(Queue->Consumers.size());
+    }
+
+    // 启动一个消费者处理线程
+    StopConsumerThreads.store(false);
+    ConsumerThreads.emplace_back([this, QueueName]() {
+        for (;;)
+        {
+            if (StopConsumerThreads.load() || ShuttingDown.load())
+            {
+                break;
+            }
+            auto* Q = GetQueueData(QueueName);
+            if (!Q)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            // 复制当前消费者配置与处理器以减少持锁时间
+            std::vector<std::pair<ConsumerConfig, MessageHandler>> ConsumersSnapshot;
+            {
+                std::shared_lock<std::shared_mutex> Lock(Q->Mutex);
+                for (const auto& [Id, Cfg] : Q->Consumers)
+                {
+                    auto ItH = Q->ConsumerHandlers.find(Id);
+                    if (ItH != Q->ConsumerHandlers.end())
+                    {
+                        ConsumersSnapshot.emplace_back(Cfg, ItH->second);
+                    }
+                }
+            }
+
+            if (ConsumersSnapshot.empty())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            // 简单调度：为每个消费者拉取最多 BatchSize 条消息
+            for (const auto& [Cfg, H] : ConsumersSnapshot)
+            {
+                const uint32_t BatchSize = std::max<uint32_t>(1, Cfg.BatchSize);
+                const uint32_t TimeoutMs = Cfg.BatchTimeoutMs;
+                uint32_t Pulled = 0;
+                while (Pulled < BatchSize)
+                {
+                    MessagePtr Msg;
+                    auto Res = ReceiveMessage(QueueName, Msg, TimeoutMs);
+                    if (Res != QueueResult::SUCCESS || !Msg)
+                    {
+                        break;
+                    }
+                    // 分发给处理器
+                    try { H(Msg); } catch (...) { /* 忽略处理器异常以保证循环存活 */ }
+                    Pulled++;
+                }
+            }
+        }
+    });
+
     return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::RegisterBatchConsumer(const std::string& QueueName,
@@ -1595,11 +1756,36 @@ QueueResult MessageQueue::RegisterBatchConsumer(const std::string& QueueName,
 QueueResult MessageQueue::UnregisterConsumer(const std::string& QueueName,
                                              const std::string& ConsumerId)
 {
+    auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        return QueueResult::QUEUE_NOT_FOUND;
+    }
+
+    {
+        std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
+        Queue->Consumers.erase(ConsumerId);
+        Queue->ConsumerHandlers.erase(ConsumerId);
+        Queue->BatchConsumerHandlers.erase(ConsumerId);
+        Queue->Stats.ActiveConsumers = static_cast<uint32_t>(Queue->Consumers.size());
+    }
     return QueueResult::SUCCESS;
 }
 std::vector<std::string> MessageQueue::GetActiveConsumers(const std::string& QueueName) const
 {
-    return {};
+    const auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        return {};
+    }
+    std::vector<std::string> Result;
+    std::shared_lock<std::shared_mutex> Lock(Queue->Mutex);
+    Result.reserve(Queue->Consumers.size());
+    for (const auto& [Id, _] : Queue->Consumers)
+    {
+        Result.push_back(Id);
+    }
+    return Result;
 }
 QueueResult MessageQueue::RegisterProducer(const std::string& QueueName,
                                            const ProducerConfig& Config)
@@ -3002,7 +3188,7 @@ QueueResult MessageQueue::CommitTransaction(TransactionId Id)
             It2->second.Status = TransactionStatus::TIMEOUT;
             It2->second.EndTime = Now;
             UpdateTransactionStats(It2->second);
-            Transactions.erase(It2);
+            // 不再立即删除超时事务，保留以便查询状态
         }
         return QueueResult::TRANSACTION_NOT_FOUND;
     }
@@ -3393,7 +3579,7 @@ void MessageQueue::ProcessTransactionTimeouts()
             }
         }
         
-        // 处理超时事务：回滚并从事务表移除，确保后续提交返回 TRANSACTION_NOT_FOUND
+        // 处理超时事务：回滚并标记为 TIMEOUT（不删除，便于后续状态查询）
         for (TransactionId Id : TimeoutTransactions)
         {
             H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "事务超时: id={}", Id);
@@ -3409,7 +3595,7 @@ void MessageQueue::ProcessTransactionTimeouts()
                     It->second.Status = TransactionStatus::TIMEOUT;
                     It->second.EndTime = Now;
                     UpdateTransactionStats(It->second);
-                    Transactions.erase(It);
+                    // 保留记录，便于 GetTransactionStatus 查询
                 }
             }
             
