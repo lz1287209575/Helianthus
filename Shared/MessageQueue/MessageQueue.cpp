@@ -757,7 +757,7 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     if (Queue->IsEmpty())
     {
         // 空队列：短暂等待以适配并发生产-消费；若仍为空则返回 TIMEOUT
-        auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(50);
+        auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
         Queue->NotifyCondition.wait_until(
             Lock,
             TimeoutPoint,
