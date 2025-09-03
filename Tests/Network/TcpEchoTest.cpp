@@ -98,7 +98,18 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
                         [&, Body, ServerSocket](NetworkError e3, size_t){
                             if (e3 != NetworkError::NONE) { ServerOk = false; Done = true; Ctx->Post([&](){ Ctx->Stop(); }); return; }
                             ServerSocket->AsyncSend(Body->data(), Body->size(), NetworkAddress{},
-                                [&, Body](NetworkError e4, size_t){ if (e4 != NetworkError::NONE) ServerOk = false; Done = true; Ctx->Post([&](){ Ctx->Stop(); }); });
+                                [&, Body](NetworkError e4, size_t){ 
+                                    if (e4 != NetworkError::NONE) { 
+                                        ServerOk = false; 
+                                        Done = true; 
+                                        Ctx->Post([&](){ Ctx->Stop(); }); 
+                                    } else {
+                                        // 所有服务器操作完成，设置Done标志
+                                        Done = true;
+                                        // 不要立即停止事件循环，给客户端时间接收数据
+                                        // Ctx->Post([&](){ Ctx->Stop(); });
+                                    }
+                                });
                         });
                 });
             });
@@ -107,8 +118,25 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
     // Client async send (header fragmented) + async receive echo back
     std::vector<char> Echo(Payload.size());
     std::atomic<bool> EchoDone{false};
-    // 先发起连接，确保服务端已注册 accept
-    ASSERT_EQ(Client.Connect({"127.0.0.1", Bound.Port}), NetworkError::NONE);
+    auto CEHdr = std::make_shared<std::array<char,4>>();
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    Client.AsyncConnect({"127.0.0.1", Bound.Port}, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
+    ASSERT_EQ(ConnectResult, NetworkError::NONE);
+
     // send header in two parts
     Client.AsyncSend(Header, 2, NetworkAddress{},
         [&](NetworkError e, size_t){
@@ -121,28 +149,49 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
                         [&](NetworkError e3, size_t){
                             ASSERT_EQ(e3, NetworkError::NONE);
                             Client.AsyncSend(Payload.data() + 3, Payload.size() - 3, NetworkAddress{},
-                                [&](NetworkError e4, size_t){ ASSERT_EQ(e4, NetworkError::NONE); });
+                                [&](NetworkError e4, size_t){ 
+                                    ASSERT_EQ(e4, NetworkError::NONE); 
+                                                                        // 发送完成后立即开始接收
+                                    std::cout << "Starting to receive echo..." << std::endl;
+                                    std::cout << "About to call ReadExact for header..." << std::endl;
+                                    // 使用ReadExact函数读取头部
+                                    auto chs = std::make_shared<ReadState>();
+                                    chs->Socket = std::shared_ptr<AsyncTcpSocket>(&Client, [](AsyncTcpSocket*){}); // 非拥有包装
+                                    chs->Buf = CEHdr->data();
+                                    chs->Target = 4;
+                                    chs->Read = 0;
+                                    std::cout << "ReadState created, calling ReadExact..." << std::endl;
+                                    ReadExact(chs, [&](NetworkError er){
+                                        std::cout << "ReadExact header callback called with error: " << static_cast<int>(er) << std::endl;
+                                        if (er != NetworkError::NONE) {
+                                            std::cout << "ReadExact header failed with error: " << static_cast<int>(er) << std::endl;
+                                            return;
+                                        }
+                                        uint32_t Len = static_cast<uint8_t>((*CEHdr)[0]) | (static_cast<uint8_t>((*CEHdr)[1]) << 8) |
+                                                       (static_cast<uint8_t>((*CEHdr)[2]) << 16) | (static_cast<uint8_t>((*CEHdr)[3]) << 24);
+                                        std::cout << "Received header, message length: " << Len << std::endl;
+                                        auto cbs = std::make_shared<ReadState>();
+                                        cbs->Socket = std::shared_ptr<AsyncTcpSocket>(&Client, [](AsyncTcpSocket*){}); // 非拥有包装
+                                        cbs->Buf = Echo.data();
+                                        cbs->Target = Len;
+                                        cbs->Read = 0;
+                                        ReadExact(cbs, [&](NetworkError er2){ 
+                                            std::cout << "ReadExact body callback called with error: " << static_cast<int>(er2) << std::endl;
+                                            if (er2 == NetworkError::NONE) { 
+                                                std::cout << "Received body successfully, setting EchoDone" << std::endl;
+                                                EchoDone = true; 
+                                                // 客户端接收完成，现在可以安全地停止事件循环
+                                                Ctx->Post([&](){ Ctx->Stop(); }); 
+                                            } else {
+                                                std::cout << "ReadExact body failed with error: " << static_cast<int>(er2) << std::endl;
+                                            }
+                                        });
+                                    });
+                                });
                         });
                 });
         });
-    // read echo header then body
-    auto CEHdr = std::make_shared<std::array<char,4>>();
-    auto chs = std::make_shared<ReadState>();
-    chs->Socket = std::shared_ptr<AsyncTcpSocket>(&Client, [](AsyncTcpSocket*){}); // 非拥有包装
-    chs->Buf = CEHdr->data();
-    chs->Target = 4;
-    chs->Read = 0;
-    ReadExact(chs, [&](NetworkError er){
-        if (er != NetworkError::NONE) return;
-        uint32_t Len = static_cast<uint8_t>((*CEHdr)[0]) | (static_cast<uint8_t>((*CEHdr)[1]) << 8) |
-                       (static_cast<uint8_t>((*CEHdr)[2]) << 16) | (static_cast<uint8_t>((*CEHdr)[3]) << 24);
-        auto cbs = std::make_shared<ReadState>();
-        cbs->Socket = std::shared_ptr<AsyncTcpSocket>(&Client, [](AsyncTcpSocket*){}); // 非拥有包装
-        cbs->Buf = Echo.data();
-        cbs->Target = Len;
-        cbs->Read = 0;
-        ReadExact(cbs, [&](NetworkError er2){ if (er2 == NetworkError::NONE) { EchoDone = true; Ctx->Post([&](){ Ctx->Stop(); }); } });
-    });
+    // 接收逻辑现在在发送完成的回调中处理
 
     // Safety guard: force stop if not finished within 2 seconds
     Ctx->PostDelayed(
@@ -158,6 +207,12 @@ TEST(TcpEchoAsyncTest, LengthPrefixedEcho)
 
     // 等待事件循环退出
     if (LoopThread.joinable()) LoopThread.join();
+
+    // 额外等待时间确保异步操作完成
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    
+    // 调试信息
+    std::cout << "Test completed. ServerOk: " << ServerOk << ", Done: " << Done.load() << ", EchoDone: " << EchoDone.load() << std::endl;
 
     ASSERT_TRUE(ServerOk);
     ASSERT_TRUE(Done.load());
@@ -179,7 +234,23 @@ TEST(TcpEchoAsyncTest, TimeoutAndCancel)
     auto Bound = Acceptor.Native().GetLocalAddress();
 
     AsyncTcpSocket Client(Ctx);
-    ASSERT_EQ(Client.Connect({"127.0.0.1", Bound.Port}), NetworkError::NONE);
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    Client.AsyncConnect({"127.0.0.1", Bound.Port}, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
+    ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // Accept and do nothing (no data)
     bool Accepted = false;

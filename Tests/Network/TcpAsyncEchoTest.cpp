@@ -137,7 +137,21 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
             EchoReceived = true;
         });
 
-    auto ConnectResult = ClientSocket->Connect(ServerAddr);
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 发送测试消息
@@ -231,7 +245,22 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
 
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
-    auto ConnectResult = ClientSocket->Connect(ServerAddr);
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 发送多个消息，模拟粘包
@@ -365,7 +394,21 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
             EchoReceived = true;
         });
 
-    auto ConnectResult = ClientSocket->Connect(ServerAddr);
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 发送大消息
@@ -495,7 +538,21 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
                 EchoReceived++;
             });
 
-        auto ConnectResult = ClientSocket->Connect(ServerAddr);
+        // 使用异步连接
+        std::atomic<bool> ConnectCompleted = false;
+        NetworkError ConnectResult = NetworkError::NONE;
+        
+        ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+            ConnectResult = Err;
+            ConnectCompleted = true;
+        });
+        
+        // 等待连接完成
+        for (int j = 0; j < 50 && !ConnectCompleted.load(); ++j) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        
+        ASSERT_TRUE(ConnectCompleted.load());
         ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
         ClientSockets.push_back(ClientSocket);
@@ -619,8 +676,22 @@ TEST_F(TcpAsyncEchoTest, StressTest)
             EchoReceived++;
         });
 
-    auto ConnectResult = ClientSocket->Connect(ServerAddr);
-    ASSERT_EQ(ConnectResult, NetworkError::NONE);
+            // 使用异步连接
+        std::atomic<bool> ConnectCompleted = false;
+        NetworkError ConnectResult = NetworkError::NONE;
+        
+        ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+            ConnectResult = Err;
+            ConnectCompleted = true;
+        });
+        
+        // 等待连接完成
+        for (int j = 0; j < 50 && !ConnectCompleted.load(); ++j) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        
+        ASSERT_TRUE(ConnectCompleted.load());
+        ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 快速发送大量消息
     for (int i = 0; i < NumMessages; ++i)

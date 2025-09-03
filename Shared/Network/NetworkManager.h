@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 #include "Message/Message.h"
-#include "Message/MessageQueue.h"
+#include <queue>
 #include "Network/NetworkTypes.h"
 #include "Network/Sockets/TcpSocket.h"
 
@@ -145,8 +145,8 @@ private:
     std::thread ServerAcceptThread;
 
     // Message processing
-    std::unique_ptr<Message::MessageQueue> IncomingMessages;
-    std::unique_ptr<Message::MessageQueue> OutgoingMessages;
+    std::queue<Message::MessagePtr> IncomingMessages;
+    std::queue<Message::MessagePtr> OutgoingMessages;
     std::thread MessageProcessingThread;
     std::atomic<bool> StopMessageProcessing = false;
 

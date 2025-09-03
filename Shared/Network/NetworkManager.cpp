@@ -11,8 +11,7 @@ NetworkManager::NetworkManager()
     Stats = NetworkStats{};
 
     // Initialize message queues
-    IncomingMessages = std::make_unique<Message::MessageQueue>();
-    OutgoingMessages = std::make_unique<Message::MessageQueue>();
+    // IncomingMessages and OutgoingMessages are now simple queues that don't need initialization
 }
 
 NetworkManager::~NetworkManager()
@@ -431,33 +430,41 @@ NetworkError NetworkManager::BroadcastMessageToGroup(const std::string& GroupNam
 // Message queue operations
 bool NetworkManager::HasIncomingMessages() const
 {
-    return IncomingMessages && !IncomingMessages->IsEmpty();
+    std::lock_guard<std::mutex> Lock(StatsMutex);
+    return !IncomingMessages.empty();
 }
 
 Message::MessagePtr NetworkManager::GetNextMessage()
 {
-    if (!IncomingMessages || IncomingMessages->IsEmpty())
+    std::lock_guard<std::mutex> Lock(StatsMutex);
+    if (IncomingMessages.empty())
     {
         return nullptr;
     }
 
-    return IncomingMessages->Dequeue();
+    auto Msg = IncomingMessages.front();
+    IncomingMessages.pop();
+    return Msg;
 }
 
 std::vector<Message::MessagePtr> NetworkManager::GetAllMessages()
 {
-    if (!IncomingMessages)
+    std::lock_guard<std::mutex> Lock(StatsMutex);
+    std::vector<Message::MessagePtr> Messages;
+    
+    while (!IncomingMessages.empty())
     {
-        return {};
+        Messages.push_back(IncomingMessages.front());
+        IncomingMessages.pop();
     }
-
-    // Use batch dequeue instead
-    return IncomingMessages->DequeueBatch(1000);
+    
+    return Messages;
 }
 
 uint32_t NetworkManager::GetIncomingMessageCount() const
 {
-    return IncomingMessages ? IncomingMessages->GetSize() : 0;
+    std::lock_guard<std::mutex> Lock(StatsMutex);
+    return static_cast<uint32_t>(IncomingMessages.size());
 }
 
 // Helper methods implementation

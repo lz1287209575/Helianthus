@@ -2,13 +2,10 @@ cc_library(
     name = "message",
     srcs = [
         "Message.cpp",
-        "MessageQueue.cpp",
     ],
     hdrs = [
         "Message.h",
         "MessageTypes.h",
-        "IMessageQueue.h",
-        "MessageQueue.h",
     ],
     copts = select({
         "@bazel_tools//src/conditions:windows": ["/std:c++20", "/utf-8"],

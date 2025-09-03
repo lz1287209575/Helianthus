@@ -34,12 +34,17 @@ bool MessageQueue::QueueData::ShouldUsePriorityQueue() const
 
 void MessageQueue::QueueData::AddMessage(MessagePtr Message)
 {
+    std::cout << "AddMessage: EnablePriority=" << (Config.EnablePriority ? "true" : "false") 
+              << ", Priority=" << static_cast<int>(Message->Header.Priority) << std::endl;
+    
     if (ShouldUsePriorityQueue())
     {
+        std::cout << "  -> 添加到优先级队列" << std::endl;
         PriorityMessages.push(Message);
     }
     else
     {
+        std::cout << "  -> 添加到普通队列" << std::endl;
         Messages.push(Message);
     }
     // 存储后快照
@@ -63,13 +68,19 @@ MessagePtr MessageQueue::QueueData::GetNextMessage()
 {
     MessagePtr Message = nullptr;
 
+    std::cout << "GetNextMessage: EnablePriority=" << (Config.EnablePriority ? "true" : "false")
+              << ", PriorityQueueSize=" << PriorityMessages.size() 
+              << ", NormalQueueSize=" << Messages.size() << std::endl;
+
     if (ShouldUsePriorityQueue() && !PriorityMessages.empty())
     {
         Message = PriorityMessages.top();
+        std::cout << "  -> 从优先级队列获取消息，优先级: " << static_cast<int>(Message->Header.Priority) << std::endl;
         PriorityMessages.pop();
     }
     else if (!Messages.empty())
     {
+        std::cout << "  -> 从普通队列获取消息" << std::endl;
         Message = Messages.front();
         Messages.pop();
     }
@@ -735,6 +746,7 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
         if (TimeoutMs == 0)
         {
             // 非阻塞模式，立即返回
+            OutMessage.reset();
             return QueueResult::TIMEOUT;
         }
         else if (TimeoutMs > 0)
@@ -747,6 +759,7 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
                     TimeoutPoint,
                     [Queue, this] { return !Queue->IsEmpty() || ShuttingDown.load(); }))
             {
+                OutMessage.reset();
                 return QueueResult::TIMEOUT;
             }
         }
@@ -1321,6 +1334,35 @@ QueueResult MessageQueue::GetQueueStats(const std::string& QueueName, QueueStats
     return QueueResult::SUCCESS;
 }
 
+QueueResult MessageQueue::ResetQueueStats(const std::string& QueueName)
+{
+    auto* Queue = GetQueueData(QueueName);
+    if (!Queue)
+    {
+        return QueueResult::QUEUE_NOT_FOUND;
+    }
+
+    std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
+    
+    // 重置统计信息，但保留队列中的消息
+    Queue->Stats.TotalMessages = 0;
+    Queue->Stats.ProcessedMessages = 0;
+    Queue->Stats.FailedMessages = 0;
+    Queue->Stats.DeadLetterMessages = 0;
+    Queue->Stats.RetriedMessages = 0;
+    Queue->Stats.ExpiredMessages = 0;
+    Queue->Stats.RejectedMessages = 0;
+    Queue->Stats.TotalBytes = 0;
+    Queue->Stats.AverageLatencyMs = 0.0;
+    Queue->Stats.ThroughputPerSecond = 0.0;
+    Queue->Stats.LastMessageTime = 0;
+    
+    // 不清空PendingMessages，因为队列中的消息仍然存在
+    // 不清空CreatedTime，因为队列创建时间不应该被重置
+    
+    return QueueResult::SUCCESS;
+}
+
 std::string MessageQueue::GetQueueInfo() const
 {
     std::stringstream Info;
@@ -1351,6 +1393,11 @@ QueueResult MessageQueue::GetTopicInfo(const std::string& TopicName, TopicConfig
 QueueResult MessageQueue::SendBatchMessages(const std::string& QueueName,
                                             const std::vector<MessagePtr>& Messages)
 {
+    // 验证参数：空批量应该被拒绝
+    if (Messages.empty()) {
+        return QueueResult::INVALID_PARAMETER;
+    }
+    
     // 简单实现：逐条发送，复用已有校验与加密/压缩路径
     QueueResult LastResult = QueueResult::SUCCESS;
     for (const auto& Msg : Messages)
@@ -1369,6 +1416,11 @@ QueueResult MessageQueue::ReceiveBatchMessages(const std::string& QueueName,
                                                uint32_t MaxCount,
                                                uint32_t TimeoutMs)
 {
+    // 验证参数
+    if (MaxCount == 0) {
+        return QueueResult::INVALID_PARAMETER;
+    }
+    
     OutMessages.clear();
 
     // 允许在总超时时间内至少获取一条消息，其后尽量拉满到 MaxCount

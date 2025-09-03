@@ -142,6 +142,7 @@ public:
     virtual QueueResult GetQueueStats(const std::string& QueueName, QueueStats& OutStats) const = 0;
     virtual QueueResult GetTopicStats(const std::string& TopicName, QueueStats& OutStats) const = 0;
     virtual QueueResult GetGlobalStats(QueueStats& OutStats) const = 0;
+    virtual QueueResult ResetQueueStats(const std::string& QueueName) = 0;
     virtual std::vector<MessagePtr> GetPendingMessages(const std::string& QueueName,
                                                        uint32_t MaxCount = 100) const = 0;
 

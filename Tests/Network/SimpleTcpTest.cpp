@@ -87,11 +87,26 @@ TEST_F(SimpleTcpTest, BasicConnection)
         });
 
     // 等待服务器准备就绪
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
-    auto ConnectResult = ClientSocket->Connect(ServerAddr);
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
     ClientConnected = true;
 
@@ -144,15 +159,30 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
         });
 
     // 等待服务器准备就绪
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
-    auto ConnectResult = ClientSocket->Connect(ServerAddr);
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 等待连接建立和 AsyncReceive 注册
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     // 发送测试消息
     std::string TestMessage = "Hello, Server!";
@@ -162,10 +192,10 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
                             [](NetworkError Err, size_t Bytes) { EXPECT_EQ(Err, NetworkError::NONE); });
     
     // 立即等待一小段时间确保数据传输
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // 等待消息接收
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
     EXPECT_TRUE(ServerReady);
     EXPECT_TRUE(MessageReceived);

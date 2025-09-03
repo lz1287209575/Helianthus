@@ -151,6 +151,7 @@ public:
     QueueResult GetQueueStats(const std::string& QueueName, QueueStats& OutStats) const override;
     QueueResult GetTopicStats(const std::string& TopicName, QueueStats& OutStats) const override;
     QueueResult GetGlobalStats(QueueStats& OutStats) const override;
+    QueueResult ResetQueueStats(const std::string& QueueName) override;
     std::vector<MessagePtr> GetPendingMessages(const std::string& QueueName,
                                                uint32_t MaxCount = 100) const override;
 

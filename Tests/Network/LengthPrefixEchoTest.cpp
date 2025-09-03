@@ -131,8 +131,24 @@ TEST_F(LengthPrefixEchoTest, SingleMessage)
 
     // Client connect and send
     auto Client = std::make_shared<AsyncTcpSocket>(ClientContext);
-    ASSERT_EQ(Client->Connect(Addr), NetworkError::NONE);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    Client->AsyncConnect(Addr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
+    ASSERT_EQ(ConnectResult, NetworkError::NONE);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     // build header
     uint32_t NetLen = htonl(static_cast<uint32_t>(Message.size()));
     char Header[4];
@@ -231,8 +247,24 @@ TEST_F(LengthPrefixEchoTest, FragmentedMessage)
 
     // Client connect and send fragmented header/body
     auto Client = std::make_shared<AsyncTcpSocket>(ClientContext);
-    ASSERT_EQ(Client->Connect(Addr), NetworkError::NONE);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+    
+    Client->AsyncConnect(Addr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
+        ConnectResult = Err;
+        ConnectCompleted = true;
+    });
+    
+    // 等待连接完成
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    ASSERT_TRUE(ConnectCompleted.load());
+    ASSERT_EQ(ConnectResult, NetworkError::NONE);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     uint32_t NetLen = htonl(static_cast<uint32_t>(Message.size()));
     char Header[4]; std::memcpy(Header, &NetLen, 4);
