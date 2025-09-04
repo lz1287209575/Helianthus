@@ -13,9 +13,3 @@ cc_library(
     copts = ["-IAES"],
     visibility = ["//visibility:public"],
 )
-
-alias(
-    name = "picohttpparser",
-    actual = "//ThirdParty/picohttpparser:picohttpparser",
-    visibility = ["//visibility:public"],
-)
