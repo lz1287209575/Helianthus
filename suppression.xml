@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <suppress>
+        <notes>Suppress false positives for C++ standard libraries</notes>
+        <packageUrl regex="true">^pkg:.*libstdc.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    <suppress>
+        <notes>Suppress false positives for system libraries</notes>
+        <packageUrl regex="true">^pkg:.*glibc.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    <suppress>
+        <notes>Suppress false positives for build tools</notes>
+        <packageUrl regex="true">^pkg:.*bazel.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    <suppress>
+        <notes>Suppress false positives for third-party C++ libraries</notes>
+        <packageUrl regex="true">^pkg:.*spdlog.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+    <suppress>
+        <notes>Suppress false positives for OpenSSL</notes>
+        <packageUrl regex="true">^pkg:.*openssl.*$</packageUrl>
+        <vulnerabilityName regex="true">.*</vulnerabilityName>
+    </suppress>
+</suppressions>

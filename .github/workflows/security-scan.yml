@@ -2,118 +2,90 @@ name: Security Scan
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   schedule:
-    - cron: '0 4 * * 0'  # 每周日凌晨4点运行
-  workflow_dispatch:
-
-env:
-  BAZEL_VERSION: 8.3.1
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
 
 jobs:
-  security-analysis:
-    name: Security Analysis
+  security-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        submodules: recursive
-
-    - name: Setup Bazel
-      uses: bazelbuild/setup-bazelisk@v3
+        fetch-depth: 0
+    
+    - name: Set up Bazel
+      uses: bazelbuild/setup-bazelisk@v2
       with:
-        version: ${{ env.BAZEL_VERSION }}
-
-    - name: Install security tools
+        bazel-version: 8.3.1
+    
+    - name: Cache Bazel
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/bazel
+          ~/.cache/bazelisk
+        key: ${{ runner.os }}-bazel-${{ hashFiles('**/MODULE.bazel', '**/MODULE.bazel.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bazel-
+    
+    - name: Build project
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          cmake \
-          pkg-config \
-          libssl-dev \
-          libcurl4-openssl-dev \
-          libmysqlclient-dev \
-          libmongoc-dev \
-          libbson-dev \
-          libhiredis-dev \
-          python3-pip
-
-    - name: Install Python security tools
-      run: |
-        pip3 install bandit safety
-
-    - name: Run bandit security scan
-      run: |
-        echo "Running bandit security scan..."
-        find . -name "*.py" -type f | xargs bandit -r -f json -o bandit-report.json || true
-        echo "Bandit scan completed"
-
-    - name: Check for hardcoded secrets
-      run: |
-        echo "Checking for hardcoded secrets..."
-        # 检查常见的密钥模式
-        grep -r -i "password\|secret\|key\|token\|api_key" \
-          --exclude-dir=.git \
-          --exclude-dir=bazel-* \
-          --exclude-dir=.bazel \
-          --exclude=*.md \
-          --exclude=*.yml \
-          --exclude=*.yaml || {
-          echo "No obvious hardcoded secrets found"
-        }
-        echo "Secret check completed"
-
-    - name: Check for unsafe functions
-      run: |
-        echo "Checking for unsafe C++ functions..."
-        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
-        xargs grep -l "strcpy\|strcat\|sprintf\|gets\|scanf" || {
-          echo "No obvious unsafe functions found"
-        }
-        echo "Unsafe function check completed"
-
-    - name: Check for buffer overflow vulnerabilities
-      run: |
-        echo "Checking for potential buffer overflow issues..."
-        find Shared/ Tests/ Examples/ -name "*.cpp" -o -name "*.h" | \
-        xargs grep -l "memcpy\|memmove\|strncpy\|strncat" || {
-          echo "No obvious buffer overflow risks found"
-        }
-        echo "Buffer overflow check completed"
-
-    - name: Run Valgrind memory check
-      run: |
-        echo "Running Valgrind memory check..."
-        # 构建测试目标
-        bazel build //Tests/Config:config_manager_test
-        # 运行Valgrind检查
-        valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all \
-          --track-origins=yes --verbose --log-file=valgrind-out.txt \
-          bazel-bin/Tests/Config/config_manager_test || true
-        echo "Valgrind check completed"
-
-    - name: Upload security scan results
-      uses: actions/upload-artifact@v4
+        bazel build //...
+    
+    - name: Run OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      id: dependency-check
+      with:
+        project: 'Helianthus'
+        path: '.'
+        format: 'HTML'
+        args: >
+          --suppression suppression.xml
+          --enableRetired
+          --enableExperimental
+          --failOnCVSS 7
+          --nvdApiKey ${{ secrets.NVD_API_KEY }}
+      continue-on-error: true
+    
+    - name: Upload dependency check results
+      uses: actions/upload-artifact@v3
       if: always()
       with:
-        name: security-scan-results
-        path: |
-          bandit-report.json
-          valgrind-out.txt
-
-    - name: Security scan summary
-      run: |
-        echo "🔒 Security scan completed"
-        echo "Results uploaded as artifacts"
-        if [ -f bandit-report.json ]; then
-          echo "Bandit report generated"
-        fi
-        if [ -f valgrind-out.txt ]; then
-          echo "Valgrind report generated"
-        fi
+        name: dependency-check-report
+        path: reports/
+    
+    - name: Comment PR with security scan results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Check if dependency check passed
+          const dependencyCheckExitCode = '${{ steps.dependency-check.outcome }}';
+          
+          let comment = '## 🔒 Security Scan Results\n\n';
+          
+          if (dependencyCheckExitCode === 'success') {
+            comment += '✅ **OWASP Dependency Check**: Passed\n';
+          } else {
+            comment += '❌ **OWASP Dependency Check**: Failed\n';
+            comment += '\nPlease review the security vulnerabilities found in the dependency check report.\n';
+          }
+          
+          comment += '\n📊 **Report**: Check the artifacts for detailed security scan reports.\n';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

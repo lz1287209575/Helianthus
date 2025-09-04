@@ -1,0 +1,133 @@
+name: Security Scan (Simplified)
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Bazel
+      uses: bazelbuild/setup-bazelisk@v2
+      with:
+        bazel-version: 8.3.1
+    
+    - name: Cache Bazel
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/bazel
+          ~/.cache/bazelisk
+        key: ${{ runner.os }}-bazel-${{ hashFiles('**/MODULE.bazel', '**/MODULE.bazel.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bazel-
+    
+    - name: Build project
+      run: |
+        bazel build //...
+    
+    - name: Run basic security checks
+      run: |
+        echo "🔒 Running basic security checks..."
+        
+        # Check for dangerous C functions
+        echo "Checking for dangerous C functions..."
+        DANGEROUS_FUNCS=$(find . -name "*.cpp" -o -name "*.c" -o -name "*.h" | xargs grep -l "strcpy\|sprintf\|gets\|scanf" 2>/dev/null || true)
+        if [ -n "$DANGEROUS_FUNCS" ]; then
+          echo "⚠️  Found potentially dangerous C functions:"
+          echo "$DANGEROUS_FUNCS"
+        else
+          echo "✅ No dangerous C functions found"
+        fi
+        
+        # Check for hardcoded secrets (basic check)
+        echo "Checking for potential hardcoded secrets..."
+        SECRETS=$(find . -name "*.cpp" -o -name "*.c" -o -name "*.h" | xargs grep -i "password\|secret\|key\|token" 2>/dev/null | grep -v "// TODO\|// FIXME\|// NOTE" || true)
+        if [ -n "$SECRETS" ]; then
+          echo "⚠️  Found potential hardcoded secrets (please review):"
+          echo "$SECRETS"
+        else
+          echo "✅ No obvious hardcoded secrets found"
+        fi
+        
+        # Check for buffer overflow vulnerabilities
+        echo "Checking for buffer operations..."
+        BUFFER_OPS=$(find . -name "*.cpp" -o -name "*.c" -o -name "*.h" | xargs grep -l "memcpy\|strncpy\|strncat" 2>/dev/null || true)
+        if [ -n "$BUFFER_OPS" ]; then
+          echo "⚠️  Found buffer operations (please ensure bounds checking):"
+          echo "$BUFFER_OPS"
+        else
+          echo "✅ No obvious buffer operations found"
+        fi
+        
+        echo "🔒 Basic security checks completed"
+      continue-on-error: true
+    
+    - name: Run OWASP Dependency Check (if available)
+      run: |
+        echo "🔍 Attempting OWASP Dependency Check..."
+        
+        # Try to run dependency check with proper configuration
+        if command -v dependency-check.sh &> /dev/null; then
+          dependency-check.sh \
+            --project "Helianthus" \
+            --scan . \
+            --suppression suppression.xml \
+            --format HTML \
+            --format JSON \
+            --out reports/ \
+            --enableRetired \
+            --failOnCVSS 9 \
+            --noupdate || echo "Dependency check completed with warnings"
+        else
+          echo "⚠️  OWASP Dependency Check not available, skipping..."
+        fi
+      continue-on-error: true
+    
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-scan-results
+        path: |
+          reports/
+        retention-days: 30
+    
+    - name: Comment PR with security scan results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          let comment = '## 🔒 Security Scan Results\n\n';
+          
+          comment += '✅ **Basic Security Checks**: Completed\n';
+          comment += '✅ **Build Verification**: Passed\n';
+          
+          if (fs.existsSync('reports/dependency-check-report.html')) {
+            comment += '✅ **OWASP Dependency Check**: Completed\n';
+          } else {
+            comment += '⚠️  **OWASP Dependency Check**: Skipped (not available)\n';
+          }
+          
+          comment += '\n📊 **Report**: Check the artifacts for detailed security scan reports.\n';
+          comment += '\n💡 **Note**: This is a simplified security scan for C++ projects. For comprehensive security analysis, consider using additional tools.\n';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

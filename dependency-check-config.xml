@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dependency-check xmlns="https://jeremylong.github.io/DependencyCheck/dependency-check.2.0.xsd"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="https://jeremylong.github.io/DependencyCheck/dependency-check.2.0.xsd">
+    
+    <!-- Project configuration -->
+    <project name="Helianthus"/>
+    
+    <!-- Suppression file -->
+    <suppressionFile>suppression.xml</suppressionFile>
+    
+    <!-- Analyzer configuration -->
+    <analyzers>
+        <!-- Enable only relevant analyzers for C++ project -->
+        <assemblyAnalyzer enabled="false"/>
+        <autoconfAnalyzer enabled="false"/>
+        <cmakeAnalyzer enabled="true"/>
+        <composerAnalyzer enabled="false"/>
+        <cpanAnalyzer enabled="false"/>
+        <dartAnalyzer enabled="false"/>
+        <golangDepAnalyzer enabled="false"/>
+        <golangModAnalyzer enabled="false"/>
+        <gradleAnalyzer enabled="false"/>
+        <mavenAnalyzer enabled="false"/>
+        <msbuildAnalyzer enabled="false"/>
+        <nodejsAnalyzer enabled="false"/>
+        <nugetconfAnalyzer enabled="false"/>
+        <nuspecAnalyzer enabled="false"/>
+        <peAnalyzer enabled="true"/>
+        <pipAnalyzer enabled="false"/>
+        <pipfileAnalyzer enabled="false"/>
+        <poetryAnalyzer enabled="false"/>
+        <pyDistAnalyzer enabled="false"/>
+        <pyPkgAnalyzer enabled="false"/>
+        <rpmAnalyzer enabled="false"/>
+        <rubyBundlerAnalyzer enabled="false"/>
+        <rubyGemspecAnalyzer enabled="false"/>
+        <swiftPackageManagerAnalyzer enabled="false"/>
+        <yarnAnalyzer enabled="false"/>
+    </analyzers>
+    
+    <!-- Database configuration -->
+    <database>
+        <driver>org.h2.Driver</driver>
+        <connectionString>jdbc:h2:file:./data/dc</connectionString>
+    </database>
+    
+    <!-- Report configuration -->
+    <formats>
+        <format>HTML</format>
+        <format>JSON</format>
+    </formats>
+    
+    <!-- Fail on high severity vulnerabilities -->
+    <failOnCVSS>7</failOnCVSS>
+    
+    <!-- Enable experimental analyzers -->
+    <enableExperimental>true</enableExperimental>
+    
+    <!-- Enable retired analyzers -->
+    <enableRetired>true</enableRetired>
+</dependency-check>
