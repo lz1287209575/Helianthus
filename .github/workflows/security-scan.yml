@@ -20,10 +20,10 @@ jobs:
       with:
         fetch-depth: 0
     
-    - name: Set up Bazel
-      uses: bazelbuild/setup-bazelisk@v2
+    - name: Set up Bazelisk
+      uses: bazelbuild/setup-bazelisk@v3
       with:
-        bazel-version: 8.3.1
+        bazelisk-version: 1.27.0
     
     - name: Cache Bazel
       uses: actions/cache@v3
