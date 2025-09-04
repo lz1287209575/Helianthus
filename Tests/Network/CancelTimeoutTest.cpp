@@ -41,13 +41,13 @@ protected:
 TEST_F(CancelTimeoutTest, PostWithCancel)
 {
     std::atomic<bool> TaskExecuted = false;
-    std::atomic<bool> TaskCancelled = false;
 
     // 创建取消 token
     auto Token = Context->CreateCancelToken();
 
-    // 提交任务
-    auto TaskId = Context->PostWithCancel([&TaskExecuted]() { TaskExecuted = true; });
+    // 使用极短延迟提交任务，保证有确定性的取消窗口
+    auto TaskId =
+        Context->PostDelayedWithCancel([&TaskExecuted]() { TaskExecuted = true; }, 1, Token);
     (void)TaskId;
 
     // 立即取消任务
