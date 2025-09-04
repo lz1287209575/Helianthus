@@ -1,0 +1,27 @@
+# Bazel outputs
+bazel-*/
+
+# Git
+.git/
+.gitmodules
+
+# Build artifacts
+**/*.o
+**/*.a
+**/*.so
+**/*.dylib
+**/*.exe
+
+# Editor/OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Runtime data
+message_queue_data/
+
+# Tests outputs
+**/test-results/
+
+

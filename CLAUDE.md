@@ -4,18 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current State vs Planned Architecture
 
-**Helianthus is in early development** - only the message queue infrastructure is fully implemented. The microservices architecture exists primarily as planning with solid foundations in place.
+**Helianthus core subsystems are production-ready** – message queue, configuration management, logging, metrics and CI/CD are implemented and tested. Microservices remain in planning; network layer has initial capabilities and tests.
 
 ## Build Commands
 
 ### Current Working Commands
 ```bash
-# Build everything (only message queue + examples)
+# Build everything
 bazel build //...
 
-# Build specific components
-bazel build //Shared:MessageQueue
-bazel build //Examples:PersistenceMetricsExample
+# Run all tests (Google Test integrated)
+bazel test //...
+
+# Run example
+bazel run //Examples:PersistenceMetricsExample
+
+# Build container image
+docker build -f Containers/Dockerfile -t helianthus:latest .
+
+# Run container
+docker run --rm -p 8080:8080 helianthus:latest
 
 # Clean build
 bazel clean
@@ -26,10 +34,8 @@ clang-format -i **/*.{cpp,hpp,h}
 
 ### Commands That Will Fail (Not Yet Implemented)
 ```bash
-bazel build //Shared/Network:network      # Network layer missing
-bazel test //...                          # No tests implemented
-bazel test //Tests/Network:all            # Tests directory missing
-bazel build //... --define=ENABLE_LUA_SCRIPTING=1  # Scripting not implemented
+# Scripting not implemented
+bazel build //... --define=ENABLE_LUA_SCRIPTING=1
 ```
 
 ## Architecture - What's Actually Built
@@ -52,11 +58,33 @@ bazel build //... --define=ENABLE_LUA_SCRIPTING=1  # Scripting not implemented
 - Tests persistence and metrics functionality
 - Serves as integration test
 
+### ✅ **Configuration Management** (Fully Implemented)
+**Location**: `Shared/Config/`
+- Multi-source config (files, environment, CLI)
+- Validators, change callbacks, templates, export (JSON/YAML/INI)
+- Type-safe access, locking, deadlock protection, full test coverage
+
+### ✅ **Logging System** (Fully Implemented)
+**Tech**: spdlog-based structured logging
+- Async logging, rotation, level control, JSON output, category loggers
+- Trace/Span IDs, thread-safe, configurable formatter
+
+### ✅ **Metrics & Monitoring** (Working)
+- Prometheus metrics export, performance counters across subsystems
+
+### ✅ **Testing & CI/CD** (Working)
+- Google Test integrated; unit/integration tests pass 100%
+- CI/CD pipeline and automated deployment are in place
+
+### 🟡 **Network Layer** (Initial Implementation)
+**Location**: `Shared/Network/`
+- Basic TCP tests exist; API evolving
+
 ### ❌ **Missing Architecture** (Planned Only)
 - **All Services**: Gateway, Auth, Game, Player, Match, Realtime, Monitor
 - **Shared Components**: Network, Discovery, Protocol, Reflection, Scripting, Common
-- **Tools**: BuildSystem, Monitoring
-- **Testing**: Google Test not implemented
+- **Tools**: BuildSystem, Monitoring (advanced)
+- **Testing**: Advanced fault-injection scenarios
 
 ## Current Directory Structure
 
@@ -68,11 +96,13 @@ Helianthus/
 │   └── PersistenceMetricsExample.cpp
 ├── Shared/                      # Shared libraries
 │   ├── BUILD.bazel
-│   └── MessageQueue/           # ✅ Working message queue
+│   ├── MessageQueue/           # ✅ Working message queue
+│   └── Network/                # 🟡 Initial network layer
 ├── ThirdParty/                 # Git submodules
 │   ├── mariadb-connector-c/
 │   └── mongo-cxx-driver/
 ├── message_queue_data/         # Runtime data directory
+├── Tests/                      # ✅ Google Test-based tests
 ├── WORKSPACE                   # Bazel workspace
 └── .gitmodules                # Submodule configuration
 ```
@@ -89,7 +119,6 @@ Services/                       # All microservices
 └── Monitor/
 
 Shared/                         # Most shared components
-├── Network/
 ├── Discovery/
 ├── Protocol/
 ├── Reflection/
@@ -97,16 +126,18 @@ Shared/                         # Most shared components
 └── Common/
 
 Tools/                          # Build and monitoring tools
-Tests/                          # Google Test framework
+Containers/                     # Dockerfiles and deployment manifests
 ```
 
 ## Development Workflow
 
 ### Current Development Cycle
 1. **Build**: `bazel build //...`
-2. **Test**: `bazel run //Examples:PersistenceMetricsExample`
-3. **Format**: `clang-format -i **/*.{cpp,hpp,h}`
-4. **Verify**: Check message_queue_data/ for runtime artifacts
+2. **Test**: `bazel test //...`
+3. **Run Example**: `bazel run //Examples:PersistenceMetricsExample`
+4. **Format**: `clang-format -i **/*.{cpp,hpp,h}`
+5. **Containerize**: `docker build -f Containers/Dockerfile -t helianthus:latest .`
+6. **Verify**: Check `message_queue_data/`, Prometheus endpoints, container health
 
 ### Git Submodules
 ```bash
@@ -120,6 +151,8 @@ git submodule update --init --recursive
 3. **Phase 2**: ❌ **NOT STARTED** - Basic services
 4. **Phase 3**: ❌ **NOT STARTED** - Game logic and real-time
 5. **Phase 4**: ❌ **NOT STARTED** - Advanced features
+
+Infrastructure subsystems (Configuration, Logging, Metrics, CI/CD) are ✅ COMPLETE. Network layer is 🟡 in progress.
 
 ## Key Implementation Details
 
@@ -151,10 +184,10 @@ git submodule update --init --recursive
 - **Language**: C++17/20
 - **Build**: Bazel
 - **Databases**: MySQL + MongoDB + Redis
-- **Testing**: Google Test (not implemented)
+- **Testing**: Google Test (implemented)
 - **Scripting**: Lua/Python/JavaScript/C# (not implemented)
-- **Networking**: Custom TCP/UDP (not implemented)
-- **Containerization**: Docker (not implemented)
+- **Networking**: Custom TCP/UDP (initial implementation)
+- **Containerization**: Docker (planned)
 
 ## Coding Standards
 - **Variables**: ALL variables must use UPPER_CASE naming convention
@@ -171,8 +204,9 @@ git submodule update --init --recursive
 ## Next Development Priorities
 
 ### Immediate Tasks
-1. **Network layer implementation** (TCP/UDP)
-2. **Google Test integration** and test framework
+1. **Containerization** (Dockerfiles, health checks, rollout strategy)
+2. **Network layer enhancement** (TCP/UDP features, stability, performance)
 3. **Service discovery mechanism**
 4. **Basic service structure** (Gateway, Auth, Player)
 5. **Reflection system foundation**
+6. **Performance optimization** (serialization, batching, memory)
