@@ -1,6 +1,6 @@
 # Helianthus 游戏服务器
 
-[![Build Status]([![Helianthus CI/CD Pipeline](https://github.com/lz1287209575/Helianthus/actions/workflows/ci.yml/badge.svg)](https://github.com/lz1287209575/Helianthus/actions/workflows/ci.yml))
+[![Helianthus CI/CD Pipeline](https://github.com/lz1287209575/Helianthus/actions/workflows/ci.yml/badge.svg)](https://github.com/lz1287209575/Helianthus/actions/workflows/ci.yml)
 [![C++](https://img.shields.io/badge/C%2B%2B-17%2F20-blue)](https://isocpp.org/)
 [![Bazel](https://img.shields.io/badge/build-Bazel-green)](https://bazel.build/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
