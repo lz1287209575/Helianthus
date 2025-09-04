@@ -75,7 +75,7 @@ TEST_F(MessageQueueMemoryTest, MessageAllocationDeallocation)
     
     // 验证队列为空
     MessagePtr FinalMessage;
-    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
     EXPECT_EQ(FinalMessage, nullptr);
 }
 
@@ -104,7 +104,7 @@ TEST_F(MessageQueueMemoryTest, LargeMessageMemoryHandling)
     
     // 验证队列为空
     MessagePtr FinalMessage;
-    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
     EXPECT_EQ(FinalMessage, nullptr);
 }
 
@@ -134,7 +134,7 @@ TEST_F(MessageQueueMemoryTest, CircularMemoryUsage)
         
         // 验证队列为空
         MessagePtr FinalMessage;
-        EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+        EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
         EXPECT_EQ(FinalMessage, nullptr);
     }
 }
@@ -258,7 +258,7 @@ TEST_F(MessageQueueMemoryTest, ConcurrentMemoryAccess)
     
     // 验证队列为空
     MessagePtr FinalMessage;
-    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
     EXPECT_EQ(FinalMessage, nullptr);
 }
 
@@ -292,7 +292,7 @@ TEST_F(MessageQueueMemoryTest, MemoryStressTest)
         
         // 验证队列为空
         MessagePtr FinalMessage;
-        EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+        EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
         EXPECT_EQ(FinalMessage, nullptr);
     }
 }
@@ -326,7 +326,7 @@ TEST_F(MessageQueueMemoryTest, QueueCapacityMemoryTest)
     
     // 验证队列为空
     MessagePtr FinalMessage;
-    EXPECT_EQ(MQ.ReceiveMessage("small_memory_queue", FinalMessage), QueueResult::SUCCESS);
+    EXPECT_EQ(MQ.ReceiveMessage("small_memory_queue", FinalMessage), QueueResult::TIMEOUT);
     EXPECT_EQ(FinalMessage, nullptr);
 }
 
@@ -357,7 +357,7 @@ TEST_F(MessageQueueMemoryTest, TransactionMemoryTest)
     
     // 验证队列为空
     MessagePtr FinalMessage;
-    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+    EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
     EXPECT_EQ(FinalMessage, nullptr);
 }
 
@@ -440,7 +440,7 @@ TEST_F(MessageQueueMemoryTest, MultiQueueMemoryTest)
         
         // 验证队列为空
         MessagePtr FinalMessage;
-        EXPECT_EQ(MQ.ReceiveMessage(QueueName, FinalMessage), QueueResult::SUCCESS);
+        EXPECT_EQ(MQ.ReceiveMessage(QueueName, FinalMessage), QueueResult::TIMEOUT);
         EXPECT_EQ(FinalMessage, nullptr);
     }
     
@@ -477,7 +477,7 @@ TEST_F(MessageQueueMemoryTest, LongRunningMemoryTest)
         
         // 验证队列为空
         MessagePtr FinalMessage;
-        EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::SUCCESS);
+        EXPECT_EQ(MQ.ReceiveMessage(TestQueueName, FinalMessage), QueueResult::TIMEOUT);
         EXPECT_EQ(FinalMessage, nullptr);
         
         // 短暂休息

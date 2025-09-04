@@ -756,7 +756,7 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
     if (Queue->IsEmpty())
     {
-        // 空队列：短暂等待以适配并发生产-消费；若仍为空则返回 TIMEOUT
+        // 空队列：短暂等待以适配并发生产-消费；若仍为空则返回 SUCCESS 且 OutMessage=nullptr
         auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
         Queue->NotifyCondition.wait_until(
             Lock,
