@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "MessageTypes.h"
 #include "MessagePersistence.h"
+#include "MessageTypes.h"
 
 namespace Helianthus::MessageQueue
 {
@@ -59,11 +59,9 @@ public:
                                                        MessagePtr Message) = 0;
 
     // 消息接收（消费者）
-    virtual QueueResult ReceiveMessage(const std::string& QueueName,
-                                       MessagePtr& OutMessage) = 0;
-    virtual QueueResult ReceiveMessage(const std::string& QueueName,
-                                       MessagePtr& OutMessage,
-                                       uint32_t TimeoutMs) = 0;
+    virtual QueueResult ReceiveMessage(const std::string& QueueName, MessagePtr& OutMessage) = 0;
+    virtual QueueResult
+    ReceiveMessage(const std::string& QueueName, MessagePtr& OutMessage, uint32_t TimeoutMs) = 0;
     virtual QueueResult ReceiveBatchMessages(const std::string& QueueName,
                                              std::vector<MessagePtr>& OutMessages,
                                              uint32_t MaxCount = 10,
@@ -149,24 +147,28 @@ public:
                                                        uint32_t MaxCount = 100) const = 0;
 
     // DLQ监控
-    virtual QueueResult GetDeadLetterQueueStats(const std::string& QueueName, 
+    virtual QueueResult GetDeadLetterQueueStats(const std::string& QueueName,
                                                 DeadLetterQueueStats& OutStats) const = 0;
-    virtual QueueResult GetAllDeadLetterQueueStats(std::vector<DeadLetterQueueStats>& OutStats) const = 0;
-    virtual QueueResult SetDeadLetterAlertConfig(const std::string& QueueName, 
+    virtual QueueResult
+    GetAllDeadLetterQueueStats(std::vector<DeadLetterQueueStats>& OutStats) const = 0;
+    virtual QueueResult SetDeadLetterAlertConfig(const std::string& QueueName,
                                                  const DeadLetterAlertConfig& Config) = 0;
-    virtual QueueResult GetDeadLetterAlertConfig(const std::string& QueueName, 
+    virtual QueueResult GetDeadLetterAlertConfig(const std::string& QueueName,
                                                  DeadLetterAlertConfig& OutConfig) const = 0;
-    virtual QueueResult GetActiveDeadLetterAlerts(const std::string& QueueName,
-                                                  std::vector<DeadLetterAlert>& OutAlerts) const = 0;
-    virtual QueueResult GetAllActiveDeadLetterAlerts(std::vector<DeadLetterAlert>& OutAlerts) const = 0;
-    virtual QueueResult ClearDeadLetterAlert(const std::string& QueueName, 
+    virtual QueueResult
+    GetActiveDeadLetterAlerts(const std::string& QueueName,
+                              std::vector<DeadLetterAlert>& OutAlerts) const = 0;
+    virtual QueueResult
+    GetAllActiveDeadLetterAlerts(std::vector<DeadLetterAlert>& OutAlerts) const = 0;
+    virtual QueueResult ClearDeadLetterAlert(const std::string& QueueName,
                                              DeadLetterAlertType AlertType) = 0;
     virtual QueueResult ClearAllDeadLetterAlerts(const std::string& QueueName) = 0;
     virtual void SetDeadLetterAlertHandler(DeadLetterAlertHandler Handler) = 0;
     virtual void SetDeadLetterStatsHandler(DeadLetterStatsHandler Handler) = 0;
 
     // 队列指标
-    virtual QueueResult GetQueueMetrics(const std::string& QueueName, QueueMetrics& OutMetrics) const = 0;
+    virtual QueueResult GetQueueMetrics(const std::string& QueueName,
+                                        QueueMetrics& OutMetrics) const = 0;
     virtual QueueResult GetAllQueueMetrics(std::vector<QueueMetrics>& OutMetrics) const = 0;
 
     // 持久化管理
@@ -174,7 +176,7 @@ public:
     virtual QueueResult LoadFromDisk() = 0;
     virtual QueueResult EnablePersistence(const std::string& QueueName, PersistenceMode Mode) = 0;
     virtual QueueResult DisablePersistence(const std::string& QueueName) = 0;
-    
+
     // 持久化统计
     virtual IMessagePersistence::PersistenceStats GetPersistenceStats() const = 0;
     virtual void ResetPersistenceStats() = 0;
@@ -204,8 +206,10 @@ public:
     // 集群/分片/副本接口
     virtual QueueResult SetClusterConfig(const ClusterConfig& Config) = 0;
     virtual QueueResult GetClusterConfig(ClusterConfig& OutConfig) const = 0;
-    virtual QueueResult GetShardForKey(const std::string& Key, ShardId& OutShardId, std::string& OutNodeId) const = 0;
-    virtual QueueResult GetShardReplicas(ShardId Shard, std::vector<ReplicaInfo>& OutReplicas) const = 0;
+    virtual QueueResult
+    GetShardForKey(const std::string& Key, ShardId& OutShardId, std::string& OutNodeId) const = 0;
+    virtual QueueResult GetShardReplicas(ShardId Shard,
+                                         std::vector<ReplicaInfo>& OutReplicas) const = 0;
     virtual QueueResult SetNodeHealth(const std::string& NodeId, bool Healthy) = 0;
     // 导出每分片详细状态（shard_id、leader、followers健康）
     virtual QueueResult GetClusterShardStatuses(std::vector<ShardInfo>& OutShards) const = 0;
@@ -220,68 +224,92 @@ public:
     virtual void SetFailoverHandler(FailoverHandler Handler) = 0;
 
     // 事务管理
-    virtual TransactionId BeginTransaction(const std::string& Description = "", uint32_t TimeoutMs = 30000) = 0;
+    virtual TransactionId BeginTransaction(const std::string& Description = "",
+                                           uint32_t TimeoutMs = 30000) = 0;
     virtual QueueResult CommitTransaction(TransactionId Id) = 0;
     virtual QueueResult RollbackTransaction(TransactionId Id, const std::string& Reason = "") = 0;
     virtual QueueResult AbortTransaction(TransactionId Id, const std::string& Reason = "") = 0;
-    
+
     // 事务内操作
-    virtual QueueResult SendMessageInTransaction(TransactionId Id, const std::string& QueueName, MessagePtr Message) = 0;
-    virtual QueueResult AcknowledgeMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId) = 0;
-    virtual QueueResult RejectMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId, const std::string& Reason = "") = 0;
+    virtual QueueResult SendMessageInTransaction(TransactionId Id,
+                                                 const std::string& QueueName,
+                                                 MessagePtr Message) = 0;
+    virtual QueueResult AcknowledgeMessageInTransaction(TransactionId Id,
+                                                        const std::string& QueueName,
+                                                        MessageId MessageId) = 0;
+    virtual QueueResult RejectMessageInTransaction(TransactionId Id,
+                                                   const std::string& QueueName,
+                                                   MessageId MessageId,
+                                                   const std::string& Reason = "") = 0;
     virtual QueueResult CreateQueueInTransaction(TransactionId Id, const QueueConfig& Config) = 0;
-    virtual QueueResult DeleteQueueInTransaction(TransactionId Id, const std::string& QueueName) = 0;
-    
+    virtual QueueResult DeleteQueueInTransaction(TransactionId Id,
+                                                 const std::string& QueueName) = 0;
+
     // 事务查询
     virtual QueueResult GetTransactionStatus(TransactionId Id, TransactionStatus& Status) = 0;
     virtual QueueResult GetTransactionInfo(TransactionId Id, Transaction& Info) = 0;
     virtual QueueResult GetTransactionStats(TransactionStats& Stats) = 0;
-    
+
     // 事务回调设置
     virtual void SetTransactionCommitHandler(TransactionCommitHandler Handler) = 0;
     virtual void SetTransactionRollbackHandler(TransactionRollbackHandler Handler) = 0;
     virtual void SetTransactionTimeoutHandler(TransactionTimeoutHandler Handler) = 0;
-    
+
     // 分布式事务支持
-    virtual QueueResult BeginDistributedTransaction(const std::string& CoordinatorId, const std::string& Description = "", uint32_t TimeoutMs = 30000) = 0;
+    virtual QueueResult BeginDistributedTransaction(const std::string& CoordinatorId,
+                                                    const std::string& Description = "",
+                                                    uint32_t TimeoutMs = 30000) = 0;
     virtual QueueResult PrepareTransaction(TransactionId Id) = 0;
     virtual QueueResult CommitDistributedTransaction(TransactionId Id) = 0;
-    virtual QueueResult RollbackDistributedTransaction(TransactionId Id, const std::string& Reason = "") = 0;
+    virtual QueueResult RollbackDistributedTransaction(TransactionId Id,
+                                                       const std::string& Reason = "") = 0;
 
     // 压缩和加密管理
-    virtual QueueResult SetCompressionConfig(const std::string& QueueName, const CompressionConfig& Config) = 0;
-    virtual QueueResult GetCompressionConfig(const std::string& QueueName, CompressionConfig& OutConfig) const = 0;
-    virtual QueueResult SetEncryptionConfig(const std::string& QueueName, const EncryptionConfig& Config) = 0;
-    virtual QueueResult GetEncryptionConfig(const std::string& QueueName, EncryptionConfig& OutConfig) const = 0;
-    
+    virtual QueueResult SetCompressionConfig(const std::string& QueueName,
+                                             const CompressionConfig& Config) = 0;
+    virtual QueueResult GetCompressionConfig(const std::string& QueueName,
+                                             CompressionConfig& OutConfig) const = 0;
+    virtual QueueResult SetEncryptionConfig(const std::string& QueueName,
+                                            const EncryptionConfig& Config) = 0;
+    virtual QueueResult GetEncryptionConfig(const std::string& QueueName,
+                                            EncryptionConfig& OutConfig) const = 0;
+
     // 压缩和加密统计
-    virtual QueueResult GetCompressionStats(const std::string& QueueName, CompressionStats& OutStats) const = 0;
+    virtual QueueResult GetCompressionStats(const std::string& QueueName,
+                                            CompressionStats& OutStats) const = 0;
     virtual QueueResult GetAllCompressionStats(std::vector<CompressionStats>& OutStats) const = 0;
-    virtual QueueResult GetEncryptionStats(const std::string& QueueName, EncryptionStats& OutStats) const = 0;
+    virtual QueueResult GetEncryptionStats(const std::string& QueueName,
+                                           EncryptionStats& OutStats) const = 0;
     virtual QueueResult GetAllEncryptionStats(std::vector<EncryptionStats>& OutStats) const = 0;
-    
+
     // 手动压缩和加密
-    virtual QueueResult CompressMessage(MessagePtr Message, CompressionAlgorithm Algorithm = CompressionAlgorithm::GZIP) = 0;
+    virtual QueueResult
+    CompressMessage(MessagePtr Message,
+                    CompressionAlgorithm Algorithm = CompressionAlgorithm::GZIP) = 0;
     virtual QueueResult DecompressMessage(MessagePtr Message) = 0;
-    virtual QueueResult EncryptMessage(MessagePtr Message, EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM, const EncryptionConfig& Cfg = EncryptionConfig{}) = 0;
+    virtual QueueResult
+    EncryptMessage(MessagePtr Message,
+                   EncryptionAlgorithm Algorithm = EncryptionAlgorithm::AES_256_GCM,
+                   const EncryptionConfig& Cfg = EncryptionConfig{}) = 0;
     virtual QueueResult DecryptMessage(MessagePtr Message) = 0;
 
     // 监控告警管理
     virtual QueueResult SetAlertConfig(const AlertConfig& Config) = 0;
-    virtual QueueResult GetAlertConfig(AlertType Type, const std::string& QueueName, AlertConfig& OutConfig) const = 0;
+    virtual QueueResult
+    GetAlertConfig(AlertType Type, const std::string& QueueName, AlertConfig& OutConfig) const = 0;
     virtual QueueResult GetAllAlertConfigs(std::vector<AlertConfig>& OutConfigs) const = 0;
     virtual QueueResult DeleteAlertConfig(AlertType Type, const std::string& QueueName) = 0;
-    
+
     // 告警查询
     virtual QueueResult GetActiveAlerts(std::vector<Alert>& OutAlerts) const = 0;
     virtual QueueResult GetAlertHistory(uint32_t Limit, std::vector<Alert>& OutAlerts) const = 0;
     virtual QueueResult GetAlertStats(AlertStats& OutStats) const = 0;
-    
+
     // 告警操作
     virtual QueueResult AcknowledgeAlert(uint64_t AlertId) = 0;
     virtual QueueResult ResolveAlert(uint64_t AlertId, const std::string& ResolutionNote = "") = 0;
     virtual QueueResult ClearAllAlerts() = 0;
-    
+
     // 告警回调设置
     virtual void SetAlertHandler(AlertHandler Handler) = 0;
     virtual void SetAlertConfigHandler(AlertConfigHandler Handler) = 0;
@@ -291,21 +319,23 @@ public:
     virtual QueueResult GetMemoryPoolConfig(MemoryPoolConfig& OutConfig) const = 0;
     virtual QueueResult SetBufferConfig(const BufferConfig& Config) = 0;
     virtual QueueResult GetBufferConfig(BufferConfig& OutConfig) const = 0;
-    
+
     // 性能统计
     virtual QueueResult GetPerformanceStats(PerformanceStats& OutStats) const = 0;
     virtual QueueResult ResetPerformanceStats() = 0;
-    
+
     // 内存池管理
     virtual QueueResult AllocateFromPool(size_t Size, void*& OutPtr) = 0;
     virtual QueueResult DeallocateToPool(void* Ptr, size_t Size) = 0;
     virtual QueueResult CompactMemoryPool() = 0;
-    
+
     // 零拷贝操作
-    virtual QueueResult CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer) = 0;
+    virtual QueueResult
+    CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer) = 0;
     virtual QueueResult ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer) = 0;
-    virtual QueueResult SendMessageZeroCopy(const std::string& QueueName, const ZeroCopyBuffer& Buffer) = 0;
-    
+    virtual QueueResult SendMessageZeroCopy(const std::string& QueueName,
+                                            const ZeroCopyBuffer& Buffer) = 0;
+
     // 批处理操作
     virtual QueueResult CreateBatch(uint32_t& OutBatchId) = 0;
     virtual QueueResult CreateBatchForQueue(const std::string& QueueName, uint32_t& OutBatchId) = 0;

@@ -1,12 +1,13 @@
-#include <gtest/gtest.h>
-#include <memory>
-#include <string>
-#include <vector>
-#include <chrono>
-#include <thread>
-
 #include "Shared/MessageQueue/MessageQueue.h"
 #include "Shared/MessageQueue/MessageTypes.h"
+
+#include <chrono>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <gtest/gtest.h>
 
 class MessageQueueBatchingTest : public ::testing::Test
 {
@@ -67,8 +68,8 @@ TEST_F(MessageQueueBatchingTest, BatchProcessingWorks)
     for (int i = 0; i < 15; ++i)
     {
         std::string ExpectedPayload = "Batch message " + std::to_string(i);
-        std::string ReceivedPayload(ReceivedMessages[i]->Payload.Data.begin(), 
-                                   ReceivedMessages[i]->Payload.Data.end());
+        std::string ReceivedPayload(ReceivedMessages[i]->Payload.Data.begin(),
+                                    ReceivedMessages[i]->Payload.Data.end());
         EXPECT_EQ(ReceivedPayload, ExpectedPayload);
     }
 }
@@ -82,7 +83,7 @@ TEST_F(MessageQueueBatchingTest, ZeroCopyOperationsWork)
     Queue->CreateQueue(Config);
 
     // 创建大消息数据
-    std::string LargePayload(50000, 'Z'); // 50KB 数据
+    std::string LargePayload(50000, 'Z');  // 50KB 数据
 
     // 创建零拷贝缓冲区
     Helianthus::MessageQueue::ZeroCopyBuffer Buffer;
@@ -103,8 +104,8 @@ TEST_F(MessageQueueBatchingTest, ZeroCopyOperationsWork)
     EXPECT_NE(ReceivedMessage, nullptr);
 
     // 验证消息内容
-    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(), 
-                               ReceivedMessage->Payload.Data.end());
+    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(),
+                                ReceivedMessage->Payload.Data.end());
     EXPECT_EQ(ReceivedPayload, LargePayload);
 }
 
@@ -116,12 +117,12 @@ TEST_F(MessageQueueBatchingTest, BatchPerformanceIsBetter)
     Config.Name = QueueName;
     Queue->CreateQueue(Config);
 
-    const int MessageCount = 2000; // 增大样本量以放大批处理优势
-    const int BatchSize = 100;     // 增大批大小减少往返与锁竞争
+    const int MessageCount = 2000;  // 增大样本量以放大批处理优势
+    const int BatchSize = 100;      // 增大批大小减少往返与锁竞争
 
     // 测试单个发送性能
     auto StartTime = std::chrono::high_resolution_clock::now();
-    
+
     for (int i = 0; i < MessageCount; ++i)
     {
         auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
@@ -134,14 +135,15 @@ TEST_F(MessageQueueBatchingTest, BatchPerformanceIsBetter)
     }
 
     auto SingleEndTime = std::chrono::high_resolution_clock::now();
-    auto SingleDuration = std::chrono::duration_cast<std::chrono::microseconds>(SingleEndTime - StartTime);
+    auto SingleDuration =
+        std::chrono::duration_cast<std::chrono::microseconds>(SingleEndTime - StartTime);
 
     // 清空队列
     Queue->PurgeQueue(QueueName);
 
     // 测试批处理发送性能
     StartTime = std::chrono::high_resolution_clock::now();
-    
+
     for (int batch = 0; batch < MessageCount / BatchSize; ++batch)
     {
         // 创建批处理
@@ -167,17 +169,19 @@ TEST_F(MessageQueueBatchingTest, BatchPerformanceIsBetter)
     }
 
     auto BatchEndTime = std::chrono::high_resolution_clock::now();
-    auto BatchDuration = std::chrono::duration_cast<std::chrono::microseconds>(BatchEndTime - StartTime);
+    auto BatchDuration =
+        std::chrono::duration_cast<std::chrono::microseconds>(BatchEndTime - StartTime);
 
     // 批处理应该更快，但在测试环境中可能有波动
     // 允许一定的性能波动，只要批处理不会显著更慢
-    bool PerformanceOk = (BatchDuration.count() <= SingleDuration.count() * 1.2); // 允许20%的性能波动
-    EXPECT_TRUE(PerformanceOk) << "批处理性能测试失败: 批处理时间(" << BatchDuration.count() 
+    bool PerformanceOk =
+        (BatchDuration.count() <= SingleDuration.count() * 1.2);  // 允许20%的性能波动
+    EXPECT_TRUE(PerformanceOk) << "批处理性能测试失败: 批处理时间(" << BatchDuration.count()
                                << ") 应该接近或优于单个处理时间(" << SingleDuration.count() << ")";
-    
+
     std::cout << "Single send time: " << SingleDuration.count() << " microseconds" << std::endl;
     std::cout << "Batch send time: " << BatchDuration.count() << " microseconds" << std::endl;
-    std::cout << "Performance improvement: " 
+    std::cout << "Performance improvement: "
               << (double)SingleDuration.count() / BatchDuration.count() << "x" << std::endl;
 }
 
@@ -273,19 +277,22 @@ TEST_F(MessageQueueBatchingTest, ConcurrentBatchAdditions)
     std::vector<std::thread> Workers;
     for (int t = 0; t < Threads; ++t)
     {
-        Workers.emplace_back([&, t]() {
-            for (int i = 0; i < PerThread; ++i)
+        Workers.emplace_back(
+            [&, t]()
             {
-                auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
-                std::string Payload = "Msg T" + std::to_string(t) + " #" + std::to_string(i);
-                Message->Payload.Data.assign(Payload.begin(), Payload.end());
-                Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
-                auto R = Queue->AddToBatch(BatchId, Message);
-                EXPECT_EQ(R, Helianthus::MessageQueue::QueueResult::SUCCESS);
-            }
-        });
+                for (int i = 0; i < PerThread; ++i)
+                {
+                    auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
+                    std::string Payload = "Msg T" + std::to_string(t) + " #" + std::to_string(i);
+                    Message->Payload.Data.assign(Payload.begin(), Payload.end());
+                    Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
+                    auto R = Queue->AddToBatch(BatchId, Message);
+                    EXPECT_EQ(R, Helianthus::MessageQueue::QueueResult::SUCCESS);
+                }
+            });
     }
-    for (auto& Th : Workers) Th.join();
+    for (auto& Th : Workers)
+        Th.join();
 
     Result = Queue->CommitBatch(BatchId);
     EXPECT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);

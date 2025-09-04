@@ -1,18 +1,18 @@
+#include "Shared/Common/LogCategories.h"
+#include "Shared/Common/LogCategory.h"
 #include "Shared/MessageQueue/IMessageQueue.h"
 #include "Shared/MessageQueue/MessageQueue.h"
-#include "Shared/Common/LogCategory.h"
-#include "Shared/Common/LogCategories.h"
 
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
 
 using namespace Helianthus::MessageQueue;
 
 int main()
 {
     std::cout << "=== 事务功能测试开始 ===" << std::endl;
-    
+
     // 创建消息队列实例
     auto Queue = std::make_unique<MessageQueue>();
     std::cout << "创建消息队列实例" << std::endl;
@@ -31,8 +31,8 @@ int main()
     QueueConfig Config;
     Config.Name = "transaction_test_queue";
     Config.MaxSize = 1000;
-    Config.MaxSizeBytes = 1024 * 1024 * 100; // 100MB
-    Config.MessageTtlMs = 30000; // 30秒
+    Config.MaxSizeBytes = 1024 * 1024 * 100;  // 100MB
+    Config.MessageTtlMs = 30000;              // 30秒
     Config.EnableDeadLetter = true;
     Config.EnablePriority = false;
     Config.EnableBatching = false;
@@ -46,22 +46,23 @@ int main()
     std::cout << "创建队列成功: " << Config.Name << std::endl;
 
     // 设置事务回调
-    Queue->SetTransactionCommitHandler([](TransactionId Id, bool Success, const std::string& ErrorMessage) {
-        std::cout << "事务提交回调: id=" << Id << ", success=" << (Success ? "true" : "false") 
-                  << ", error=" << ErrorMessage << std::endl;
-    });
+    Queue->SetTransactionCommitHandler(
+        [](TransactionId Id, bool Success, const std::string& ErrorMessage)
+        {
+            std::cout << "事务提交回调: id=" << Id << ", success=" << (Success ? "true" : "false")
+                      << ", error=" << ErrorMessage << std::endl;
+        });
 
-    Queue->SetTransactionRollbackHandler([](TransactionId Id, const std::string& Reason) {
-        std::cout << "事务回滚回调: id=" << Id << ", reason=" << Reason << std::endl;
-    });
+    Queue->SetTransactionRollbackHandler(
+        [](TransactionId Id, const std::string& Reason)
+        { std::cout << "事务回滚回调: id=" << Id << ", reason=" << Reason << std::endl; });
 
-    Queue->SetTransactionTimeoutHandler([](TransactionId Id) {
-        std::cout << "事务超时回调: id=" << Id << std::endl;
-    });
+    Queue->SetTransactionTimeoutHandler([](TransactionId Id)
+                                        { std::cout << "事务超时回调: id=" << Id << std::endl; });
 
     // 测试1：成功的事务
     std::cout << "=== 测试1：成功的事务 ===" << std::endl;
-    
+
     TransactionId TxId1 = Queue->BeginTransaction("测试事务1", 10000);
     std::cout << "开始事务: id=" << TxId1 << std::endl;
 
@@ -71,8 +72,10 @@ int main()
     Message1->Header.Priority = MessagePriority::NORMAL;
     Message1->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
     Message1->Header.ExpireTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count() + 60000;
-    
+                                      std::chrono::system_clock::now().time_since_epoch())
+                                      .count() +
+                                  60000;
+
     std::string Payload1 = "事务测试消息1";
     Message1->Payload.Data = std::vector<char>(Payload1.begin(), Payload1.end());
     Message1->Payload.Size = Message1->Payload.Data.size();
@@ -91,12 +94,13 @@ int main()
     }
     else
     {
-        std::cout << "事务提交失败: id=" << TxId1 << ", error=" << static_cast<int>(CommitResult1) << std::endl;
+        std::cout << "事务提交失败: id=" << TxId1 << ", error=" << static_cast<int>(CommitResult1)
+                  << std::endl;
     }
 
     // 测试2：回滚的事务
     std::cout << "=== 测试2：回滚的事务 ===" << std::endl;
-    
+
     TransactionId TxId2 = Queue->BeginTransaction("测试事务2", 10000);
     std::cout << "开始事务: id=" << TxId2 << std::endl;
 
@@ -106,8 +110,10 @@ int main()
     Message2->Header.Priority = MessagePriority::NORMAL;
     Message2->Header.Delivery = DeliveryMode::AT_LEAST_ONCE;
     Message2->Header.ExpireTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count() + 60000;
-    
+                                      std::chrono::system_clock::now().time_since_epoch())
+                                      .count() +
+                                  60000;
+
     std::string Payload2 = "事务测试消息2（将被回滚）";
     Message2->Payload.Data = std::vector<char>(Payload2.begin(), Payload2.end());
     Message2->Payload.Size = Message2->Payload.Data.size();
@@ -126,12 +132,13 @@ int main()
     }
     else
     {
-        std::cout << "事务回滚失败: id=" << TxId2 << ", error=" << static_cast<int>(RollbackResult2) << std::endl;
+        std::cout << "事务回滚失败: id=" << TxId2 << ", error=" << static_cast<int>(RollbackResult2)
+                  << std::endl;
     }
 
     // 测试3：查看事务统计
     std::cout << "=== 测试3：查看事务统计 ===" << std::endl;
-    
+
     TransactionStats Stats;
     auto StatsResult = Queue->GetTransactionStats(Stats);
     if (StatsResult == QueueResult::SUCCESS)
@@ -150,11 +157,11 @@ int main()
 
     // 测试4：查看事务状态
     std::cout << "=== 测试4：查看事务状态 ===" << std::endl;
-    
+
     TransactionStatus Status1, Status2;
     Queue->GetTransactionStatus(TxId1, Status1);
     Queue->GetTransactionStatus(TxId2, Status2);
-    
+
     std::cout << "事务1状态: " << static_cast<int>(Status1) << std::endl;
     std::cout << "事务2状态: " << static_cast<int>(Status2) << std::endl;
 

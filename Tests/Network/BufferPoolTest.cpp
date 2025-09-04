@@ -278,5 +278,5 @@ TEST_F(BufferPoolTest, MemoryEfficiency)
 
     // 内存使用应该保持稳定（池化应该避免频繁的内存分配/释放）
     EXPECT_LE(FinalMemory, InitialMemory * 3);  // 内存使用不应该过度增长（允许一些增长）
-    EXPECT_EQ(FinalStats.InUseBuffers, 0);      // 所有缓冲区都应该被释放
+    EXPECT_EQ(FinalStats.InUseBuffers, 0);  // 所有缓冲区都应该被释放
 }

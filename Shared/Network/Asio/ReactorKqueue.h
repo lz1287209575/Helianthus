@@ -22,7 +22,7 @@ public:
     int PollOnce(int TimeoutMs) override;
 
     // 批处理相关
-    int  PollBatch(int TimeoutMs, size_t MaxEvents = 64) override;
+    int PollBatch(int TimeoutMs, size_t MaxEvents = 64) override;
     void SetBatchConfig(const BatchConfig& Config) override;
     BatchConfig GetBatchConfig() const override;
 

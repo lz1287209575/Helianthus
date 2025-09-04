@@ -77,7 +77,8 @@ TEST_F(SimpleTcpTest, BasicConnection)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [this, ServerReady = std::ref(ServerReady)](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [this, ServerReady = std::ref(ServerReady)](NetworkError Err,
+                                                    std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -91,21 +92,24 @@ TEST_F(SimpleTcpTest, BasicConnection)
 
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
-    
+
     // 使用异步连接
     std::atomic<bool> ConnectCompleted = false;
     NetworkError ConnectResult = NetworkError::NONE;
-    
-    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-        ConnectResult = Err;
-        ConnectCompleted = true;
-    });
-    
+
+    ClientSocket->AsyncConnect(ServerAddr,
+                               [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                               {
+                                   ConnectResult = Err;
+                                   ConnectCompleted = true;
+                               });
+
     // 等待连接完成
-    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    
+
     ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
     ClientConnected = true;
@@ -132,7 +136,11 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [this, ServerReady = std::ref(ServerReady), MessageReceived = std::ref(MessageReceived), ReceivedMessage = std::ref(ReceivedMessage)](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [this,
+         ServerReady = std::ref(ServerReady),
+         MessageReceived = std::ref(MessageReceived),
+         ReceivedMessage = std::ref(ReceivedMessage)](NetworkError Err,
+                                                      std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -144,18 +152,23 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
             std::cout << "Starting AsyncReceive on accepted socket" << std::endl;
             // 在夹具上保存缓冲区，保证生命周期
             this->ServerRecvBuffer = std::make_shared<std::vector<char>>(1024);
-            ServerSocket->AsyncReceive(this->ServerRecvBuffer->data(),
-                                      1024,
-                                      [this, MessageReceived = std::ref(MessageReceived), ReceivedMessage = std::ref(ReceivedMessage)](NetworkError Err, size_t Bytes, NetworkAddress)
-                                      {
-                                          std::cout << "AsyncReceive callback called with error: " << static_cast<int>(Err) << ", bytes: " << Bytes << std::endl;
-                                          if (Err == NetworkError::NONE && Bytes > 0)
-                                          {
-                                              ReceivedMessage.get() = std::string(this->ServerRecvBuffer->data(), Bytes);
-                                              MessageReceived.get() = true;
-                                              std::cout << "Message received: " << ReceivedMessage.get() << std::endl;
-                                          }
-                                      });
+            ServerSocket->AsyncReceive(
+                this->ServerRecvBuffer->data(),
+                1024,
+                [this,
+                 MessageReceived = std::ref(MessageReceived),
+                 ReceivedMessage =
+                     std::ref(ReceivedMessage)](NetworkError Err, size_t Bytes, NetworkAddress)
+                {
+                    std::cout << "AsyncReceive callback called with error: "
+                              << static_cast<int>(Err) << ", bytes: " << Bytes << std::endl;
+                    if (Err == NetworkError::NONE && Bytes > 0)
+                    {
+                        ReceivedMessage.get() = std::string(this->ServerRecvBuffer->data(), Bytes);
+                        MessageReceived.get() = true;
+                        std::cout << "Message received: " << ReceivedMessage.get() << std::endl;
+                    }
+                });
         });
 
     // 等待服务器准备就绪
@@ -163,21 +176,24 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
 
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
-    
+
     // 使用异步连接
     std::atomic<bool> ConnectCompleted = false;
     NetworkError ConnectResult = NetworkError::NONE;
-    
-    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-        ConnectResult = Err;
-        ConnectCompleted = true;
-    });
-    
+
+    ClientSocket->AsyncConnect(ServerAddr,
+                               [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                               {
+                                   ConnectResult = Err;
+                                   ConnectCompleted = true;
+                               });
+
     // 等待连接完成
-    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    
+
     ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
@@ -189,8 +205,9 @@ TEST_F(SimpleTcpTest, SimpleSendReceive)
     ClientSocket->AsyncSend(TestMessage.data(),
                             TestMessage.size(),
                             ServerAddr,
-                            [](NetworkError Err, size_t Bytes) { EXPECT_EQ(Err, NetworkError::NONE); });
-    
+                            [](NetworkError Err, size_t Bytes)
+                            { EXPECT_EQ(Err, NetworkError::NONE); });
+
     // 立即等待一小段时间确保数据传输
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 

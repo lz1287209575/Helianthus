@@ -1,9 +1,10 @@
-#include <gtest/gtest.h>
-#include <thread>
+#include "Shared/MessageQueue/MessageQueue.h"
+
 #include <chrono>
 #include <string>
+#include <thread>
 
-#include "Shared/MessageQueue/MessageQueue.h"
+#include <gtest/gtest.h>
 
 using namespace Helianthus::MessageQueue;
 
@@ -11,7 +12,9 @@ TEST(PrometheusTransactionMetricsTest, ExportsTransactionCounters)
 {
     MessageQueue MQ;
     ASSERT_EQ(MQ.Initialize(), QueueResult::SUCCESS);
-    QueueConfig C; C.Name = "tx_metrics_q"; C.Persistence = PersistenceMode::MEMORY_ONLY;
+    QueueConfig C;
+    C.Name = "tx_metrics_q";
+    C.Persistence = PersistenceMode::MEMORY_ONLY;
     ASSERT_EQ(MQ.CreateQueue(C), QueueResult::SUCCESS);
 
     // 触发一次提交与一次回滚
@@ -59,5 +62,3 @@ TEST(PrometheusTransactionMetricsTest, ExportsTransactionCounters)
 
     MQ.Shutdown();
 }
-
-

@@ -58,7 +58,10 @@ bool ReactorKqueue::Add(Fd Handle, EventMask Mask, IoCallback Callback)
 bool ReactorKqueue::Mod(Fd Handle, EventMask Mask)
 {
     Masks[Handle] = Mask;
-    struct timespec ts{0, 0};
+    struct timespec ts
+    {
+        0, 0
+    };
     struct kevent Changes[2];
     int n = 0;
     EV_SET(&Changes[n++],
@@ -91,7 +94,10 @@ bool ReactorKqueue::Del(Fd Handle)
 {
     Masks.erase(Handle);
     Callbacks.erase(Handle);
-    struct timespec ts{0, 0};
+    struct timespec ts
+    {
+        0, 0
+    };
     struct kevent Changes[2];
     int n = 0;
     EV_SET(&Changes[n++], Handle, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
@@ -164,7 +170,8 @@ int ReactorKqueue::PollOnce(int TimeoutMs)
 
 int ReactorKqueue::PollBatch(int TimeoutMs, size_t MaxEvents)
 {
-    if (MaxEvents == 0) MaxEvents = 64;
+    if (MaxEvents == 0)
+        MaxEvents = 64;
     struct timespec ts;
     if (TimeoutMs < 0)
     {
@@ -182,7 +189,8 @@ int ReactorKqueue::PollBatch(int TimeoutMs, size_t MaxEvents)
     auto End = std::chrono::high_resolution_clock::now();
     if (n <= 0)
     {
-        if (n == 0 || errno == EINTR) return 0;
+        if (n == 0 || errno == EINTR)
+            return 0;
         return -1;
     }
     size_t BatchCount = 0;
@@ -190,24 +198,30 @@ int ReactorKqueue::PollBatch(int TimeoutMs, size_t MaxEvents)
     {
         Fd fd = static_cast<Fd>(EvList[i].ident);
         auto it = Callbacks.find(fd);
-        if (it == Callbacks.end()) continue;
+        if (it == Callbacks.end())
+            continue;
         EventMask mask = EventMask::None;
-        if (EvList[i].filter == EVFILT_READ)  mask = mask | EventMask::Read;
-        if (EvList[i].filter == EVFILT_WRITE) mask = mask | EventMask::Write;
-        if (EvList[i].flags & EV_ERROR)       mask = mask | EventMask::Error;
+        if (EvList[i].filter == EVFILT_READ)
+            mask = mask | EventMask::Read;
+        if (EvList[i].filter == EVFILT_WRITE)
+            mask = mask | EventMask::Write;
+        if (EvList[i].flags & EV_ERROR)
+            mask = mask | EventMask::Error;
         it->second(mask);
         BatchCount++;
     }
     PerfStats.TotalEvents += static_cast<size_t>(n);
     PerfStats.TotalBatches++;
     PerfStats.MaxBatchSize = std::max(PerfStats.MaxBatchSize, static_cast<size_t>(n));
-    if (PerfStats.MinBatchSize == 0) PerfStats.MinBatchSize = static_cast<size_t>(n);
-    else PerfStats.MinBatchSize = std::min(PerfStats.MinBatchSize, static_cast<size_t>(n));
+    if (PerfStats.MinBatchSize == 0)
+        PerfStats.MinBatchSize = static_cast<size_t>(n);
+    else
+        PerfStats.MinBatchSize = std::min(PerfStats.MinBatchSize, static_cast<size_t>(n));
     double Ms = std::chrono::duration<double, std::milli>(End - Start).count();
     // 简单EMA
     PerfStats.AverageProcessingTimeMs = PerfStats.AverageProcessingTimeMs * 0.9 + Ms * 0.1;
-    PerfStats.AverageBatchSize = static_cast<size_t>(
-        (PerfStats.AverageBatchSize * 0.9) + (static_cast<double>(n) * 0.1));
+    PerfStats.AverageBatchSize =
+        static_cast<size_t>((PerfStats.AverageBatchSize * 0.9) + (static_cast<double>(n) * 0.1));
     return n;
 }
 

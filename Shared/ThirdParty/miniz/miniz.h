@@ -6,16 +6,24 @@
 // This is a lightweight dependency for gzip/zlib-compatible compression.
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-typedef unsigned char mz_uint8;
-typedef unsigned int mz_uint;
-typedef unsigned long mz_ulong;
+    typedef unsigned char mz_uint8;
+    typedef unsigned int mz_uint;
+    typedef unsigned long mz_ulong;
 
-// Compression levels: 0-9
-int mz_compress2(unsigned char *pDest, mz_ulong *pDest_len, const unsigned char *pSource, mz_ulong source_len, int level);
-int mz_uncompress(unsigned char *pDest, mz_ulong *pDest_len, const unsigned char *pSource, mz_ulong source_len);
+    // Compression levels: 0-9
+    int mz_compress2(unsigned char *pDest,
+                     mz_ulong *pDest_len,
+                     const unsigned char *pSource,
+                     mz_ulong source_len,
+                     int level);
+    int mz_uncompress(unsigned char *pDest,
+                      mz_ulong *pDest_len,
+                      const unsigned char *pSource,
+                      mz_ulong source_len);
 
 // Return codes
 #define MZ_OK 0
@@ -26,6 +34,4 @@ int mz_uncompress(unsigned char *pDest, mz_ulong *pDest_len, const unsigned char
 }
 #endif
 
-#endif // MINIZ_SINGLE_HEADER_INCLUDED
-
-
+#endif  // MINIZ_SINGLE_HEADER_INCLUDED

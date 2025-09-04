@@ -6,9 +6,9 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <mutex>
 
 #include <gtest/gtest.h>
 
@@ -77,8 +77,7 @@ TEST_F(UdpAsyncEchoTest, SimpleEcho)
     auto Protocol = std::make_shared<MessageProtocol>();
 
     Protocol->SetMessageHandler(
-        [&MessageReceived, &ReceivedMessage, ServerSocket, Protocol](
-            const std::string& Message)
+        [&MessageReceived, &ReceivedMessage, ServerSocket, Protocol](const std::string& Message)
         {
             ReceivedMessage = Message;
             MessageReceived = true;
@@ -86,12 +85,12 @@ TEST_F(UdpAsyncEchoTest, SimpleEcho)
             // 回显消息
             auto EchoData = MessageProtocol::EncodeMessage(Message);
             ServerSocket->AsyncSendTo(EchoData.data(),
-                                     EchoData.size(),
-                                     NetworkAddress("127.0.0.1", TestPort + 1),
-                                     [](NetworkError, size_t)
-                                     {
-                                         // 发送完成
-                                     });
+                                      EchoData.size(),
+                                      NetworkAddress("127.0.0.1", TestPort + 1),
+                                      [](NetworkError, size_t)
+                                      {
+                                          // 发送完成
+                                      });
         });
 
     // 开始接收数据
@@ -100,15 +99,15 @@ TEST_F(UdpAsyncEchoTest, SimpleEcho)
     {
         auto Buffer = std::make_shared<std::vector<char>>(1024);
         ServerSocket->AsyncReceive(Buffer->data(),
-                                  1024,
-                                  [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
-                                  {
-                                      if (Err == NetworkError::NONE && Bytes > 0)
-                                      {
-                                          Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                          (*StartReceive)();  // 继续接收
-                                      }
-                                  });
+                                   1024,
+                                   [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                   {
+                                       if (Err == NetworkError::NONE && Bytes > 0)
+                                       {
+                                           Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                                           (*StartReceive)();  // 继续接收
+                                       }
+                                   });
     };
     (*StartReceive)();
 
@@ -194,12 +193,12 @@ TEST_F(UdpAsyncEchoTest, MultipleMessages)
             // 回显消息
             auto EchoData = MessageProtocol::EncodeMessage(Message);
             ServerSocket->AsyncSendTo(EchoData.data(),
-                                     EchoData.size(),
-                                     NetworkAddress("127.0.0.1", TestPort + 3),
-                                     [](NetworkError, size_t)
-                                     {
-                                         // 发送完成
-                                     });
+                                      EchoData.size(),
+                                      NetworkAddress("127.0.0.1", TestPort + 3),
+                                      [](NetworkError, size_t)
+                                      {
+                                          // 发送完成
+                                      });
         });
 
     // 开始接收数据
@@ -208,15 +207,15 @@ TEST_F(UdpAsyncEchoTest, MultipleMessages)
     {
         auto Buffer = std::make_shared<std::vector<char>>(1024);
         ServerSocket->AsyncReceive(Buffer->data(),
-                                  1024,
-                                  [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
-                                  {
-                                      if (Err == NetworkError::NONE && Bytes > 0)
-                                      {
-                                          Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                          (*StartReceive)();  // 继续接收
-                                      }
-                                  });
+                                   1024,
+                                   [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                   {
+                                       if (Err == NetworkError::NONE && Bytes > 0)
+                                       {
+                                           Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                                           (*StartReceive)();  // 继续接收
+                                       }
+                                   });
     };
     (*StartReceive)();
 
@@ -240,11 +239,7 @@ TEST_F(UdpAsyncEchoTest, MultipleMessages)
 
     // 发送多个测试消息
     std::vector<std::string> TestMessages = {
-        "UDPTest:Message1",
-        "UDPTest:Message2", 
-        "UDPTest:Message3",
-        "UDPTest:Message4"
-    };
+        "UDPTest:Message1", "UDPTest:Message2", "UDPTest:Message3", "UDPTest:Message4"};
 
     for (const auto& TestMessage : TestMessages)
     {
@@ -252,7 +247,8 @@ TEST_F(UdpAsyncEchoTest, MultipleMessages)
         ClientSocket->AsyncSendTo(MessageData.data(),
                                   MessageData.size(),
                                   ServerAddr,
-                                  [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
+                                  [](NetworkError Err, size_t)
+                                  { EXPECT_EQ(Err, NetworkError::NONE); });
     }
 
     // 开始接收回显
@@ -306,8 +302,7 @@ TEST_F(UdpAsyncEchoTest, LargeMessageEcho)
     auto Protocol = std::make_shared<MessageProtocol>();
 
     Protocol->SetMessageHandler(
-        [&MessageReceived, &ReceivedMessage, ServerSocket, Protocol](
-            const std::string& Message)
+        [&MessageReceived, &ReceivedMessage, ServerSocket, Protocol](const std::string& Message)
         {
             ReceivedMessage = Message;
             MessageReceived = true;
@@ -315,29 +310,29 @@ TEST_F(UdpAsyncEchoTest, LargeMessageEcho)
             // 回显消息
             auto EchoData = MessageProtocol::EncodeMessage(Message);
             ServerSocket->AsyncSendTo(EchoData.data(),
-                                     EchoData.size(),
-                                     NetworkAddress("127.0.0.1", TestPort + 5),
-                                     [](NetworkError, size_t)
-                                     {
-                                         // 发送完成
-                                     });
+                                      EchoData.size(),
+                                      NetworkAddress("127.0.0.1", TestPort + 5),
+                                      [](NetworkError, size_t)
+                                      {
+                                          // 发送完成
+                                      });
         });
 
     // 开始接收数据
     auto StartReceive = std::make_shared<std::function<void()>>();
     *StartReceive = [ServerSocket, Protocol, StartReceive]()
     {
-        auto Buffer = std::make_shared<std::vector<char>>(8192); // 更大的缓冲区
+        auto Buffer = std::make_shared<std::vector<char>>(8192);  // 更大的缓冲区
         ServerSocket->AsyncReceive(Buffer->data(),
-                                  8192,
-                                  [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
-                                  {
-                                      if (Err == NetworkError::NONE && Bytes > 0)
-                                      {
-                                          Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                          (*StartReceive)();  // 继续接收
-                                      }
-                                  });
+                                   8192,
+                                   [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes)
+                                   {
+                                       if (Err == NetworkError::NONE && Bytes > 0)
+                                       {
+                                           Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                                           (*StartReceive)();  // 继续接收
+                                       }
+                                   });
     };
     (*StartReceive)();
 
@@ -361,7 +356,7 @@ TEST_F(UdpAsyncEchoTest, LargeMessageEcho)
     ASSERT_EQ(ClientBindResult, NetworkError::NONE);
 
     // 发送大消息
-    std::string LargeMessage = "LargeData:" + std::string(1990, 'X'); // 2000字节消息
+    std::string LargeMessage = "LargeData:" + std::string(1990, 'X');  // 2000字节消息
     auto MessageData = MessageProtocol::EncodeMessage(LargeMessage);
     ClientSocket->AsyncSendTo(MessageData.data(),
                               MessageData.size(),

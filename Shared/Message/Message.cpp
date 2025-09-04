@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
-#include <cstdint>
 
 namespace Helianthus::Message
 {

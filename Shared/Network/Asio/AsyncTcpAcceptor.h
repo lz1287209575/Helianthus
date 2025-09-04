@@ -15,7 +15,8 @@ class AsyncTcpSocket;  // 前向声明
 class AsyncTcpAcceptor
 {
 public:
-    using AcceptHandler = std::function<void(Network::NetworkError, std::shared_ptr<AsyncTcpSocket>)>;  // 返回新连接对象
+    using AcceptHandler = std::function<void(Network::NetworkError,
+                                             std::shared_ptr<AsyncTcpSocket>)>;  // 返回新连接对象
     using AcceptExHandler = std::function<void(Network::NetworkError, Fd)>;
 
     explicit AsyncTcpAcceptor(std::shared_ptr<IoContext> Ctx);
@@ -32,7 +33,7 @@ private:
     std::shared_ptr<Proactor> ProactorPtr;
     Network::Sockets::TcpSocket Socket;
     AcceptHandler PendingAccept;
-    bool IsRegistered = false;  // 是否已注册到 Reactor
+    bool IsRegistered = false;       // 是否已注册到 Reactor
     mutable std::mutex SocketMutex;  // 保护 Socket 的访问
 };
 }  // namespace Helianthus::Network::Asio

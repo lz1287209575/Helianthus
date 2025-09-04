@@ -21,23 +21,23 @@ namespace Helianthus::MessageQueue
 // 健康检查结果
 enum class HealthCheckResult : uint8_t
 {
-    HEALTHY = 0,        // 健康
-    UNHEALTHY = 1,      // 不健康
-    DEGRADED = 2,       // 降级
-    CRITICAL = 3,       // 严重
-    UNKNOWN = 4         // 未知
+    HEALTHY = 0,    // 健康
+    UNHEALTHY = 1,  // 不健康
+    DEGRADED = 2,   // 降级
+    CRITICAL = 3,   // 严重
+    UNKNOWN = 4     // 未知
 };
 
 // 健康检查类型
 enum class HealthCheckType : uint8_t
 {
-    QUEUE_HEALTH = 0,           // 队列健康检查
-    PERSISTENCE_HEALTH = 1,     // 持久化健康检查
-    MEMORY_HEALTH = 2,          // 内存健康检查
-    DISK_HEALTH = 3,            // 磁盘健康检查
-    NETWORK_HEALTH = 4,         // 网络健康检查
-    DATABASE_HEALTH = 5,        // 数据库健康检查
-    CUSTOM_HEALTH = 6           // 自定义健康检查
+    QUEUE_HEALTH = 0,        // 队列健康检查
+    PERSISTENCE_HEALTH = 1,  // 持久化健康检查
+    MEMORY_HEALTH = 2,       // 内存健康检查
+    DISK_HEALTH = 3,         // 磁盘健康检查
+    NETWORK_HEALTH = 4,      // 网络健康检查
+    DATABASE_HEALTH = 5,     // 数据库健康检查
+    CUSTOM_HEALTH = 6        // 自定义健康检查
 };
 
 // 健康检查状态
@@ -61,13 +61,13 @@ struct HealthCheckStatus
 struct HealthCheckConfig
 {
     HealthCheckType Type = HealthCheckType::QUEUE_HEALTH;
-    uint32_t IntervalMs = 30000;        // 检查间隔（毫秒）
-    uint32_t TimeoutMs = 5000;          // 超时时间（毫秒）
-    uint32_t UnhealthyThreshold = 3;    // 不健康阈值
-    uint32_t HealthyThreshold = 2;      // 健康阈值
-    bool Enabled = true;                // 是否启用
-    std::string QueueName;              // 队列名称（队列健康检查时使用）
-    std::string CustomEndpoint;         // 自定义端点
+    uint32_t IntervalMs = 30000;      // 检查间隔（毫秒）
+    uint32_t TimeoutMs = 5000;        // 超时时间（毫秒）
+    uint32_t UnhealthyThreshold = 3;  // 不健康阈值
+    uint32_t HealthyThreshold = 2;    // 健康阈值
+    bool Enabled = true;              // 是否启用
+    std::string QueueName;            // 队列名称（队列健康检查时使用）
+    std::string CustomEndpoint;       // 自定义端点
     std::unordered_map<std::string, std::string> CustomParameters;
 };
 
@@ -88,7 +88,8 @@ struct OverallHealthStatus
 };
 
 // 健康检查回调函数类型
-using HealthCheckCallback = std::function<void(HealthCheckType Type, const HealthCheckStatus& Status)>;
+using HealthCheckCallback =
+    std::function<void(HealthCheckType Type, const HealthCheckStatus& Status)>;
 using OverallHealthCallback = std::function<void(const OverallHealthStatus& Status)>;
 
 // 健康检查器接口
@@ -199,7 +200,7 @@ private:
     mutable std::shared_mutex HealthCheckMutex;
     std::unordered_map<HealthCheckType, HealthCheckEntry> HealthChecks;
     OverallHealthStatus OverallStatus;
-    
+
     // 回调函数
     HealthCheckCallback HealthCheckCallbackFunc;
     OverallHealthCallback OverallHealthCallbackFunc;
@@ -213,7 +214,7 @@ private:
     HealthCheckStatus PerformNetworkHealthCheck(const HealthCheckConfig& Config);
     HealthCheckStatus PerformDatabaseHealthCheck(const HealthCheckConfig& Config);
     HealthCheckStatus PerformCustomHealthCheck(const HealthCheckConfig& Config);
-    
+
     void UpdateOverallHealthStatus();
     void NotifyHealthCheckCallback(HealthCheckType Type, const HealthCheckStatus& Status);
     void NotifyOverallHealthCallback(const OverallHealthStatus& Status);
@@ -229,4 +230,4 @@ HealthChecker& GetHealthChecker();
 bool InitializeHealthChecker();
 void ShutdownHealthChecker();
 
-} // namespace Helianthus::MessageQueue
+}  // namespace Helianthus::MessageQueue

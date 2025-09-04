@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../Common/Types.h"
 #include <atomic>
 #include <functional>
 #include <map>
@@ -9,6 +8,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "../Common/Types.h"
 
 namespace Helianthus::Config
 {
@@ -36,14 +37,20 @@ struct ConfigValue
     std::unordered_map<std::string, std::string> ObjectValue;
 
     ConfigValue() = default;
-    
+
     // 构造函数
     ConfigValue(const std::string& Value) : Type(ConfigValueType::STRING), StringValue(Value) {}
     ConfigValue(int64_t Value) : Type(ConfigValueType::INTEGER), IntValue(Value) {}
     ConfigValue(double Value) : Type(ConfigValueType::FLOAT), FloatValue(Value) {}
     ConfigValue(bool Value) : Type(ConfigValueType::BOOLEAN), BoolValue(Value) {}
-    ConfigValue(const std::vector<std::string>& Value) : Type(ConfigValueType::ARRAY), ArrayValue(Value) {}
-    ConfigValue(const std::unordered_map<std::string, std::string>& Value) : Type(ConfigValueType::OBJECT), ObjectValue(Value) {}
+    ConfigValue(const std::vector<std::string>& Value)
+        : Type(ConfigValueType::ARRAY), ArrayValue(Value)
+    {
+    }
+    ConfigValue(const std::unordered_map<std::string, std::string>& Value)
+        : Type(ConfigValueType::OBJECT), ObjectValue(Value)
+    {
+    }
 
     // 类型转换方法
     std::string AsString() const;
@@ -71,12 +78,17 @@ struct ConfigItem
     std::function<bool(const ConfigValue&)> Validator;
 
     ConfigItem() = default;
-    ConfigItem(const std::string& InKey, const ConfigValue& InValue, const std::string& InDescription = "")
-        : Key(InKey), Value(InValue), Description(InDescription) {}
+    ConfigItem(const std::string& InKey,
+               const ConfigValue& InValue,
+               const std::string& InDescription = "")
+        : Key(InKey), Value(InValue), Description(InDescription)
+    {
+    }
 };
 
 // 配置变更回调
-using ConfigChangeCallback = std::function<void(const std::string& Key, const ConfigValue& OldValue, const ConfigValue& NewValue)>;
+using ConfigChangeCallback = std::function<void(
+    const std::string& Key, const ConfigValue& OldValue, const ConfigValue& NewValue)>;
 
 // 配置验证器
 using ConfigValidator = std::function<bool(const std::string& Key, const ConfigValue& Value)>;
@@ -112,7 +124,8 @@ public:
     bool SetFloat(const std::string& Key, double Value);
     bool SetBool(const std::string& Key, bool Value);
     bool SetArray(const std::string& Key, const std::vector<std::string>& Value);
-    bool SetObject(const std::string& Key, const std::unordered_map<std::string, std::string>& Value);
+    bool SetObject(const std::string& Key,
+                   const std::unordered_map<std::string, std::string>& Value);
 
     ConfigValue GetValue(const std::string& Key) const;
     std::string GetString(const std::string& Key, const std::string& Default = "") const;
@@ -163,7 +176,7 @@ public:
     size_t GetConfigItemCount() const;
     std::vector<std::string> GetModifiedKeys() const;
     void ClearModifiedFlags();
-    
+
     // 重新加载配置
     bool ReloadConfig();
 
@@ -175,7 +188,9 @@ public:
 private:
     // 内部辅助方法
     bool ValidateValue(const std::string& Key, const ConfigValue& Value) const;
-    void NotifyChangeCallbacks(const std::string& Key, const ConfigValue& OldValue, const ConfigValue& NewValue);
+    void NotifyChangeCallbacks(const std::string& Key,
+                               const ConfigValue& OldValue,
+                               const ConfigValue& NewValue);
     bool ParseConfigLine(const std::string& Line, std::string& Key, ConfigValue& Value);
     std::string EscapeString(const std::string& Str) const;
     std::string UnescapeString(const std::string& Str) const;
@@ -212,25 +227,25 @@ extern std::unique_ptr<ConfigManager> GlobalConfigManager;
 // 便捷的全局配置访问函数
 namespace Global
 {
-    bool InitializeConfig(const std::string& ConfigPath = "config/");
-    void ShutdownConfig();
-    
-    // 便捷的配置访问
-    std::string GetString(const std::string& Key, const std::string& Default = "");
-    int64_t GetInt(const std::string& Key, int64_t Default = 0);
-    double GetFloat(const std::string& Key, double Default = 0.0);
-    bool GetBool(const std::string& Key, bool Default = false);
-    
-    // 配置设置
-    bool SetString(const std::string& Key, const std::string& Value);
-    bool SetInt(const std::string& Key, int64_t Value);
-    bool SetFloat(const std::string& Key, double Value);
-    bool SetBool(const std::string& Key, bool Value);
-    
-    // 配置验证
-    bool ValidateConfig();
-    bool ReloadConfig();
-}
+bool InitializeConfig(const std::string& ConfigPath = "config/");
+void ShutdownConfig();
+
+// 便捷的配置访问
+std::string GetString(const std::string& Key, const std::string& Default = "");
+int64_t GetInt(const std::string& Key, int64_t Default = 0);
+double GetFloat(const std::string& Key, double Default = 0.0);
+bool GetBool(const std::string& Key, bool Default = false);
+
+// 配置设置
+bool SetString(const std::string& Key, const std::string& Value);
+bool SetInt(const std::string& Key, int64_t Value);
+bool SetFloat(const std::string& Key, double Value);
+bool SetBool(const std::string& Key, bool Value);
+
+// 配置验证
+bool ValidateConfig();
+bool ReloadConfig();
+}  // namespace Global
 
 // 配置模板类
 class ConfigTemplate
@@ -244,4 +259,4 @@ public:
     static void LoadPerformanceDefaults(ConfigManager& Manager);
 };
 
-} // namespace Helianthus::Config
+}  // namespace Helianthus::Config

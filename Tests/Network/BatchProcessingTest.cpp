@@ -1,10 +1,12 @@
-#include <gtest/gtest.h>
 #include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/Reactor.h"
+
 #include <atomic>
-#include <thread>
 #include <chrono>
+#include <thread>
 #include <vector>
+
+#include <gtest/gtest.h>
 #if !defined(_WIN32)
     #include <sys/eventfd.h>
     #include <unistd.h>
@@ -97,21 +99,23 @@ TEST_F(BatchProcessingTest, TaskBatchProcessing)
     // 启动多个线程提交任务
     for (int i = 0; i < 4; ++i)
     {
-        Threads.emplace_back([this, &TaskCounter]() {
-            for (int j = 0; j < 100; ++j)
+        Threads.emplace_back(
+            [this, &TaskCounter]()
             {
-                Context->Post([&TaskCounter]() {
-                    TaskCounter.fetch_add(1);
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
-                });
-            }
-        });
+                for (int j = 0; j < 100; ++j)
+                {
+                    Context->Post(
+                        [&TaskCounter]()
+                        {
+                            TaskCounter.fetch_add(1);
+                            std::this_thread::sleep_for(std::chrono::microseconds(10));
+                        });
+                }
+            });
     }
 
     // 启动事件循环
-    std::thread RunThread([this]() {
-        Context->RunBatch();
-    });
+    std::thread RunThread([this]() { Context->RunBatch(); });
 
     // 等待所有线程完成
     for (auto& Thread : Threads)
@@ -212,15 +216,11 @@ TEST_F(BatchProcessingTest, PerformanceComparison)
         // 提交任务
         for (int i = 0; i < NumTasks; ++i)
         {
-            Context->Post([&TaskCounter]() {
-                TaskCounter.fetch_add(1);
-            });
+            Context->Post([&TaskCounter]() { TaskCounter.fetch_add(1); });
         }
 
         // 启动事件循环
-        std::thread RunThread([this]() {
-            Context->Run();
-        });
+        std::thread RunThread([this]() { Context->Run(); });
 
         // 等待任务完成
         while (TaskCounter.load() < NumTasks)
@@ -258,15 +258,11 @@ TEST_F(BatchProcessingTest, PerformanceComparison)
         // 提交任务
         for (int i = 0; i < NumTasks; ++i)
         {
-            Context->Post([&TaskCounter]() {
-                TaskCounter.fetch_add(1);
-            });
+            Context->Post([&TaskCounter]() { TaskCounter.fetch_add(1); });
         }
 
         // 启动批处理事件循环
-        std::thread RunThread([this]() {
-            Context->RunBatch();
-        });
+        std::thread RunThread([this]() { Context->RunBatch(); });
 
         // 等待任务完成
         while (TaskCounter.load() < NumTasks)

@@ -1,9 +1,10 @@
-#include <gtest/gtest.h>
+#include "Shared/MessageQueue/MessageQueue.h"
+
+#include <chrono>
 #include <sstream>
 #include <thread>
-#include <chrono>
 
-#include "Shared/MessageQueue/MessageQueue.h"
+#include <gtest/gtest.h>
 
 using namespace Helianthus::MessageQueue;
 
@@ -11,7 +12,9 @@ TEST(PrometheusTransactionMetricsExtendedTest, CoversTimeoutFailedAndAverages)
 {
     MessageQueue MQ;
     ASSERT_EQ(MQ.Initialize(), QueueResult::SUCCESS);
-    QueueConfig C; C.Name = "tx_ext_q"; C.Persistence = PersistenceMode::MEMORY_ONLY;
+    QueueConfig C;
+    C.Name = "tx_ext_q";
+    C.Persistence = PersistenceMode::MEMORY_ONLY;
     ASSERT_EQ(MQ.CreateQueue(C), QueueResult::SUCCESS);
 
     // 提交一次
@@ -26,12 +29,12 @@ TEST(PrometheusTransactionMetricsExtendedTest, CoversTimeoutFailedAndAverages)
     // 触发一次超时：Begin 一个很短超时时间且不提交/回滚，让后台超时监控统计
     auto Tx2 = MQ.BeginTransaction("timeout_flow", 1);
     ASSERT_GT(Tx2, 0u);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1200)); // 等待后台超时线程统计
+    std::this_thread::sleep_for(std::chrono::milliseconds(1200));  // 等待后台超时线程统计
 
     // 触发一次失败：在 PENDING 之外状态上尝试添加操作，或提交空操作后强制失败
     // 简化：直接调用 PrepareTransaction/CommitDistributedTransaction 等可能返回失败的路径
     // 若实现返回 SUCCESS 则跳过失败断言（不强制）
-    (void)MQ.PrepareTransaction(Tx2); // 可能是 INVALID_PARAMETER/INVALID_STATE
+    (void)MQ.PrepareTransaction(Tx2);  // 可能是 INVALID_PARAMETER/INVALID_STATE
 
     // 拉取事务统计并构造 Prometheus 文本
     TransactionStats TS{};
@@ -75,5 +78,3 @@ TEST(PrometheusTransactionMetricsExtendedTest, CoversTimeoutFailedAndAverages)
 
     MQ.Shutdown();
 }
-
-

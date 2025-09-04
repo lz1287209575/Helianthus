@@ -1,11 +1,11 @@
+#include "Shared/MessageQueue/MessageQueue.h"
+#include "Shared/Monitoring/PrometheusExporter.h"
+
+#include <chrono>
 #include <iostream>
 #include <sstream>
-#include <vector>
 #include <thread>
-#include <chrono>
-
-#include "Shared/Monitoring/PrometheusExporter.h"
-#include "Shared/MessageQueue/MessageQueue.h"
+#include <vector>
 
 using namespace Helianthus::Monitoring;
 using namespace Helianthus::MessageQueue;
@@ -17,7 +17,8 @@ static std::string CollectMetrics(MessageQueue& MQ)
     // 批处理指标帮助与类型
     Os << "# HELP helianthus_batch_commits_total Total number of batch commits per queue\n";
     Os << "# TYPE helianthus_batch_commits_total counter\n";
-    Os << "# HELP helianthus_batch_messages_total Total number of messages committed via batches per queue\n";
+    Os << "# HELP helianthus_batch_messages_total Total number of messages committed via batches "
+          "per queue\n";
     Os << "# TYPE helianthus_batch_messages_total counter\n";
 
     for (const auto& Q : Queues)
@@ -27,17 +28,22 @@ static std::string CollectMetrics(MessageQueue& MQ)
         {
             Os << "helianthus_queue_pending{queue=\"" << Q << "\"} " << S.PendingMessages << "\n";
             Os << "helianthus_queue_total{queue=\"" << Q << "\"} " << S.TotalMessages << "\n";
-            Os << "helianthus_queue_processed{queue=\"" << Q << "\"} " << S.ProcessedMessages << "\n";
-            Os << "helianthus_queue_deadletter{queue=\"" << Q << "\"} " << S.DeadLetterMessages << "\n";
-            Os << "helianthus_queue_throughput{queue=\"" << Q << "\"} " << S.ThroughputPerSecond << "\n";
+            Os << "helianthus_queue_processed{queue=\"" << Q << "\"} " << S.ProcessedMessages
+               << "\n";
+            Os << "helianthus_queue_deadletter{queue=\"" << Q << "\"} " << S.DeadLetterMessages
+               << "\n";
+            Os << "helianthus_queue_throughput{queue=\"" << Q << "\"} " << S.ThroughputPerSecond
+               << "\n";
         }
 
         // 队列延迟分位与速率（QueueMetrics）
         QueueMetrics M{};
         if (MQ.GetQueueMetrics(Q, M) == QueueResult::SUCCESS)
         {
-            Os << "helianthus_queue_latency_p50_ms{queue=\"" << Q << "\"} " << M.P50LatencyMs << "\n";
-            Os << "helianthus_queue_latency_p95_ms{queue=\"" << Q << "\"} " << M.P95LatencyMs << "\n";
+            Os << "helianthus_queue_latency_p50_ms{queue=\"" << Q << "\"} " << M.P50LatencyMs
+               << "\n";
+            Os << "helianthus_queue_latency_p95_ms{queue=\"" << Q << "\"} " << M.P95LatencyMs
+               << "\n";
             Os << "helianthus_queue_enqueue_rate{queue=\"" << Q << "\"} " << M.EnqueueRate << "\n";
             Os << "helianthus_queue_dequeue_rate{queue=\"" << Q << "\"} " << M.DequeueRate << "\n";
         }
@@ -47,18 +53,25 @@ static std::string CollectMetrics(MessageQueue& MQ)
         if (MQ.GetCompressionStats(Q, CS) == QueueResult::SUCCESS)
         {
             Os << "helianthus_compress_total{queue=\"" << Q << "\"} " << CS.TotalMessages << "\n";
-            Os << "helianthus_compress_compressed{queue=\"" << Q << "\"} " << CS.CompressedMessages << "\n";
-            Os << "helianthus_compress_ratio{queue=\"" << Q << "\"} " << CS.CompressionRatio << "\n";
-            Os << "helianthus_compress_time_avg_ms{queue=\"" << Q << "\"} " << CS.AverageCompressionTimeMs << "\n";
-            Os << "helianthus_decompress_time_avg_ms{queue=\"" << Q << "\"} " << CS.AverageDecompressionTimeMs << "\n";
+            Os << "helianthus_compress_compressed{queue=\"" << Q << "\"} " << CS.CompressedMessages
+               << "\n";
+            Os << "helianthus_compress_ratio{queue=\"" << Q << "\"} " << CS.CompressionRatio
+               << "\n";
+            Os << "helianthus_compress_time_avg_ms{queue=\"" << Q << "\"} "
+               << CS.AverageCompressionTimeMs << "\n";
+            Os << "helianthus_decompress_time_avg_ms{queue=\"" << Q << "\"} "
+               << CS.AverageDecompressionTimeMs << "\n";
         }
         EncryptionStats ES{};
         if (MQ.GetEncryptionStats(Q, ES) == QueueResult::SUCCESS)
         {
             Os << "helianthus_encrypt_total{queue=\"" << Q << "\"} " << ES.TotalMessages << "\n";
-            Os << "helianthus_encrypt_encrypted{queue=\"" << Q << "\"} " << ES.EncryptedMessages << "\n";
-            Os << "helianthus_encrypt_time_avg_ms{queue=\"" << Q << "\"} " << ES.AverageEncryptionTimeMs << "\n";
-            Os << "helianthus_decrypt_time_avg_ms{queue=\"" << Q << "\"} " << ES.AverageDecryptionTimeMs << "\n";
+            Os << "helianthus_encrypt_encrypted{queue=\"" << Q << "\"} " << ES.EncryptedMessages
+               << "\n";
+            Os << "helianthus_encrypt_time_avg_ms{queue=\"" << Q << "\"} "
+               << ES.AverageEncryptionTimeMs << "\n";
+            Os << "helianthus_decrypt_time_avg_ms{queue=\"" << Q << "\"} "
+               << ES.AverageDecryptionTimeMs << "\n";
         }
 
         // 批处理统计导出
@@ -152,35 +165,44 @@ int main()
 {
     MessageQueue MQ;
     MQ.Initialize();
-    QueueConfig C; C.Name = "metrics_demo"; C.Persistence = PersistenceMode::MEMORY_ONLY;
+    QueueConfig C;
+    C.Name = "metrics_demo";
+    C.Persistence = PersistenceMode::MEMORY_ONLY;
     MQ.CreateQueue(C);
 
     PrometheusExporter Exporter;
-    Exporter.Start(9108, [&](){ return CollectMetrics(MQ); });
+    Exporter.Start(9108, [&]() { return CollectMetrics(MQ); });
     std::cout << "Exporter started on :9108 /metrics" << std::endl;
     // 启动一个简单的批处理演示线程，周期性提交批次以便观察 batch 统计增长
-    std::thread([&MQ]() {
-        const std::string Q = "metrics_demo";
-        for (;;) {
-            uint32_t BatchId = 0;
-            if (MQ.CreateBatchForQueue(Q, BatchId) != QueueResult::SUCCESS) {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                continue;
+    std::thread(
+        [&MQ]()
+        {
+            const std::string Q = "metrics_demo";
+            for (;;)
+            {
+                uint32_t BatchId = 0;
+                if (MQ.CreateBatchForQueue(Q, BatchId) != QueueResult::SUCCESS)
+                {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    continue;
+                }
+                for (int i = 0; i < 10; ++i)
+                {
+                    auto Msg = std::make_shared<Message>();
+                    std::string Payload = std::string("demo-") + std::to_string(i);
+                    Msg->Header.Type = MessageType::TEXT;
+                    Msg->Payload.Data.assign(Payload.begin(), Payload.end());
+                    MQ.AddToBatch(BatchId, Msg);
+                }
+                MQ.CommitBatch(BatchId);
+                std::this_thread::sleep_for(std::chrono::seconds(2));
             }
-            for (int i = 0; i < 10; ++i) {
-                auto Msg = std::make_shared<Message>();
-                std::string Payload = std::string("demo-") + std::to_string(i);
-                Msg->Header.Type = MessageType::TEXT;
-                Msg->Payload.Data.assign(Payload.begin(), Payload.end());
-                MQ.AddToBatch(BatchId, Msg);
-            }
-            MQ.CommitBatch(BatchId);
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-        }
-    }).detach();
+        })
+        .detach();
     // 简单阻塞
-    while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); }
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
     return 0;
 }
-
-

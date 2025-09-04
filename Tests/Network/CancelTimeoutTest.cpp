@@ -47,9 +47,7 @@ TEST_F(CancelTimeoutTest, PostWithCancel)
     auto Token = Context->CreateCancelToken();
 
     // 提交任务
-    auto TaskId = Context->PostWithCancel([&TaskExecuted]() {
-        TaskExecuted = true;
-    });
+    auto TaskId = Context->PostWithCancel([&TaskExecuted]() { TaskExecuted = true; });
     (void)TaskId;
 
     // 立即取消任务
@@ -70,9 +68,8 @@ TEST_F(CancelTimeoutTest, PostDelayedWithCancel)
     auto Token = Context->CreateCancelToken();
 
     // 提交延迟任务（100ms 后执行）
-    auto TaskId = Context->PostDelayedWithCancel([&TaskExecuted]() {
-        TaskExecuted = true;
-    }, 100, Token);
+    auto TaskId =
+        Context->PostDelayedWithCancel([&TaskExecuted]() { TaskExecuted = true; }, 100, Token);
     (void)TaskId;
 
     // 等待 50ms 后取消任务
@@ -96,13 +93,10 @@ TEST_F(CancelTimeoutTest, CancelToken)
     auto Token = Context->CreateCancelToken();
 
     // 提交两个任务
-    auto TaskId1 = Context->PostWithCancel([&Task1Executed]() {
-        Task1Executed = true;
-    });
+    auto TaskId1 = Context->PostWithCancel([&Task1Executed]() { Task1Executed = true; });
     (void)TaskId1;
-    auto TaskId2 = Context->PostDelayedWithCancel([&Task2Executed]() {
-        Task2Executed = true;
-    }, 100, Token);
+    auto TaskId2 =
+        Context->PostDelayedWithCancel([&Task2Executed]() { Task2Executed = true; }, 100, Token);
     (void)TaskId2;
 
     // 取消 token
@@ -122,9 +116,7 @@ TEST_F(CancelTimeoutTest, DelayedTaskExecution)
     auto StartTime = std::chrono::steady_clock::now();
 
     // 提交延迟任务（50ms 后执行）
-    auto TaskId = Context->PostDelayedWithCancel([&TaskExecuted]() {
-        TaskExecuted = true;
-    }, 50);
+    auto TaskId = Context->PostDelayedWithCancel([&TaskExecuted]() { TaskExecuted = true; }, 50);
     (void)TaskId;
 
     // 等待任务执行
@@ -136,8 +128,8 @@ TEST_F(CancelTimeoutTest, DelayedTaskExecution)
     // 任务应该被执行
     EXPECT_TRUE(TaskExecuted.load());
     // 延迟应该在合理范围内
-    EXPECT_GE(Duration.count(), 40); // 至少 40ms
-    EXPECT_LE(Duration.count(), 100); // 最多 100ms
+    EXPECT_GE(Duration.count(), 40);   // 至少 40ms
+    EXPECT_LE(Duration.count(), 100);  // 最多 100ms
 }
 
 TEST_F(CancelTimeoutTest, MultipleDelayedTasks)
@@ -146,10 +138,11 @@ TEST_F(CancelTimeoutTest, MultipleDelayedTasks)
     std::vector<IoContext::TaskId> TaskIds(5);
 
     // 提交多个延迟任务
-    for (int I = 0; I < 5; ++I) {
-        TaskIds[I] = Context->PostDelayedWithCancel([&TaskExecuted, I]() {
-            TaskExecuted[I] = true;
-        }, 50 + I * 10); // 50ms, 60ms, 70ms, 80ms, 90ms
+    for (int I = 0; I < 5; ++I)
+    {
+        TaskIds[I] =
+            Context->PostDelayedWithCancel([&TaskExecuted, I]() { TaskExecuted[I] = true; },
+                                           50 + I * 10);  // 50ms, 60ms, 70ms, 80ms, 90ms
     }
 
     // 取消中间的任务
@@ -160,11 +153,11 @@ TEST_F(CancelTimeoutTest, MultipleDelayedTasks)
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
     // 检查结果
-    EXPECT_TRUE(TaskExecuted[0].load());  // 应该执行
-    EXPECT_TRUE(TaskExecuted[1].load());  // 应该执行
-    EXPECT_FALSE(TaskExecuted[2].load()); // 被取消
-    EXPECT_TRUE(TaskExecuted[3].load());  // 应该执行
-    EXPECT_TRUE(TaskExecuted[4].load());  // 应该执行
+    EXPECT_TRUE(TaskExecuted[0].load());   // 应该执行
+    EXPECT_TRUE(TaskExecuted[1].load());   // 应该执行
+    EXPECT_FALSE(TaskExecuted[2].load());  // 被取消
+    EXPECT_TRUE(TaskExecuted[3].load());   // 应该执行
+    EXPECT_TRUE(TaskExecuted[4].load());   // 应该执行
 }
 
 TEST_F(CancelTimeoutTest, CancelNonExistentTask)
@@ -183,9 +176,7 @@ TEST_F(CancelTimeoutTest, TokenReuse)
     auto Token = Context->CreateCancelToken();
 
     // 提交第一个任务
-    auto TaskId1 = Context->PostWithCancel([&Task1Executed]() {
-        Task1Executed = true;
-    });
+    auto TaskId1 = Context->PostWithCancel([&Task1Executed]() { Task1Executed = true; });
     (void)TaskId1;
 
     // 等待第一个任务执行
@@ -196,9 +187,8 @@ TEST_F(CancelTimeoutTest, TokenReuse)
     Token->store(false);
 
     // 提交第二个任务
-    auto TaskId2 = Context->PostDelayedWithCancel([&Task2Executed]() {
-        Task2Executed = true;
-    }, 50, Token);
+    auto TaskId2 =
+        Context->PostDelayedWithCancel([&Task2Executed]() { Task2Executed = true; }, 50, Token);
     (void)TaskId2;
 
     // 等待第二个任务执行

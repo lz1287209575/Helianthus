@@ -78,23 +78,25 @@ void ZeroCopyBuffer::AddMemoryMappedFragment(const MemoryMappedBufferFragment& F
     }
 }
 
-void ZeroCopyBuffer::AddMemoryMappedFile(std::shared_ptr<MemoryMappedFile> File, size_t Offset, size_t Size)
+void ZeroCopyBuffer::AddMemoryMappedFile(std::shared_ptr<MemoryMappedFile> File,
+                                         size_t Offset,
+                                         size_t Size)
 {
     if (!File || !File->IsMapped())
     {
         return;
     }
-    
+
     if (Size == 0)
     {
         Size = File->GetSize() - Offset;
     }
-    
+
     if (Offset + Size > File->GetSize())
     {
         Size = File->GetSize() - Offset;
     }
-    
+
     if (Size > 0)
     {
         MemoryMappedBufferFragment Fragment(File, Offset, Size);
@@ -109,27 +111,28 @@ bool ZeroCopyBuffer::AddFileFragment(const std::string& FilePath, size_t Offset,
     {
         return false;
     }
-    
+
     AddMemoryMappedFile(MappedFile, Offset, Size);
     return true;
 }
 
-bool ZeroCopyBuffer::AddOptimizedFileFragments(const std::string& FilePath, 
-                                              const LargeFileTransferOptimizer::TransferConfig& Config)
+bool ZeroCopyBuffer::AddOptimizedFileFragments(
+    const std::string& FilePath, const LargeFileTransferOptimizer::TransferConfig& Config)
 {
-    auto OptimizedFragments = LargeFileTransferOptimizer::CreateOptimizedFragments(FilePath, Config);
-    
+    auto OptimizedFragments =
+        LargeFileTransferOptimizer::CreateOptimizedFragments(FilePath, Config);
+
     if (OptimizedFragments.empty())
     {
         // 如果无法创建内存映射片段，尝试添加单个文件片段
         return AddFileFragment(FilePath);
     }
-    
+
     for (const auto& Fragment : OptimizedFragments)
     {
         AddMemoryMappedFragment(Fragment);
     }
-    
+
     return true;
 }
 

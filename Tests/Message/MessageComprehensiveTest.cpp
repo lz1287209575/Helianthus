@@ -1,6 +1,6 @@
+#include <cstring>
 #include <string>
 #include <vector>
-#include <cstring>
 
 #include "Common/Types.h"
 #include "Message/Message.h"

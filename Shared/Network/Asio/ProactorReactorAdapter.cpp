@@ -6,10 +6,10 @@
     #define ssize_t int
 using NativeSocketType = SOCKET;
 #else
-    #include <sys/socket.h>
-    #include <unistd.h>
     #include <arpa/inet.h>
     #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
 using NativeSocketType = int;
 #endif
 
@@ -102,7 +102,7 @@ void ProactorReactorAdapter::AsyncReceiveFrom(Fd Handle,
         }
         return;
     }
-    
+
     ReactorPtr->Add(
         Handle,
         EventMask::Read,
@@ -112,22 +112,21 @@ void ProactorReactorAdapter::AsyncReceiveFrom(Fd Handle,
             {
                 return;
             }
-            
+
             // 使用 recvfrom 获取发送方地址
             sockaddr_in SockAddr{};
             socklen_t SockAddrLen = sizeof(SockAddr);
-            
-            ssize_t Received = ::recvfrom(
-                static_cast<NativeSocketType>(Handle), 
-                Buffer, 
-                static_cast<int>(BufferSize), 
-                0,
-                reinterpret_cast<sockaddr*>(&SockAddr),
-                &SockAddrLen);
-                
+
+            ssize_t Received = ::recvfrom(static_cast<NativeSocketType>(Handle),
+                                          Buffer,
+                                          static_cast<int>(BufferSize),
+                                          0,
+                                          reinterpret_cast<sockaddr*>(&SockAddr),
+                                          &SockAddrLen);
+
             Network::NetworkError Err = (Received >= 0) ? Network::NetworkError::NONE
                                                         : Network::NetworkError::RECEIVE_FAILED;
-            
+
             Network::NetworkAddress FromAddress;
             if (Received > 0 && SockAddrLen >= sizeof(sockaddr_in))
             {
@@ -135,7 +134,7 @@ void ProactorReactorAdapter::AsyncReceiveFrom(Fd Handle,
                 inet_ntop(AF_INET, &SockAddr.sin_addr, IpStr, INET_ADDRSTRLEN);
                 FromAddress = Network::NetworkAddress(IpStr, ntohs(SockAddr.sin_port));
             }
-            
+
             if (Handler)
             {
                 Handler(Err, Received > 0 ? static_cast<size_t>(Received) : 0, FromAddress);
@@ -158,13 +157,13 @@ void ProactorReactorAdapter::AsyncSendTo(Fd Handle,
         }
         return;
     }
-    
+
     // 准备目标地址
     sockaddr_in SockAddr{};
     SockAddr.sin_family = AF_INET;
     SockAddr.sin_port = htons(Address.Port);
     inet_pton(AF_INET, Address.Ip.c_str(), &SockAddr.sin_addr);
-    
+
     ReactorPtr->Add(
         Handle,
         EventMask::Write,
@@ -174,15 +173,14 @@ void ProactorReactorAdapter::AsyncSendTo(Fd Handle,
             {
                 return;
             }
-            
-            ssize_t Sent = ::sendto(
-                static_cast<NativeSocketType>(Handle), 
-                Data, 
-                static_cast<int>(Size), 
-                0,
-                reinterpret_cast<const sockaddr*>(&SockAddr),
-                sizeof(SockAddr));
-                
+
+            ssize_t Sent = ::sendto(static_cast<NativeSocketType>(Handle),
+                                    Data,
+                                    static_cast<int>(Size),
+                                    0,
+                                    reinterpret_cast<const sockaddr*>(&SockAddr),
+                                    sizeof(SockAddr));
+
             Network::NetworkError Err =
                 (Sent >= 0) ? Network::NetworkError::NONE : Network::NetworkError::SEND_FAILED;
             if (Handler)

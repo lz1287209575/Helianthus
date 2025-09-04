@@ -19,7 +19,10 @@ public:
 
     bool Start(uint16_t Port, MetricsProvider Provider);
     void Stop();
-    bool IsRunning() const { return Running.load(); }
+    bool IsRunning() const
+    {
+        return Running.load();
+    }
 
 private:
     void ServerLoop(uint16_t Port);
@@ -29,6 +32,4 @@ private:
     std::atomic<bool> Running{false};
 };
 
-}
-
-
+}  // namespace Helianthus::Monitoring

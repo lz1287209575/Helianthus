@@ -1,17 +1,19 @@
 #include "Shared/MessageQueue/MessageQueue.h"
-#include "Shared/Common/LogCategory.h"
+
 #include "Shared/Common/LogCategories.h"
+#include "Shared/Common/LogCategory.h"
 #include "Shared/Common/StructuredLogger.h"
 
 #include <algorithm>
+#include <cstring>
 #include <future>
 #include <iostream>
-#include <sstream>
 #include <numeric>
-#include <cstring>
-#include <zlib.h>  // GZIP 压缩
-#include <openssl/evp.h>  // OpenSSL 加密
+#include <sstream>
+
+#include <openssl/evp.h>   // OpenSSL 加密
 #include <openssl/rand.h>  // 随机数生成
+#include <zlib.h>          // GZIP 压缩
 
 namespace Helianthus::MessageQueue
 {
@@ -34,9 +36,9 @@ bool MessageQueue::QueueData::ShouldUsePriorityQueue() const
 
 void MessageQueue::QueueData::AddMessage(MessagePtr Message)
 {
-    std::cout << "AddMessage: EnablePriority=" << (Config.EnablePriority ? "true" : "false") 
+    std::cout << "AddMessage: EnablePriority=" << (Config.EnablePriority ? "true" : "false")
               << ", Priority=" << static_cast<int>(Message->Header.Priority) << std::endl;
-    
+
     if (ShouldUsePriorityQueue())
     {
         std::cout << "  -> 添加到优先级队列" << std::endl;
@@ -48,7 +50,8 @@ void MessageQueue::QueueData::AddMessage(MessagePtr Message)
         Messages.push(Message);
     }
     // 存储后快照
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
           "QueueData.AddMessage props={} enc={} comp={} size={}",
           Message ? Message->Header.Properties.size() : 0,
           Message ? (int)Message->Header.Properties.count("Encrypted") : 0,
@@ -74,13 +77,14 @@ MessagePtr MessageQueue::QueueData::GetNextMessage()
     MessagePtr Message = nullptr;
 
     std::cout << "GetNextMessage: EnablePriority=" << (Config.EnablePriority ? "true" : "false")
-              << ", PriorityQueueSize=" << PriorityMessages.size() 
+              << ", PriorityQueueSize=" << PriorityMessages.size()
               << ", NormalQueueSize=" << Messages.size() << std::endl;
 
     if (ShouldUsePriorityQueue() && !PriorityMessages.empty())
     {
         Message = PriorityMessages.top();
-        std::cout << "  -> 从优先级队列获取消息，优先级: " << static_cast<int>(Message->Header.Priority) << std::endl;
+        std::cout << "  -> 从优先级队列获取消息，优先级: "
+                  << static_cast<int>(Message->Header.Priority) << std::endl;
         PriorityMessages.pop();
     }
     else if (!Messages.empty())
@@ -92,7 +96,8 @@ MessagePtr MessageQueue::QueueData::GetNextMessage()
 
     if (Message)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
               "QueueData.Dequeue props={} enc={} comp={} size={}",
               Message->Header.Properties.size(),
               (int)Message->Header.Properties.count("Encrypted"),
@@ -175,12 +180,24 @@ QueueResult MessageQueue::Initialize()
         auto ItShards = GlobalConfig.find("cluster.shards");
         if (ItShards != GlobalConfig.end())
         {
-            try { ShardCount = static_cast<uint32_t>(std::stoul(ItShards->second)); } catch (...) {}
+            try
+            {
+                ShardCount = static_cast<uint32_t>(std::stoul(ItShards->second));
+            }
+            catch (...)
+            {
+            }
         }
         auto ItVnodes = GlobalConfig.find("cluster.shard.vnodes");
         if (ItVnodes != GlobalConfig.end())
         {
-            try { ShardVirtualNodes = static_cast<uint32_t>(std::stoul(ItVnodes->second)); } catch (...) {}
+            try
+            {
+                ShardVirtualNodes = static_cast<uint32_t>(std::stoul(ItVnodes->second));
+            }
+            catch (...)
+            {
+            }
         }
     }
 
@@ -188,11 +205,14 @@ QueueResult MessageQueue::Initialize()
     PersistenceMgr = std::make_unique<PersistenceManager>();
     PersistenceSettings.Type = PersistenceType::FILE_BASED;
     PersistenceSettings.DataDirectory = "./message_queue_data";
-    
+
     auto PersistenceResult = PersistenceMgr->Initialize(PersistenceSettings);
     if (PersistenceResult != QueueResult::SUCCESS)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "持久化管理器初始化失败，将使用内存模式, code={}", static_cast<int>(PersistenceResult));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "持久化管理器初始化失败，将使用内存模式, code={}",
+              static_cast<int>(PersistenceResult));
         // 继续初始化，但不使用持久化功能
     }
 
@@ -275,7 +295,7 @@ void MessageQueue::Shutdown()
     StopDeadLetterMonitor = true;  // 停止DLQ监控线程
     {
         std::lock_guard<std::mutex> lk(MetricsMonitorMutex);
-        StopMetricsMonitor = true; // 停止指标监控线程
+        StopMetricsMonitor = true;  // 停止指标监控线程
     }
     MetricsMonitorCondition.notify_all();
 
@@ -370,10 +390,14 @@ void MessageQueue::Shutdown()
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "关闭持久化管理器");
     if (PersistenceMgr)
     {
-        try {
+        try
+        {
             PersistenceMgr->Shutdown();
-        } catch (const std::exception& e) {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "持久化管理器关闭异常: {}", e.what());
+        }
+        catch (const std::exception& e)
+        {
+            H_LOG(
+                MQ, Helianthus::Common::LogVerbosity::Error, "持久化管理器关闭异常: {}", e.what());
         }
         PersistenceMgr.reset();
     }
@@ -541,54 +565,78 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     // 自动压缩与加密（按队列配置），确保属性被保留
     {
         auto BeforeSize = Msg->Payload.Data.size();
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
-              "Send.Pre size={} props={}", static_cast<uint64_t>(BeforeSize), Msg->Header.Properties.size());
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
+              "Send.Pre size={} props={}",
+              static_cast<uint64_t>(BeforeSize),
+              Msg->Header.Properties.size());
         auto C1 = ApplyCompression(Msg, QueueName);
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
               "Send.AfterCompress size={} rc={} props={} comp={} enc={}",
-              static_cast<uint64_t>(Msg->Payload.Data.size()), static_cast<int>(C1), Msg->Header.Properties.size(),
-              (int)Msg->Header.Properties.count("Compressed"), (int)Msg->Header.Properties.count("Encrypted"));
+              static_cast<uint64_t>(Msg->Payload.Data.size()),
+              static_cast<int>(C1),
+              Msg->Header.Properties.size(),
+              (int)Msg->Header.Properties.count("Compressed"),
+              (int)Msg->Header.Properties.count("Encrypted"));
         const auto SizeAfterCompress = Msg->Payload.Data.size();
         auto C2 = ApplyEncryption(Msg, QueueName);
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
               "Send.AfterEncrypt size={} rc={} props={} comp={} enc={}",
-              static_cast<uint64_t>(Msg->Payload.Data.size()), static_cast<int>(C2), Msg->Header.Properties.size(),
-              (int)Msg->Header.Properties.count("Compressed"), (int)Msg->Header.Properties.count("Encrypted"));
+              static_cast<uint64_t>(Msg->Payload.Data.size()),
+              static_cast<int>(C2),
+              Msg->Header.Properties.size(),
+              (int)Msg->Header.Properties.count("Compressed"),
+              (int)Msg->Header.Properties.count("Encrypted"));
         // 强校验：若开启自动加密但长度未出现GCM封装额外开销（至少+28），重试一次
-        CompressionConfig __tmpC; GetCompressionConfig(QueueName, __tmpC);
-        EncryptionConfig __ec; GetEncryptionConfig(QueueName, __ec);
+        CompressionConfig __tmpC;
+        GetCompressionConfig(QueueName, __tmpC);
+        EncryptionConfig __ec;
+        GetEncryptionConfig(QueueName, __ec);
         if (__ec.EnableAutoEncryption && Msg->Header.Properties.count("Compressed"))
         {
-            const auto ExpectedMin = SizeAfterCompress + 28; // 12B nonce + 16B tag
-            if (!Msg->Header.Properties.count("Encrypted") || Msg->Payload.Data.size() < ExpectedMin)
+            const auto ExpectedMin = SizeAfterCompress + 28;  // 12B nonce + 16B tag
+            if (!Msg->Header.Properties.count("Encrypted") ||
+                Msg->Payload.Data.size() < ExpectedMin)
             {
-                H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-                      "Encrypt sanity check failed, retrying: size_after_comp={}, size_now={}, enc_flag={}",
-                      static_cast<uint64_t>(SizeAfterCompress), static_cast<uint64_t>(Msg->Payload.Data.size()),
+                H_LOG(MQ,
+                      Helianthus::Common::LogVerbosity::Warning,
+                      "Encrypt sanity check failed, retrying: size_after_comp={}, size_now={}, "
+                      "enc_flag={}",
+                      static_cast<uint64_t>(SizeAfterCompress),
+                      static_cast<uint64_t>(Msg->Payload.Data.size()),
                       (int)Msg->Header.Properties.count("Encrypted"));
                 auto Rretry = ApplyEncryption(Msg, QueueName);
-                H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+                H_LOG(MQ,
+                      Helianthus::Common::LogVerbosity::Display,
                       "Send.AfterEncryptRetry size={} rc={} props={} comp={} enc={}",
-                      static_cast<uint64_t>(Msg->Payload.Data.size()), static_cast<int>(Rretry), Msg->Header.Properties.size(),
-                      (int)Msg->Header.Properties.count("Compressed"), (int)Msg->Header.Properties.count("Encrypted"));
+                      static_cast<uint64_t>(Msg->Payload.Data.size()),
+                      static_cast<int>(Rretry),
+                      Msg->Header.Properties.size(),
+                      (int)Msg->Header.Properties.count("Compressed"),
+                      (int)Msg->Header.Properties.count("Encrypted"));
             }
         }
-        (void)BeforeSize; (void)C1; (void)C2;
+        (void)BeforeSize;
+        (void)C1;
+        (void)C2;
         // 再次校验属性存在性
         if (!Msg->Header.Properties.count("CompressionAlgorithm") &&
             Msg->Header.Properties.count("Compressed"))
         {
-            Msg->Header.Properties["CompressionAlgorithm"] = "gzip"; // 仅当前实现
+            Msg->Header.Properties["CompressionAlgorithm"] = "gzip";  // 仅当前实现
         }
         if (Msg->Header.Properties.count("Encrypted") &&
             !Msg->Header.Properties.count("EncryptionAlgorithm"))
         {
-            Msg->Header.Properties["EncryptionAlgorithm"] = "aes-256-gcm"; // 当前实现
+            Msg->Header.Properties["EncryptionAlgorithm"] = "aes-256-gcm";  // 当前实现
         }
     }
     auto enqueueStart = std::chrono::high_resolution_clock::now();
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
               "发送消息: queue={}, id={}, priority={}, delivery={}",
               QueueName,
               static_cast<uint64_t>(Msg->Header.Id),
@@ -604,23 +652,27 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     {
         if (Queue->Config.MaxSize <= 5)
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-                  "队列已满: queue={}", QueueName);
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "队列已满: queue={}", QueueName);
             return QueueResult::QUEUE_FULL;
         }
         else
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Warning,
                   "队列达到容量但允许溢出: queue={} size={} max={}",
-                  QueueName, Queue->GetMessageCount(), Queue->Config.MaxSize);
+                  QueueName,
+                  Queue->GetMessageCount(),
+                  Queue->Config.MaxSize);
         }
     }
 
     // 检查消息大小（按总字节上限）
     if (Msg->Payload.Size > Queue->Config.MaxSizeBytes)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-              "消息过大: queue={}, size={}, limit={}B", QueueName,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "消息过大: queue={}, size={}, limit={}B",
+              QueueName,
               static_cast<uint64_t>(Msg->Payload.Size),
               static_cast<uint64_t>(Queue->Config.MaxSizeBytes));
         return QueueResult::MESSAGE_TOO_LARGE;
@@ -628,7 +680,8 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
 
     // 添加消息到队列
     Queue->AddMessage(Msg);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
           "Enqueue.After props={} enc={} comp={} size={}",
           Msg->Header.Properties.size(),
           (int)Msg->Header.Properties.count("Encrypted"),
@@ -636,13 +689,15 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
           static_cast<uint64_t>(Msg->Payload.Data.size()));
     // 埋点：入队延迟（近似，当前实现为0，保留接口以便后续扩展）
     auto enqueueEnd = std::chrono::high_resolution_clock::now();
-    const double enqueueLatencyMs = std::chrono::duration<double, std::milli>(enqueueEnd - enqueueStart).count();
+    const double enqueueLatencyMs =
+        std::chrono::duration<double, std::milli>(enqueueEnd - enqueueStart).count();
     RecordLatencySample(Queue, enqueueLatencyMs);
 
     // 如果启用了消息路由，尝试路由消息
     auto RouteResult = RouteMessage(QueueName, Msg);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
-          "Route.After props={} enc={} comp={} size={} rc={}", 
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "Route.After props={} enc={} comp={} size={} rc={}",
           Msg->Header.Properties.size(),
           (int)Msg->Header.Properties.count("Encrypted"),
           (int)Msg->Header.Properties.count("Compressed"),
@@ -655,7 +710,14 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
         auto ItShard = Msg->Header.Properties.find("routed_shard");
         if (ItShard != Msg->Header.Properties.end())
         {
-            try { ShardIndex = std::stoi(ItShard->second); } catch (...) { ShardIndex = -1; }
+            try
+            {
+                ShardIndex = std::stoi(ItShard->second);
+            }
+            catch (...)
+            {
+                ShardIndex = -1;
+            }
         }
         if (ShardIndex >= 0 && MinReplicationAcks > 0)
         {
@@ -670,7 +732,8 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
                     E.Id = Msg->Header.Id;
                     E.Queue = QueueName;
                     E.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
+                                      std::chrono::system_clock::now().time_since_epoch())
+                                      .count();
                     Wal.Entries.push_back(std::move(E));
                 }
             }
@@ -692,7 +755,8 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
                 {
                     for (const auto& R : Cluster.Shards[static_cast<size_t>(ShardIndex)].Replicas)
                     {
-                        if (R.Role == ReplicaRole::FOLLOWER && R.Healthy) HealthyFollowers++;
+                        if (R.Role == ReplicaRole::FOLLOWER && R.Healthy)
+                            HealthyFollowers++;
                     }
                 }
             }
@@ -704,15 +768,19 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
                 if (static_cast<size_t>(ShardIndex) < WalPerShard.size())
                 {
                     uint64_t AnyFollowerIndex = 0;
-                    for (const auto& P : WalPerShard[static_cast<size_t>(ShardIndex)].FollowerAppliedIndex)
+                    for (const auto& P :
+                         WalPerShard[static_cast<size_t>(ShardIndex)].FollowerAppliedIndex)
                     {
                         AnyFollowerIndex = std::max(AnyFollowerIndex, P.second);
                     }
                     F.AddField("follower_applied_index", static_cast<uint64_t>(AnyFollowerIndex));
-                    F.AddField("leader_log_len", static_cast<uint64_t>(WalPerShard[static_cast<size_t>(ShardIndex)].Entries.size()));
+                    F.AddField("leader_log_len",
+                               static_cast<uint64_t>(
+                                   WalPerShard[static_cast<size_t>(ShardIndex)].Entries.size()));
                 }
             }
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Verbose,
                   "复制模拟: shard={} id={}",
                   ShardIndex,
                   static_cast<uint64_t>(Msg->Header.Id));
@@ -727,9 +795,12 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
         auto PersistenceResult = PersistenceMgr->SaveMessage(QueueName, Msg);
         if (PersistenceResult != QueueResult::SUCCESS)
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
-                 "持久化消息失败，继续处理 queue={} id={} code={}",
-                 QueueName, static_cast<uint64_t>(Msg->Header.Id), static_cast<int>(PersistenceResult));
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Warning,
+                  "持久化消息失败，继续处理 queue={} id={} code={}",
+                  QueueName,
+                  static_cast<uint64_t>(Msg->Header.Id),
+                  static_cast<int>(PersistenceResult));
             // 继续处理，不因为持久化失败而阻塞消息发送
         }
     }
@@ -743,8 +814,7 @@ QueueResult MessageQueue::SendMessage(const std::string& QueueName, MessagePtr M
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
-                                         MessagePtr& OutMessage)
+QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName, MessagePtr& OutMessage)
 {
     // 无超时参数：若队列为空返回 SUCCESS 且 OutMessage=nullptr（不等待）
     auto* Queue = GetQueueData(QueueName);
@@ -759,9 +829,7 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
         // 空队列：短暂等待以适配并发生产-消费；若仍为空则返回 SUCCESS 且 OutMessage=nullptr
         auto TimeoutPoint = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
         Queue->NotifyCondition.wait_until(
-            Lock,
-            TimeoutPoint,
-            [Queue, this] { return !Queue->IsEmpty() || ShuttingDown.load(); });
+            Lock, TimeoutPoint, [Queue, this] { return !Queue->IsEmpty() || ShuttingDown.load(); });
         if (Queue->IsEmpty())
         {
             OutMessage.reset();
@@ -841,9 +909,12 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     }
     // 调试：打印属性与大小（解密/解压前）
     {
-        const auto hasEnc = OutMessage->Header.Properties.find("Encrypted") != OutMessage->Header.Properties.end();
-        const auto hasComp = OutMessage->Header.Properties.find("Compressed") != OutMessage->Header.Properties.end();
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+        const auto hasEnc =
+            OutMessage->Header.Properties.find("Encrypted") != OutMessage->Header.Properties.end();
+        const auto hasComp =
+            OutMessage->Header.Properties.find("Compressed") != OutMessage->Header.Properties.end();
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Verbose,
               "Recv.AfterDequeue props={} enc={} comp={} size={}",
               OutMessage->Header.Properties.size(),
               hasEnc ? OutMessage->Header.Properties["Encrypted"] : "0",
@@ -852,23 +923,27 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
         // 列出所有属性键值
         for (const auto& KV : OutMessage->Header.Properties)
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
-                  "Recv.Prop {}={}", KV.first, KV.second);
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Verbose,
+                  "Recv.Prop {}={}",
+                  KV.first,
+                  KV.second);
         }
     }
     // 自动解密与解压（按队列配置），并在失败时记录日志
     {
         // 尝试顺序 A：解密 -> 解压
-        auto TryDecrypt = [&]() -> QueueResult {
+        auto TryDecrypt = [&]() -> QueueResult
+        {
             // 若无加密标记，直接尝试启发式解密；否则按标记解密
-            if (!OutMessage->Header.Properties.count("Encrypted")) {
+            if (!OutMessage->Header.Properties.count("Encrypted"))
+            {
                 return ApplyDecryption(OutMessage, QueueName, 0);
             }
             return ApplyDecryption(OutMessage, QueueName);
         };
-        auto TryDecompress = [&]() -> QueueResult {
-            return ApplyDecompression(OutMessage, QueueName);
-        };
+        auto TryDecompress = [&]() -> QueueResult
+        { return ApplyDecompression(OutMessage, QueueName); };
         auto Rdec = TryDecrypt();
         auto Runc = TryDecompress();
         bool Ok = (Rdec == QueueResult::SUCCESS && Runc == QueueResult::SUCCESS);
@@ -881,15 +956,20 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
             Ok = (Runc2 == QueueResult::SUCCESS && Rdec2 == QueueResult::SUCCESS);
             if (!Ok)
             {
-                H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+                H_LOG(MQ,
+                      Helianthus::Common::LogVerbosity::Warning,
                       "自动解密/解压未完全成功: decA={} uncA={} uncB={} decB={} id={}",
-                      static_cast<int>(Rdec), static_cast<int>(Runc),
-                      static_cast<int>(Runc2), static_cast<int>(Rdec2),
+                      static_cast<int>(Rdec),
+                      static_cast<int>(Runc),
+                      static_cast<int>(Runc2),
+                      static_cast<int>(Rdec2),
                       static_cast<uint64_t>(OutMessage->Header.Id));
             }
         }
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
-              "解密/解压处理完成 size={}", static_cast<uint64_t>(OutMessage->Payload.Data.size()));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Verbose,
+              "解密/解压处理完成 size={}",
+              static_cast<uint64_t>(OutMessage->Payload.Data.size()));
     }
 
     // 检查消息是否过期
@@ -905,22 +985,24 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     // 检查消息是否过期
     if (IsMessageExpired(OutMessage))
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-              "消息已过期，移动到死信队列: messageId={}", OutMessage->Header.Id);
-        
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
+              "消息已过期，移动到死信队列: messageId={}",
+              OutMessage->Header.Id);
+
         // 释放当前锁，避免死锁
         Lock.unlock();
         MoveToDeadLetter(QueueName, OutMessage, DeadLetterReason::EXPIRED);
         UpdateQueueStats(QueueName, false, false);
         return QueueResult::TIMEOUT;
     }
-    
+
     if (OutMessage->Header.RetryCount > 0)
     {
         auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
                        .count();
-        
+
         if (OutMessage->Header.NextRetryTime > Now)
         {
             // 消息还没有到重试时间，跳过
@@ -929,8 +1011,10 @@ QueueResult MessageQueue::ReceiveMessage(const std::string& QueueName,
     }
 
     OutMessage->Status = MessageStatus::DELIVERED;
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
-          "接收消息: queue={} id={}", QueueName,
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Log,
+          "接收消息: queue={} id={}",
+          QueueName,
           static_cast<uint64_t>(OutMessage->Header.Id));
 
     // 如果不是自动确认，添加到待确认列表
@@ -973,12 +1057,15 @@ QueueResult MessageQueue::AcknowledgeMessage(const std::string& QueueName, Messa
 
     // 简化：以(当前时间 - 创建时间)作为处理时延样本
     auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::system_clock::now().time_since_epoch()).count();
+                     std::chrono::system_clock::now().time_since_epoch())
+                     .count();
     const double latencyMs = static_cast<double>(nowMs - It->second->CreatedTime);
     RecordLatencySample(Queue, latencyMs);
 
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
-          "确认消息: queue={} id={}", QueueName,
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Log,
+          "确认消息: queue={} id={}",
+          QueueName,
           static_cast<uint64_t>(MessageId));
 
     NotifyEvent(QueueName, "MessageAcknowledged", "Message acknowledged");
@@ -1040,7 +1127,11 @@ QueueResult MessageQueue::Subscribe(const std::string& TopicName,
     Topic->Subscribers[SubscriberId] = Handler;
     Topic->Stats.ActiveSubscribers++;
 
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Log, "订阅主题: {} 订阅者: {}", TopicName, SubscriberId);
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Log,
+          "订阅主题: {} 订阅者: {}",
+          TopicName,
+          SubscriberId);
     return QueueResult::SUCCESS;
 }
 
@@ -1073,10 +1164,12 @@ MessageQueue::TopicData* MessageQueue::GetTopicData(const std::string& TopicName
 
 bool MessageQueue::ValidateMessage(MessagePtr Message)
 {
-    bool Ok = Message && Message->Header.Type != MessageType::UNKNOWN && !Message->Payload.IsEmpty();
+    bool Ok =
+        Message && Message->Header.Type != MessageType::UNKNOWN && !Message->Payload.IsEmpty();
     if (!Ok)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
               "消息校验失败: hasMsg={} type={} empty={} size={} extSize={}",
               Message != nullptr,
               Message ? static_cast<int>(Message->Header.Type) : -1,
@@ -1110,12 +1203,17 @@ bool MessageQueue::IsMessageExpired(MessagePtr Message)
     return Now > Message->Header.ExpireTime;
 }
 
-void MessageQueue::MoveToDeadLetter(const std::string& QueueName, MessagePtr Message, DeadLetterReason Reason)
+void MessageQueue::MoveToDeadLetter(const std::string& QueueName,
+                                    MessagePtr Message,
+                                    DeadLetterReason Reason)
 {
     auto* Queue = GetQueueData(QueueName);
     if (!Queue)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "队列不存在，无法移动到死信队列: {}", QueueName);
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "队列不存在，无法移动到死信队列: {}",
+              QueueName);
         return;
     }
 
@@ -1124,8 +1222,8 @@ void MessageQueue::MoveToDeadLetter(const std::string& QueueName, MessagePtr Mes
     Message->Header.DeadLetterReasonValue = Reason;
     Message->Header.OriginalQueue = QueueName;
     Message->LastModifiedTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::system_clock::now().time_since_epoch())
-                                   .count();
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count();
 
     // 确保死信队列存在（在获取任何锁之前）
     auto DeadLetterQueueName = GetDeadLetterQueueName(QueueName);
@@ -1139,13 +1237,18 @@ void MessageQueue::MoveToDeadLetter(const std::string& QueueName, MessagePtr Mes
             DeadLetterQueue->DeadLetterMessages.push(Message);
             DeadLetterQueue->Stats.DeadLetterMessages++;
             DeadLetterLock.unlock();  // 立即释放死信队列锁
-            
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
-                  "消息已移动到死信队列: queue={}, messageId={}, reason={}", 
-                  QueueName, Message->Header.Id, static_cast<int>(Reason));
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Warning,
+                  "消息已移动到死信队列: queue={}, messageId={}, reason={}",
+                  QueueName,
+                  Message->Header.Id,
+                  static_cast<int>(Reason));
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Warning,
                   "DLQ移动: queue={} dlq={} id={} reason={}",
-                  QueueName, DeadLetterQueueName,
+                  QueueName,
+                  DeadLetterQueueName,
                   static_cast<uint64_t>(Message->Header.Id),
                   static_cast<int>(Reason));
         }
@@ -1154,7 +1257,7 @@ void MessageQueue::MoveToDeadLetter(const std::string& QueueName, MessagePtr Mes
     // 更新原队列统计（最后获取原队列锁）
     std::unique_lock<std::shared_mutex> QueueLock(Queue->Mutex);
     Queue->Stats.DeadLetterMessages++;
-    
+
     // 根据原因更新相应统计
     switch (Reason)
     {
@@ -1197,7 +1300,10 @@ QueueResult MessageQueue::DeliverMessageToSubscribers(const std::string& TopicNa
                     }
                     catch (const std::exception& e)
                     {
-                        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "订阅者处理异常: {}", e.what());
+                        H_LOG(MQ,
+                              Helianthus::Common::LogVerbosity::Error,
+                              "订阅者处理异常: {}",
+                              e.what());
                     }
                 })
                 .detach();
@@ -1282,7 +1388,7 @@ void MessageQueue::ProcessScheduledMessages()
         // 等待直到有调度消息或需要关闭
         // 等待直到有调度消息或需要关闭
         SchedulerCondition.wait_for(Lock,
-                                    std::chrono::milliseconds(100), // 改为100毫秒，提高响应性
+                                    std::chrono::milliseconds(100),  // 改为100毫秒，提高响应性
                                     [this]
                                     { return ShuttingDown.load() || !ScheduledMessages.empty(); });
 
@@ -1402,7 +1508,7 @@ QueueResult MessageQueue::ResetQueueStats(const std::string& QueueName)
     }
 
     std::unique_lock<std::shared_mutex> Lock(Queue->Mutex);
-    
+
     // 重置统计信息，但保留队列中的消息
     Queue->Stats.TotalMessages = 0;
     Queue->Stats.ProcessedMessages = 0;
@@ -1415,10 +1521,10 @@ QueueResult MessageQueue::ResetQueueStats(const std::string& QueueName)
     Queue->Stats.AverageLatencyMs = 0.0;
     Queue->Stats.ThroughputPerSecond = 0.0;
     Queue->Stats.LastMessageTime = 0;
-    
+
     // 不清空PendingMessages，因为队列中的消息仍然存在
     // 不清空CreatedTime，因为队列创建时间不应该被重置
-    
+
     return QueueResult::SUCCESS;
 }
 
@@ -1453,7 +1559,8 @@ QueueResult MessageQueue::SendBatchMessages(const std::string& QueueName,
                                             const std::vector<MessagePtr>& Messages)
 {
     // 验证参数：空批量应该被拒绝
-    if (Messages.empty()) {
+    if (Messages.empty())
+    {
         return QueueResult::INVALID_PARAMETER;
     }
 
@@ -1508,10 +1615,11 @@ QueueResult MessageQueue::ReceiveBatchMessages(const std::string& QueueName,
                                                uint32_t TimeoutMs)
 {
     // 验证参数
-    if (MaxCount == 0) {
+    if (MaxCount == 0)
+    {
         return QueueResult::INVALID_PARAMETER;
     }
-    
+
     OutMessages.clear();
 
     // 允许在总超时时间内至少获取一条消息，其后尽量拉满到 MaxCount
@@ -1609,48 +1717,58 @@ MessageQueue::RejectMessage(const std::string& QueueName, MessageId MessageId, b
         auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
                        .count();
-        
+
         // 显式事务拒收后重入队：立即可见
         Message->Header.NextRetryTime = Now;
         Message->IncrementRetry();
         Message->Status = MessageStatus::PENDING;
-        
+
         // 重新添加到队列
         Queue->AddMessage(Message);
         // 唤醒可能在等待可用消息的接收者
         Queue->NotifyCondition.notify_one();
         Queue->Stats.RetriedMessages++;
-        
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
-              "消息重试: queue={}, messageId={}, retryCount={}, nextRetryTime={}", 
-              QueueName, MessageId, Message->Header.RetryCount, Message->Header.NextRetryTime);
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "消息重试: queue={}, messageId={}, retryCount={}, nextRetryTime={}",
+              QueueName,
+              MessageId,
+              Message->Header.RetryCount,
+              Message->Header.NextRetryTime);
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
               "已计划重试: queue={} id={} retry_count={} next_retry_time={}",
               QueueName,
               static_cast<uint64_t>(MessageId),
               static_cast<int>(Message->Header.RetryCount),
               static_cast<uint64_t>(Message->Header.NextRetryTime));
-        
+
         NotifyEvent(QueueName, "MessageRetried", "Message requeued for retry");
     }
     else
     {
         // 超过最大重试次数或不重试，移动到死信队列
-        DeadLetterReason Reason = Requeue ? DeadLetterReason::MAX_RETRIES_EXCEEDED : DeadLetterReason::REJECTED;
-        
+        DeadLetterReason Reason =
+            Requeue ? DeadLetterReason::MAX_RETRIES_EXCEEDED : DeadLetterReason::REJECTED;
+
         // 释放当前锁，避免死锁
         Lock.unlock();
         MoveToDeadLetter(QueueName, Message, Reason);
-        
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
-              "消息移动到死信队列: queue={}, messageId={}, reason=\"", 
-              QueueName, MessageId, static_cast<int>(Reason));
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "消息移动到死信队列: queue={}, messageId={}, reason=\"",
+              QueueName,
+              MessageId,
+              static_cast<int>(Reason));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
               "已丢入死信: queue={} id={} reason={}",
               QueueName,
               static_cast<uint64_t>(MessageId),
               static_cast<int>(Reason));
-        
+
         NotifyEvent(QueueName, "MessageDeadLettered", "Message moved to dead letter queue");
     }
 
@@ -1689,61 +1807,69 @@ QueueResult MessageQueue::RegisterConsumer(const std::string& QueueName,
 
     // 启动一个消费者处理线程
     StopConsumerThreads.store(false);
-    ConsumerThreads.emplace_back([this, QueueName]() {
-        for (;;)
+    ConsumerThreads.emplace_back(
+        [this, QueueName]()
         {
-            if (StopConsumerThreads.load() || ShuttingDown.load())
+            for (;;)
             {
-                break;
-            }
-            auto* Q = GetQueueData(QueueName);
-            if (!Q)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                continue;
-            }
-
-            // 复制当前消费者配置与处理器以减少持锁时间
-            std::vector<std::pair<ConsumerConfig, MessageHandler>> ConsumersSnapshot;
-            {
-                std::shared_lock<std::shared_mutex> Lock(Q->Mutex);
-                for (const auto& [Id, Cfg] : Q->Consumers)
+                if (StopConsumerThreads.load() || ShuttingDown.load())
                 {
-                    auto ItH = Q->ConsumerHandlers.find(Id);
-                    if (ItH != Q->ConsumerHandlers.end())
+                    break;
+                }
+                auto* Q = GetQueueData(QueueName);
+                if (!Q)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+
+                // 复制当前消费者配置与处理器以减少持锁时间
+                std::vector<std::pair<ConsumerConfig, MessageHandler>> ConsumersSnapshot;
+                {
+                    std::shared_lock<std::shared_mutex> Lock(Q->Mutex);
+                    for (const auto& [Id, Cfg] : Q->Consumers)
                     {
-                        ConsumersSnapshot.emplace_back(Cfg, ItH->second);
+                        auto ItH = Q->ConsumerHandlers.find(Id);
+                        if (ItH != Q->ConsumerHandlers.end())
+                        {
+                            ConsumersSnapshot.emplace_back(Cfg, ItH->second);
+                        }
+                    }
+                }
+
+                if (ConsumersSnapshot.empty())
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+
+                // 简单调度：为每个消费者拉取最多 BatchSize 条消息
+                for (const auto& [Cfg, H] : ConsumersSnapshot)
+                {
+                    const uint32_t BatchSize = std::max<uint32_t>(1, Cfg.BatchSize);
+                    const uint32_t TimeoutMs = Cfg.BatchTimeoutMs;
+                    uint32_t Pulled = 0;
+                    while (Pulled < BatchSize)
+                    {
+                        MessagePtr Msg;
+                        auto Res = ReceiveMessage(QueueName, Msg, TimeoutMs);
+                        if (Res != QueueResult::SUCCESS || !Msg)
+                        {
+                            break;
+                        }
+                        // 分发给处理器
+                        try
+                        {
+                            H(Msg);
+                        }
+                        catch (...)
+                        { /* 忽略处理器异常以保证循环存活 */
+                        }
+                        Pulled++;
                     }
                 }
             }
-
-            if (ConsumersSnapshot.empty())
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                continue;
-            }
-
-            // 简单调度：为每个消费者拉取最多 BatchSize 条消息
-            for (const auto& [Cfg, H] : ConsumersSnapshot)
-            {
-                const uint32_t BatchSize = std::max<uint32_t>(1, Cfg.BatchSize);
-                const uint32_t TimeoutMs = Cfg.BatchTimeoutMs;
-                uint32_t Pulled = 0;
-                while (Pulled < BatchSize)
-                {
-                    MessagePtr Msg;
-                    auto Res = ReceiveMessage(QueueName, Msg, TimeoutMs);
-                    if (Res != QueueResult::SUCCESS || !Msg)
-                    {
-                        break;
-                    }
-                    // 分发给处理器
-                    try { H(Msg); } catch (...) { /* 忽略处理器异常以保证循环存活 */ }
-                    Pulled++;
-                }
-            }
-        }
-    });
+        });
 
     return QueueResult::SUCCESS;
 }
@@ -1865,17 +1991,17 @@ QueueResult MessageQueue::GetDeadLetterMessages(const std::string& QueueName,
 {
     auto DeadLetterQueueName = GetDeadLetterQueueName(QueueName);
     auto* DeadLetterQueue = GetQueueData(DeadLetterQueueName);
-    
+
     if (!DeadLetterQueue)
     {
         return QueueResult::QUEUE_NOT_FOUND;
     }
 
     std::shared_lock<std::shared_mutex> Lock(DeadLetterQueue->Mutex);
-    
+
     OutMessages.clear();
     uint32_t Count = 0;
-    
+
     // 从死信队列中获取消息
     while (!DeadLetterQueue->DeadLetterMessages.empty() && Count < MaxCount)
     {
@@ -1883,10 +2009,13 @@ QueueResult MessageQueue::GetDeadLetterMessages(const std::string& QueueName,
         DeadLetterQueue->DeadLetterMessages.pop();
         Count++;
     }
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-          "获取死信消息: queue={}, count={}", QueueName, Count);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "获取死信消息: queue={}, count={}",
+          QueueName,
+          Count);
+
     return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::RequeueDeadLetterMessage(const std::string& QueueName,
@@ -1894,23 +2023,23 @@ QueueResult MessageQueue::RequeueDeadLetterMessage(const std::string& QueueName,
 {
     auto DeadLetterQueueName = GetDeadLetterQueueName(QueueName);
     auto* DeadLetterQueue = GetQueueData(DeadLetterQueueName);
-    
+
     if (!DeadLetterQueue)
     {
         return QueueResult::QUEUE_NOT_FOUND;
     }
 
     std::unique_lock<std::shared_mutex> Lock(DeadLetterQueue->Mutex);
-    
+
     // 查找指定的死信消息
     std::queue<MessagePtr> TempQueue;
     MessagePtr TargetMessage = nullptr;
-    
+
     while (!DeadLetterQueue->DeadLetterMessages.empty())
     {
         auto Message = DeadLetterQueue->DeadLetterMessages.front();
         DeadLetterQueue->DeadLetterMessages.pop();
-        
+
         if (Message->Header.Id == MessageId)
         {
             TargetMessage = Message;
@@ -1920,69 +2049,75 @@ QueueResult MessageQueue::RequeueDeadLetterMessage(const std::string& QueueName,
             TempQueue.push(Message);
         }
     }
-    
+
     // 恢复其他消息
     while (!TempQueue.empty())
     {
         DeadLetterQueue->DeadLetterMessages.push(TempQueue.front());
         TempQueue.pop();
     }
-    
+
     if (!TargetMessage)
     {
         return QueueResult::MESSAGE_NOT_FOUND;
     }
-    
+
     // 重置消息状态，重新加入原队列
     TargetMessage->Status = MessageStatus::PENDING;
     TargetMessage->Header.RetryCount = 0;
     TargetMessage->Header.NextRetryTime = 0;
     TargetMessage->Header.DeadLetterReasonValue = DeadLetterReason::UNKNOWN;
     TargetMessage->LastModifiedTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                         std::chrono::system_clock::now().time_since_epoch())
-                                         .count();
-    
+                                          std::chrono::system_clock::now().time_since_epoch())
+                                          .count();
+
     // 添加到原队列
     auto* OriginalQueue = GetQueueData(QueueName);
     if (OriginalQueue)
     {
         OriginalQueue->AddMessage(TargetMessage);
         DeadLetterQueue->Stats.DeadLetterMessages--;
-        
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-              "死信消息重新入队: queue={}, messageId={}", QueueName, MessageId);
-        
+
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
+              "死信消息重新入队: queue={}, messageId={}",
+              QueueName,
+              MessageId);
+
         NotifyEvent(QueueName, "MessageRequeued", "Dead letter message requeued");
     }
-    
+
     return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::PurgeDeadLetterQueue(const std::string& QueueName)
 {
     auto DeadLetterQueueName = GetDeadLetterQueueName(QueueName);
     auto* DeadLetterQueue = GetQueueData(DeadLetterQueueName);
-    
+
     if (!DeadLetterQueue)
     {
         return QueueResult::QUEUE_NOT_FOUND;
     }
 
     std::unique_lock<std::shared_mutex> Lock(DeadLetterQueue->Mutex);
-    
+
     uint32_t PurgedCount = 0;
     while (!DeadLetterQueue->DeadLetterMessages.empty())
     {
         DeadLetterQueue->DeadLetterMessages.pop();
         PurgedCount++;
     }
-    
+
     DeadLetterQueue->Stats.DeadLetterMessages = 0;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-          "清空死信队列: queue={}, purgedCount={}", QueueName, PurgedCount);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "清空死信队列: queue={}, purgedCount={}",
+          QueueName,
+          PurgedCount);
+
     NotifyEvent(QueueName, "DeadLetterQueuePurged", "Dead letter queue purged");
-    
+
     return QueueResult::SUCCESS;
 }
 QueueResult MessageQueue::GetTopicStats(const std::string& TopicName, QueueStats& OutStats) const
@@ -2044,7 +2179,8 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
         try
         {
             uint32_t ms = static_cast<uint32_t>(std::stoul(Value));
-            if (ms < 100) ms = 100; // 下限保护
+            if (ms < 100)
+                ms = 100;  // 下限保护
             {
                 std::lock_guard<std::mutex> lk(MetricsMonitorMutex);
                 MetricsIntervalMs = ms;
@@ -2061,7 +2197,8 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
         try
         {
             uint32_t ms = static_cast<uint32_t>(std::stoul(Value));
-            if (ms < 1000) ms = 1000; // 至少1秒窗口
+            if (ms < 1000)
+                ms = 1000;  // 至少1秒窗口
             {
                 std::lock_guard<std::mutex> lk(MetricsMonitorMutex);
                 MetricsWindowMs = ms;
@@ -2077,7 +2214,8 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
         try
         {
             size_t cap = static_cast<size_t>(std::stoull(Value));
-            if (cap < 32) cap = 32; // 下限
+            if (cap < 32)
+                cap = 32;  // 下限
             // 为所有队列应用新的容量
             std::shared_lock<std::shared_mutex> ql(QueuesMutex);
             for (auto& pair : Queues)
@@ -2088,7 +2226,8 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
                 if (q->LatencySamplesMs.size() > cap)
                 {
                     q->LatencySamplesMs.erase(q->LatencySamplesMs.begin(),
-                                               q->LatencySamplesMs.begin() + (q->LatencySamplesMs.size() - cap));
+                                              q->LatencySamplesMs.begin() +
+                                                  (q->LatencySamplesMs.size() - cap));
                 }
             }
         }
@@ -2104,7 +2243,10 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
             ShardCount = static_cast<uint32_t>(std::stoul(Value));
             RebuildShardRing();
         }
-        catch (...) { return QueueResult::INVALID_PARAMETER; }
+        catch (...)
+        {
+            return QueueResult::INVALID_PARAMETER;
+        }
     }
     else if (Key == "cluster.shard.vnodes")
     {
@@ -2113,18 +2255,27 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
             ShardVirtualNodes = static_cast<uint32_t>(std::stoul(Value));
             RebuildShardRing();
         }
-        catch (...) { return QueueResult::INVALID_PARAMETER; }
+        catch (...)
+        {
+            return QueueResult::INVALID_PARAMETER;
+        }
     }
     else if (Key == "cluster.heartbeat.flap.prob")
     {
         try
         {
             double Prob = std::stod(Value);
-            if (Prob < 0.0) Prob = 0.0; if (Prob > 1.0) Prob = 1.0;
+            if (Prob < 0.0)
+                Prob = 0.0;
+            if (Prob > 1.0)
+                Prob = 1.0;
             std::lock_guard<std::mutex> Lk(HeartbeatMutex);
             HeartbeatFlapProbability = Prob;
         }
-        catch (...) { return QueueResult::INVALID_PARAMETER; }
+        catch (...)
+        {
+            return QueueResult::INVALID_PARAMETER;
+        }
     }
     else if (Key == "replication.min.acks")
     {
@@ -2133,7 +2284,10 @@ QueueResult MessageQueue::SetGlobalConfig(const std::string& Key, const std::str
             uint32_t Acks = static_cast<uint32_t>(std::stoul(Value));
             MinReplicationAcks = Acks;
         }
-        catch (...) { return QueueResult::INVALID_PARAMETER; }
+        catch (...)
+        {
+            return QueueResult::INVALID_PARAMETER;
+        }
     }
 
     return QueueResult::SUCCESS;
@@ -2142,7 +2296,8 @@ std::string MessageQueue::GetGlobalConfig(const std::string& Key) const
 {
     std::shared_lock<std::shared_mutex> lock(ConfigMutex);
     auto it = GlobalConfig.find(Key);
-    if (it == GlobalConfig.end()) return "";
+    if (it == GlobalConfig.end())
+        return "";
     return it->second;
 }
 QueueResult MessageQueue::FlushAll()
@@ -2187,7 +2342,14 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
         auto Pos = NodeId.rfind('-');
         if (Pos != std::string::npos)
         {
-            try { ShardIndex = std::stoi(NodeId.substr(Pos + 1)); } catch (...) { ShardIndex = -1; }
+            try
+            {
+                ShardIndex = std::stoi(NodeId.substr(Pos + 1));
+            }
+            catch (...)
+            {
+                ShardIndex = -1;
+            }
         }
     }
 
@@ -2196,15 +2358,15 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
     std::string SelectedRole = "UNKNOWN";
     bool SelectedHealthy = true;
     uint32_t RetryCount = 0;
-    const uint32_t MaxRetries = 3; // 最大重试次数
-    
+    const uint32_t MaxRetries = 3;  // 最大重试次数
+
     if (ShardIndex >= 0)
     {
         std::shared_lock<std::shared_mutex> ClusterLock(ClusterMutex);
         if (static_cast<size_t>(ShardIndex) < Cluster.Shards.size())
         {
             const auto& Replicas = Cluster.Shards[static_cast<size_t>(ShardIndex)].Replicas;
-            
+
             // 第一优先级：健康Leader
             for (const auto& R : Replicas)
             {
@@ -2216,7 +2378,7 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
                     break;
                 }
             }
-            
+
             // 第二优先级：健康Follower（如果Leader不可用）
             if (SelectedRole != "LEADER")
             {
@@ -2231,21 +2393,29 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
                     }
                 }
             }
-            
+
             // 第三优先级：任何可用副本（如果都不健康，选择第一个）
             if (!SelectedHealthy && !Replicas.empty())
             {
                 SelectedNodeId = Replicas[0].NodeId;
-                SelectedRole = (Replicas[0].Role == ReplicaRole::LEADER ? "LEADER" : 
-                              Replicas[0].Role == ReplicaRole::FOLLOWER ? "FOLLOWER" : "UNKNOWN");
+                SelectedRole = (Replicas[0].Role == ReplicaRole::LEADER     ? "LEADER"
+                                : Replicas[0].Role == ReplicaRole::FOLLOWER ? "FOLLOWER"
+                                                                            : "UNKNOWN");
                 SelectedHealthy = false;
             }
-            
+
             // 记录重试信息到消息属性
             auto RetryIt = Message->Header.Properties.find("routing_retry_count");
             if (RetryIt != Message->Header.Properties.end())
             {
-                try { RetryCount = static_cast<uint32_t>(std::stoul(RetryIt->second)); } catch (...) { RetryCount = 0; }
+                try
+                {
+                    RetryCount = static_cast<uint32_t>(std::stoul(RetryIt->second));
+                }
+                catch (...)
+                {
+                    RetryCount = 0;
+                }
             }
             RetryCount++;
             Message->Header.Properties["routing_retry_count"] = std::to_string(RetryCount);
@@ -2277,7 +2447,7 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
         F.AddField("healthy", SelectedHealthy);
         F.AddField("retry_count", static_cast<uint32_t>(RetryCount));
         F.AddField("max_retries", MaxRetries);
-        
+
         std::string LogLevel = "INFO";
         if (RetryCount > 1)
         {
@@ -2289,12 +2459,13 @@ QueueResult MessageQueue::RouteMessage(const std::string& SourceQueue, MessagePt
             LogLevel = "ERROR";
             F.AddField("unhealthy_node", true);
         }
-        
+
         H_LOG(MQ,
-              LogLevel == "INFO" ? Helianthus::Common::LogVerbosity::Log :
-              LogLevel == "WARN" ? Helianthus::Common::LogVerbosity::Warning :
-                                     Helianthus::Common::LogVerbosity::Error,
-              "消息路由: queue={} target={} shard={} retry_count={} max_retries={} fallback_used={} unhealthy_node={}",
+              LogLevel == "INFO"   ? Helianthus::Common::LogVerbosity::Log
+              : LogLevel == "WARN" ? Helianthus::Common::LogVerbosity::Warning
+                                   : Helianthus::Common::LogVerbosity::Error,
+              "消息路由: queue={} target={} shard={} retry_count={} max_retries={} "
+              "fallback_used={} unhealthy_node={}",
               SourceQueue,
               SelectedNodeId,
               SelectedHealthy ? SelectedNodeId : std::string("unhealthy"),
@@ -2321,59 +2492,61 @@ std::string MessageQueue::GetDeadLetterQueueName(const std::string& QueueName) c
 QueueResult MessageQueue::EnsureDeadLetterQueue(const std::string& QueueName)
 {
     auto DeadLetterQueueName = GetDeadLetterQueueName(QueueName);
-    
+
     // 检查死信队列是否已存在
     if (QueueExists(DeadLetterQueueName))
     {
         return QueueResult::SUCCESS;
     }
-    
+
     // 创建死信队列配置
     QueueConfig DeadLetterConfig;
     DeadLetterConfig.Name = DeadLetterQueueName;
     DeadLetterConfig.Type = QueueType::DEAD_LETTER;
     DeadLetterConfig.Persistence = PersistenceMode::DISK_PERSISTENT;  // 死信队列默认持久化
-    DeadLetterConfig.MaxSize = 10000;  // 死信队列可以存储更多消息
+    DeadLetterConfig.MaxSize = 10000;                    // 死信队列可以存储更多消息
     DeadLetterConfig.MaxSizeBytes = 1024 * 1024 * 1024;  // 1GB
-    DeadLetterConfig.MessageTtlMs = 86400000;  // 24小时
-    DeadLetterConfig.EnableDeadLetter = false;  // 死信队列本身不再有死信队列
+    DeadLetterConfig.MessageTtlMs = 86400000;            // 24小时
+    DeadLetterConfig.EnableDeadLetter = false;           // 死信队列本身不再有死信队列
     DeadLetterConfig.EnablePriority = false;
     DeadLetterConfig.EnableBatching = false;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-          "创建死信队列: {}", DeadLetterQueueName);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
-          "DeadLetterQueue created: queue={} dlq={}", QueueName, DeadLetterQueueName);
-    
+
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "创建死信队列: {}", DeadLetterQueueName);
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "DeadLetterQueue created: queue={} dlq={}",
+          QueueName,
+          DeadLetterQueueName);
+
     return CreateQueue(DeadLetterConfig);
 }
 
 // DLQ监控方法实现
-QueueResult MessageQueue::GetDeadLetterQueueStats(const std::string& QueueName, 
+QueueResult MessageQueue::GetDeadLetterQueueStats(const std::string& QueueName,
                                                   DeadLetterQueueStats& OutStats) const
 {
     auto DeadLetterQueueName = GetDeadLetterQueueName(QueueName);
     const auto* DeadLetterQueue = GetQueueData(DeadLetterQueueName);
-    
+
     if (!DeadLetterQueue)
     {
         return QueueResult::QUEUE_NOT_FOUND;
     }
 
     std::shared_lock<std::shared_mutex> Lock(DeadLetterQueue->Mutex);
-    
+
     OutStats.QueueName = QueueName;
     OutStats.DeadLetterQueueName = DeadLetterQueueName;
     OutStats.TotalDeadLetterMessages = DeadLetterQueue->Stats.DeadLetterMessages;
     OutStats.CurrentDeadLetterMessages = DeadLetterQueue->DeadLetterMessages.size();
     OutStats.ExpiredMessages = DeadLetterQueue->Stats.ExpiredMessages;
-    OutStats.MaxRetriesExceededMessages = DeadLetterQueue->Stats.DeadLetterMessages - 
-                                          DeadLetterQueue->Stats.ExpiredMessages - 
+    OutStats.MaxRetriesExceededMessages = DeadLetterQueue->Stats.DeadLetterMessages -
+                                          DeadLetterQueue->Stats.ExpiredMessages -
                                           DeadLetterQueue->Stats.RejectedMessages;
     OutStats.RejectedMessages = DeadLetterQueue->Stats.RejectedMessages;
     OutStats.LastDeadLetterTime = DeadLetterQueue->Stats.LastMessageTime;
     OutStats.CreatedTime = DeadLetterQueue->Stats.CreatedTime;
-    
+
     // 计算死信率
     const auto* OriginalQueue = GetQueueData(QueueName);
     if (OriginalQueue)
@@ -2381,26 +2554,27 @@ QueueResult MessageQueue::GetDeadLetterQueueStats(const std::string& QueueName,
         std::shared_lock<std::shared_mutex> OriginalLock(OriginalQueue->Mutex);
         if (OriginalQueue->Stats.TotalMessages > 0)
         {
-            OutStats.DeadLetterRate = static_cast<double>(OutStats.TotalDeadLetterMessages) / 
+            OutStats.DeadLetterRate = static_cast<double>(OutStats.TotalDeadLetterMessages) /
                                       OriginalQueue->Stats.TotalMessages;
         }
     }
-    
+
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::GetAllDeadLetterQueueStats(std::vector<DeadLetterQueueStats>& OutStats) const
+QueueResult
+MessageQueue::GetAllDeadLetterQueueStats(std::vector<DeadLetterQueueStats>& OutStats) const
 {
     OutStats.clear();
     std::shared_lock<std::shared_mutex> Lock(QueuesMutex);
-    
+
     for (const auto& [QueueName, Queue] : Queues)
     {
         if (Queue->Config.Type == QueueType::DEAD_LETTER)
         {
-            continue; // 跳过死信队列本身
+            continue;  // 跳过死信队列本身
         }
-        
+
         DeadLetterQueueStats Stats;
         auto Result = GetDeadLetterQueueStats(QueueName, Stats);
         if (Result == QueueResult::SUCCESS)
@@ -2408,24 +2582,27 @@ QueueResult MessageQueue::GetAllDeadLetterQueueStats(std::vector<DeadLetterQueue
             OutStats.push_back(Stats);
         }
     }
-    
+
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::SetDeadLetterAlertConfig(const std::string& QueueName, 
+QueueResult MessageQueue::SetDeadLetterAlertConfig(const std::string& QueueName,
                                                    const DeadLetterAlertConfig& Config)
 {
     std::unique_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
     DeadLetterAlertConfigs[QueueName] = Config;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-          "设置DLQ告警配置: queue={}, maxCount={}, maxRate={}", 
-          QueueName, Config.MaxDeadLetterMessages, Config.MaxDeadLetterRate);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "设置DLQ告警配置: queue={}, maxCount={}, maxRate={}",
+          QueueName,
+          Config.MaxDeadLetterMessages,
+          Config.MaxDeadLetterRate);
+
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::GetDeadLetterAlertConfig(const std::string& QueueName, 
+QueueResult MessageQueue::GetDeadLetterAlertConfig(const std::string& QueueName,
                                                    DeadLetterAlertConfig& OutConfig) const
 {
     std::shared_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
@@ -2436,13 +2613,13 @@ QueueResult MessageQueue::GetDeadLetterAlertConfig(const std::string& QueueName,
         OutConfig = DeadLetterAlertConfig{};
         return QueueResult::SUCCESS;
     }
-    
+
     OutConfig = It->second;
     return QueueResult::SUCCESS;
 }
 
 QueueResult MessageQueue::GetActiveDeadLetterAlerts(const std::string& QueueName,
-                                                   std::vector<DeadLetterAlert>& OutAlerts) const
+                                                    std::vector<DeadLetterAlert>& OutAlerts) const
 {
     std::shared_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
     auto It = ActiveDeadLetterAlerts.find(QueueName);
@@ -2451,25 +2628,26 @@ QueueResult MessageQueue::GetActiveDeadLetterAlerts(const std::string& QueueName
         OutAlerts.clear();
         return QueueResult::SUCCESS;
     }
-    
+
     OutAlerts = It->second;
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::GetAllActiveDeadLetterAlerts(std::vector<DeadLetterAlert>& OutAlerts) const
+QueueResult
+MessageQueue::GetAllActiveDeadLetterAlerts(std::vector<DeadLetterAlert>& OutAlerts) const
 {
     OutAlerts.clear();
     std::shared_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
-    
+
     for (const auto& [QueueName, Alerts] : ActiveDeadLetterAlerts)
     {
         OutAlerts.insert(OutAlerts.end(), Alerts.begin(), Alerts.end());
     }
-    
+
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::ClearDeadLetterAlert(const std::string& QueueName, 
+QueueResult MessageQueue::ClearDeadLetterAlert(const std::string& QueueName,
                                                DeadLetterAlertType AlertType)
 {
     ClearDeadLetterAlertInternal(QueueName, AlertType);
@@ -2480,10 +2658,9 @@ QueueResult MessageQueue::ClearAllDeadLetterAlerts(const std::string& QueueName)
 {
     std::unique_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
     ActiveDeadLetterAlerts.erase(QueueName);
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-          "清除所有DLQ告警: queue={}", QueueName);
-    
+
+    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "清除所有DLQ告警: queue={}", QueueName);
+
     return QueueResult::SUCCESS;
 }
 
@@ -2503,7 +2680,7 @@ void MessageQueue::SetDeadLetterStatsHandler(DeadLetterStatsHandler Handler)
 void MessageQueue::ProcessDeadLetterMonitoring()
 {
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "启动DLQ监控线程");
-    
+
     while (!StopDeadLetterMonitor.load())
     {
         // 检查DLQ告警
@@ -2514,18 +2691,19 @@ void MessageQueue::ProcessDeadLetterMonitoring()
                 CheckDeadLetterAlerts(QueueName);
             }
         }
-        
+
         // 等待下一次检查，使用较短的等待时间以便及时响应停止信号
         std::unique_lock<std::mutex> WaitLock(HandlersMutex);
-        if (DeadLetterMonitorCondition.wait_for(WaitLock, 
-            std::chrono::milliseconds(1000), // 改为1秒检查一次，提高响应性
-            [this] { return StopDeadLetterMonitor.load(); }))
+        if (DeadLetterMonitorCondition.wait_for(
+                WaitLock,
+                std::chrono::milliseconds(1000),  // 改为1秒检查一次，提高响应性
+                [this] { return StopDeadLetterMonitor.load(); }))
         {
             // 停止信号被触发，立即退出
             break;
         }
     }
-    
+
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "DLQ监控线程停止");
 }
 
@@ -2537,38 +2715,47 @@ void MessageQueue::CheckDeadLetterAlerts(const std::string& QueueName)
     {
         return;
     }
-    
+
     DeadLetterAlertConfig Config;
     Result = GetDeadLetterAlertConfig(QueueName, Config);
     if (Result != QueueResult::SUCCESS)
     {
         return;
     }
-    
+
     // 检查死信数量告警
-    if (Config.EnableDeadLetterCountAlert && 
+    if (Config.EnableDeadLetterCountAlert &&
         Stats.CurrentDeadLetterMessages > Config.MaxDeadLetterMessages)
     {
-        const_cast<MessageQueue*>(this)->TriggerDeadLetterAlert(QueueName, DeadLetterAlertType::DEAD_LETTER_COUNT_EXCEEDED,
-                              "死信队列消息数量超过阈值",
-                              Stats.CurrentDeadLetterMessages, Config.MaxDeadLetterMessages);
+        const_cast<MessageQueue*>(this)->TriggerDeadLetterAlert(
+            QueueName,
+            DeadLetterAlertType::DEAD_LETTER_COUNT_EXCEEDED,
+            "死信队列消息数量超过阈值",
+            Stats.CurrentDeadLetterMessages,
+            Config.MaxDeadLetterMessages);
     }
-    
+
     // 检查死信率告警
-    if (Config.EnableDeadLetterRateAlert && 
-        Stats.DeadLetterRate > Config.MaxDeadLetterRate)
+    if (Config.EnableDeadLetterRateAlert && Stats.DeadLetterRate > Config.MaxDeadLetterRate)
     {
-        const_cast<MessageQueue*>(this)->TriggerDeadLetterAlert(QueueName, DeadLetterAlertType::DEAD_LETTER_RATE_EXCEEDED,
-                              "死信率超过阈值",
-                              0, 0, Stats.DeadLetterRate, Config.MaxDeadLetterRate);
+        const_cast<MessageQueue*>(this)->TriggerDeadLetterAlert(
+            QueueName,
+            DeadLetterAlertType::DEAD_LETTER_RATE_EXCEEDED,
+            "死信率超过阈值",
+            0,
+            0,
+            Stats.DeadLetterRate,
+            Config.MaxDeadLetterRate);
     }
-    
+
     // 检查死信队列已满告警
-    auto* DeadLetterQueue = const_cast<MessageQueue*>(this)->GetQueueData(Stats.DeadLetterQueueName);
-    if (DeadLetterQueue && DeadLetterQueue->DeadLetterMessages.size() >= DeadLetterQueue->Config.MaxSize)
+    auto* DeadLetterQueue =
+        const_cast<MessageQueue*>(this)->GetQueueData(Stats.DeadLetterQueueName);
+    if (DeadLetterQueue &&
+        DeadLetterQueue->DeadLetterMessages.size() >= DeadLetterQueue->Config.MaxSize)
     {
-        const_cast<MessageQueue*>(this)->TriggerDeadLetterAlert(QueueName, DeadLetterAlertType::DEAD_LETTER_QUEUE_FULL,
-                              "死信队列已满");
+        const_cast<MessageQueue*>(this)->TriggerDeadLetterAlert(
+            QueueName, DeadLetterAlertType::DEAD_LETTER_QUEUE_FULL, "死信队列已满");
     }
 }
 
@@ -2580,9 +2767,9 @@ void MessageQueue::UpdateDeadLetterStats(const std::string& QueueName, DeadLette
     {
         return;
     }
-    
+
     std::unique_lock<std::shared_mutex> Lock(DeadLetterQueue->Mutex);
-    
+
     switch (Reason)
     {
         case DeadLetterReason::EXPIRED:
@@ -2597,13 +2784,15 @@ void MessageQueue::UpdateDeadLetterStats(const std::string& QueueName, DeadLette
         default:
             break;
     }
-    
+
     DeadLetterQueue->Stats.DeadLetterMessages++;
-    DeadLetterQueue->Stats.LastMessageTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    DeadLetterQueue->Stats.LastMessageTime =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count();
 }
 
-void MessageQueue::TriggerDeadLetterAlert(const std::string& QueueName, 
+void MessageQueue::TriggerDeadLetterAlert(const std::string& QueueName,
                                           DeadLetterAlertType AlertType,
                                           const std::string& AlertMessage,
                                           uint64_t CurrentValue,
@@ -2621,23 +2810,28 @@ void MessageQueue::TriggerDeadLetterAlert(const std::string& QueueName,
     Alert.CurrentRate = CurrentRate;
     Alert.ThresholdRate = ThresholdRate;
     Alert.AlertTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                          std::chrono::system_clock::now().time_since_epoch())
+                          .count();
     Alert.IsActive = true;
-    
+
     // 添加到活跃告警列表
     std::unique_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
     ActiveDeadLetterAlerts[QueueName].push_back(Alert);
-    
+
     // 调用告警处理器
     if (DeadLetterAlertHandlerFunc)
     {
         DeadLetterAlertHandlerFunc(Alert);
     }
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, 
-          "DLQ告警触发: queue={}, type={}, message={}", 
-          QueueName, static_cast<int>(AlertType), AlertMessage);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning,
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Warning,
+          "DLQ告警触发: queue={}, type={}, message={}",
+          QueueName,
+          static_cast<int>(AlertType),
+          AlertMessage);
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Warning,
           "DLQ告警详情: queue={} type={} current={} threshold={} rate={} threshold_rate={}",
           QueueName,
           static_cast<int>(AlertType),
@@ -2647,7 +2841,7 @@ void MessageQueue::TriggerDeadLetterAlert(const std::string& QueueName,
           ThresholdRate);
 }
 
-void MessageQueue::ClearDeadLetterAlertInternal(const std::string& QueueName, 
+void MessageQueue::ClearDeadLetterAlertInternal(const std::string& QueueName,
                                                 DeadLetterAlertType AlertType)
 {
     std::unique_lock<std::shared_mutex> Lock(DeadLetterMonitorMutex);
@@ -2656,13 +2850,14 @@ void MessageQueue::ClearDeadLetterAlertInternal(const std::string& QueueName,
     {
         return;
     }
-    
+
     auto& Alerts = It->second;
-    Alerts.erase(std::remove_if(Alerts.begin(), Alerts.end(),
-        [AlertType](const DeadLetterAlert& Alert) {
-            return Alert.Type == AlertType;
-        }), Alerts.end());
-    
+    Alerts.erase(std::remove_if(Alerts.begin(),
+                                Alerts.end(),
+                                [AlertType](const DeadLetterAlert& Alert)
+                                { return Alert.Type == AlertType; }),
+                 Alerts.end());
+
     if (Alerts.empty())
     {
         ActiveDeadLetterAlerts.erase(It);
@@ -2672,7 +2867,8 @@ void MessageQueue::ClearDeadLetterAlertInternal(const std::string& QueueName,
 // 指标窗口辅助
 void MessageQueue::RecordEnqueueEvent(QueueData* Queue)
 {
-    if (!Queue) return;
+    if (!Queue)
+        return;
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::system_clock::now().time_since_epoch())
                    .count();
@@ -2681,7 +2877,8 @@ void MessageQueue::RecordEnqueueEvent(QueueData* Queue)
 
 void MessageQueue::RecordDequeueEvent(QueueData* Queue)
 {
-    if (!Queue) return;
+    if (!Queue)
+        return;
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::system_clock::now().time_since_epoch())
                    .count();
@@ -2690,17 +2887,21 @@ void MessageQueue::RecordDequeueEvent(QueueData* Queue)
 
 void MessageQueue::RecordLatencySample(QueueData* Queue, double Ms)
 {
-    if (!Queue) return;
+    if (!Queue)
+        return;
     if (Queue->LatencySamplesMs.size() >= Queue->LatencyCapacity)
     {
         // 简单环形：移除前半以控制开销
         Queue->LatencySamplesMs.erase(Queue->LatencySamplesMs.begin(),
-                                      Queue->LatencySamplesMs.begin() + Queue->LatencySamplesMs.size() / 2);
+                                      Queue->LatencySamplesMs.begin() +
+                                          Queue->LatencySamplesMs.size() / 2);
     }
     Queue->LatencySamplesMs.push_back(Ms);
 }
 
-void MessageQueue::TrimOld(std::deque<MessageTimestamp>& TsDeque, MessageTimestamp Now, uint32_t WindowMs)
+void MessageQueue::TrimOld(std::deque<MessageTimestamp>& TsDeque,
+                           MessageTimestamp Now,
+                           uint32_t WindowMs)
 {
     const auto cutoff = Now - WindowMs;
     while (!TsDeque.empty() && TsDeque.front() < cutoff)
@@ -2709,20 +2910,34 @@ void MessageQueue::TrimOld(std::deque<MessageTimestamp>& TsDeque, MessageTimesta
     }
 }
 
-double MessageQueue::ComputeRatePerSec(const std::deque<MessageTimestamp>& TsDeque, MessageTimestamp Now, uint32_t WindowMs)
+double MessageQueue::ComputeRatePerSec(const std::deque<MessageTimestamp>& TsDeque,
+                                       MessageTimestamp Now,
+                                       uint32_t WindowMs)
 {
-    if (TsDeque.empty()) return 0.0;
+    if (TsDeque.empty())
+        return 0.0;
     const double windowSec = static_cast<double>(WindowMs) / 1000.0;
     return static_cast<double>(TsDeque.size()) / windowSec;
 }
 
 void MessageQueue::ComputePercentiles(const std::vector<double>& Samples, double& P50, double& P95)
 {
-    if (Samples.empty()) { P50 = 0.0; P95 = 0.0; return; }
+    if (Samples.empty())
+    {
+        P50 = 0.0;
+        P95 = 0.0;
+        return;
+    }
     std::vector<double> tmp = Samples;
     std::sort(tmp.begin(), tmp.end());
-    auto idx50 = static_cast<size_t>(std::clamp(static_cast<long>(std::llround(0.5 * (tmp.size() - 1))), 0L, static_cast<long>(tmp.size()-1)));
-    auto idx95 = static_cast<size_t>(std::clamp(static_cast<long>(std::llround(0.95 * (tmp.size() - 1))), 0L, static_cast<long>(tmp.size()-1)));
+    auto idx50 =
+        static_cast<size_t>(std::clamp(static_cast<long>(std::llround(0.5 * (tmp.size() - 1))),
+                                       0L,
+                                       static_cast<long>(tmp.size() - 1)));
+    auto idx95 =
+        static_cast<size_t>(std::clamp(static_cast<long>(std::llround(0.95 * (tmp.size() - 1))),
+                                       0L,
+                                       static_cast<long>(tmp.size() - 1)));
     P50 = tmp[idx50];
     P95 = tmp[idx95];
 }
@@ -2742,7 +2957,8 @@ QueueResult MessageQueue::GetAllQueueMetrics(std::vector<QueueMetrics>& OutMetri
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::GetQueueMetrics(const std::string& QueueName, QueueMetrics& OutMetrics) const
+QueueResult MessageQueue::GetQueueMetrics(const std::string& QueueName,
+                                          QueueMetrics& OutMetrics) const
 {
     const auto* Queue = GetQueueData(QueueName);
     if (!Queue)
@@ -2762,14 +2978,17 @@ QueueResult MessageQueue::GetQueueMetrics(const std::string& QueueName, QueueMet
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::system_clock::now().time_since_epoch())
                    .count();
-    TrimOld(const_cast<std::deque<MessageTimestamp>&>(Queue->EnqueueTimestamps), now, MetricsWindowMs);
-    TrimOld(const_cast<std::deque<MessageTimestamp>&>(Queue->DequeueTimestamps), now, MetricsWindowMs);
+    TrimOld(
+        const_cast<std::deque<MessageTimestamp>&>(Queue->EnqueueTimestamps), now, MetricsWindowMs);
+    TrimOld(
+        const_cast<std::deque<MessageTimestamp>&>(Queue->DequeueTimestamps), now, MetricsWindowMs);
     OutMetrics.EnqueueRate = ComputeRatePerSec(Queue->EnqueueTimestamps, now, MetricsWindowMs);
     OutMetrics.DequeueRate = ComputeRatePerSec(Queue->DequeueTimestamps, now, MetricsWindowMs);
     ComputePercentiles(Queue->LatencySamplesMs, OutMetrics.P50LatencyMs, OutMetrics.P95LatencyMs);
 
     OutMetrics.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                               std::chrono::system_clock::now().time_since_epoch())
+                               .count();
 
     return QueueResult::SUCCESS;
 }
@@ -2780,7 +2999,9 @@ void MessageQueue::ProcessMetricsMonitoring()
     for (;;)
     {
         std::unique_lock<std::mutex> lock(MetricsMonitorMutex);
-        if (MetricsMonitorCondition.wait_for(lock, std::chrono::milliseconds(MetricsIntervalMs), [this]{ return StopMetricsMonitor.load(); }))
+        if (MetricsMonitorCondition.wait_for(lock,
+                                             std::chrono::milliseconds(MetricsIntervalMs),
+                                             [this] { return StopMetricsMonitor.load(); }))
         {
             break;
         }
@@ -2792,8 +3013,10 @@ void MessageQueue::ProcessMetricsMonitoring()
         {
             for (const auto& M : metricsList)
             {
-                H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
-                      "队列指标: queue={} pending={} total={} processed={} dlq={} retried={} enq_rate={} deq_rate={} p50_ms={} p95_ms={}",
+                H_LOG(MQ,
+                      Helianthus::Common::LogVerbosity::Log,
+                      "队列指标: queue={} pending={} total={} processed={} dlq={} retried={} "
+                      "enq_rate={} deq_rate={} p50_ms={} p95_ms={}",
                       M.QueueName,
                       static_cast<uint64_t>(M.PendingMessages),
                       static_cast<uint64_t>(M.TotalMessages),
@@ -2821,8 +3044,10 @@ void MessageQueue::ProcessMetricsMonitoring()
             {
                 for (const auto& R : S.Replicas)
                 {
-                    if (R.Role == ReplicaRole::LEADER) Leaders++;
-                    if (R.Healthy) HealthyReplicas++;
+                    if (R.Role == ReplicaRole::LEADER)
+                        Leaders++;
+                    if (R.Healthy)
+                        HealthyReplicas++;
                 }
             }
             // 复制滞后度聚合（基于 WAL 占位）
@@ -2843,9 +3068,13 @@ void MessageQueue::ProcessMetricsMonitoring()
                 }
             }
         }
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Log,
-              "集群指标: shards={} leaders={} healthy={} wal_total_len={} followers_max_applied={} replication_total_lag={}",
-              Shards, Leaders, HealthyReplicas,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Log,
+              "集群指标: shards={} leaders={} healthy={} wal_total_len={} followers_max_applied={} "
+              "replication_total_lag={}",
+              Shards,
+              Leaders,
+              HealthyReplicas,
               static_cast<uint64_t>(TotalWalLen),
               static_cast<uint64_t>(TotalFollowerApplied),
               static_cast<uint64_t>(TotalReplicationLag));
@@ -2862,8 +3091,12 @@ void MessageQueue::RebuildShardRing()
         const std::string NodeId = std::string("shard-") + std::to_string(I);
         ShardRing.AddNode(NodeId, std::max(ShardVirtualNodes, 1u));
     }
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "一致性哈希环构建完成: shards={} vnodes/node={} total_nodes={}",
-          ShardCount, ShardVirtualNodes, ShardRing.Size());
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "一致性哈希环构建完成: shards={} vnodes/node={} total_nodes={}",
+          ShardCount,
+          ShardVirtualNodes,
+          ShardRing.Size());
 }
 
 // 集群/分片/副本接口实现
@@ -2873,7 +3106,8 @@ QueueResult MessageQueue::SetClusterConfig(const ClusterConfig& Config)
         std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
         Cluster = Config;
         // 同步 ShardCount 与 HashRing（按 Shards 大小）
-        ShardCount = static_cast<uint32_t>(Cluster.Shards.size() > 0 ? Cluster.Shards.size() : ShardCount);
+        ShardCount =
+            static_cast<uint32_t>(Cluster.Shards.size() > 0 ? Cluster.Shards.size() : ShardCount);
     }
     RebuildShardRing();
     return QueueResult::SUCCESS;
@@ -2886,27 +3120,40 @@ QueueResult MessageQueue::GetClusterConfig(ClusterConfig& OutConfig) const
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::GetShardForKey(const std::string& Key, ShardId& OutShardId, std::string& OutNodeId) const
+QueueResult MessageQueue::GetShardForKey(const std::string& Key,
+                                         ShardId& OutShardId,
+                                         std::string& OutNodeId) const
 {
     const std::string NodeId = ShardRing.GetNode(Key);
-    if (NodeId.empty()) return QueueResult::INTERNAL_ERROR;
+    if (NodeId.empty())
+        return QueueResult::INTERNAL_ERROR;
     // 解析 shard index
     int ShardIndex = -1;
     auto Pos = NodeId.rfind('-');
     if (Pos != std::string::npos)
     {
-        try { ShardIndex = std::stoi(NodeId.substr(Pos + 1)); } catch (...) { ShardIndex = -1; }
+        try
+        {
+            ShardIndex = std::stoi(NodeId.substr(Pos + 1));
+        }
+        catch (...)
+        {
+            ShardIndex = -1;
+        }
     }
-    if (ShardIndex < 0) return QueueResult::INTERNAL_ERROR;
+    if (ShardIndex < 0)
+        return QueueResult::INTERNAL_ERROR;
     OutShardId = static_cast<ShardId>(ShardIndex);
     OutNodeId = NodeId;
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::GetShardReplicas(ShardId Shard, std::vector<ReplicaInfo>& OutReplicas) const
+QueueResult MessageQueue::GetShardReplicas(ShardId Shard,
+                                           std::vector<ReplicaInfo>& OutReplicas) const
 {
     std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
-    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    if (Shard >= Cluster.Shards.size())
+        return QueueResult::QUEUE_NOT_FOUND;
     OutReplicas = Cluster.Shards[Shard].Replicas;
     return QueueResult::SUCCESS;
 }
@@ -2933,7 +3180,9 @@ void MessageQueue::ProcessHeartbeat()
     for (;;)
     {
         std::unique_lock<std::mutex> Lk(HeartbeatMutex);
-        if (HeartbeatCondition.wait_for(Lk, std::chrono::milliseconds(HeartbeatIntervalMs), [this]{ return StopHeartbeat.load(); }))
+        if (HeartbeatCondition.wait_for(Lk,
+                                        std::chrono::milliseconds(HeartbeatIntervalMs),
+                                        [this] { return StopHeartbeat.load(); }))
         {
             break;
         }
@@ -2945,12 +3194,16 @@ void MessageQueue::ProcessHeartbeat()
             if (!Cluster.Shards.empty())
             {
                 // 简单伪随机：基于时间种子与自增扰动，避免全局rand()
-                const auto NowNs = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+                const auto NowNs =
+                    std::chrono::high_resolution_clock::now().time_since_epoch().count();
                 uint64_t Seed = static_cast<uint64_t>(NowNs);
-                auto NextBool = [&Seed]() {
+                auto NextBool = [&Seed]()
+                {
                     // xorshift64*
-                    Seed ^= Seed >> 12; Seed ^= Seed << 25; Seed ^= Seed >> 27; 
-                    uint64_t R = Seed * 2685821657736338717ULL; 
+                    Seed ^= Seed >> 12;
+                    Seed ^= Seed << 25;
+                    Seed ^= Seed >> 27;
+                    uint64_t R = Seed * 2685821657736338717ULL;
                     return (R & 0xFFFFFFFFULL);
                 };
                 for (auto& Shard : Cluster.Shards)
@@ -2963,12 +3216,17 @@ void MessageQueue::ProcessHeartbeat()
                         // 以 HeartbeatFlapProbability 概率翻转健康状态
                         uint32_t RandomValue = static_cast<uint32_t>(NextBool());
                         // 将0..UINT32映射到[0,1)
-                        const double Uniform = static_cast<double>(RandomValue) / static_cast<double>(0xFFFFFFFFu);
+                        const double Uniform =
+                            static_cast<double>(RandomValue) / static_cast<double>(0xFFFFFFFFu);
                         if (Uniform < HeartbeatFlapProbability)
                         {
                             Replica.Healthy = !Replica.Healthy;
                         }
-                        if (Replica.Role == ReplicaRole::LEADER) { CurrentLeader = Replica.NodeId; LeaderHealthy = Replica.Healthy; }
+                        if (Replica.Role == ReplicaRole::LEADER)
+                        {
+                            CurrentLeader = Replica.NodeId;
+                            LeaderHealthy = Replica.Healthy;
+                        }
                     }
 
                     // 简单主选举：Leader不健康则选择第一个健康Follower接管
@@ -2988,8 +3246,10 @@ void MessageQueue::ProcessHeartbeat()
                             // 执行切换
                             for (auto& Replica : Shard.Replicas)
                             {
-                                if (Replica.NodeId == CurrentLeader) Replica.Role = ReplicaRole::FOLLOWER;
-                                if (Replica.NodeId == TakeoverNode) Replica.Role = ReplicaRole::LEADER;
+                                if (Replica.NodeId == CurrentLeader)
+                                    Replica.Role = ReplicaRole::FOLLOWER;
+                                if (Replica.NodeId == TakeoverNode)
+                                    Replica.Role = ReplicaRole::LEADER;
                             }
                             // 回调（在持锁内先收集参数，出锁后触发）
                             std::string OldLeader = CurrentLeader;
@@ -2997,8 +3257,10 @@ void MessageQueue::ProcessHeartbeat()
                             ShardId ShardIdValue = Shard.Id;
                             // 出锁后回调
                             Lock.unlock();
-                            if (FailoverCb) FailoverCb(ShardIdValue, OldLeader, NewLeader);
-                            if (LeaderChangedCb) LeaderChangedCb(ShardIdValue, OldLeader, NewLeader);
+                            if (FailoverCb)
+                                FailoverCb(ShardIdValue, OldLeader, NewLeader);
+                            if (LeaderChangedCb)
+                                LeaderChangedCb(ShardIdValue, OldLeader, NewLeader);
                             // 重新加锁以继续循环
                             Lock.lock();
                         }
@@ -3014,7 +3276,8 @@ void MessageQueue::ProcessHeartbeat()
             {
                 auto& Wal = WalPerShard[S];
                 const uint64_t LeaderLen = static_cast<uint64_t>(Wal.Entries.size());
-                if (LeaderLen == 0) continue;
+                if (LeaderLen == 0)
+                    continue;
                 for (auto& Pair : Wal.FollowerAppliedIndex)
                 {
                     uint64_t& Applied = Pair.second;
@@ -3042,7 +3305,9 @@ void MessageQueue::ProcessHeartbeat()
         }
         if (!NodeHealthList.empty())
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "心跳滴答: nodes={}",
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Verbose,
+                  "心跳滴答: nodes={}",
                   static_cast<uint64_t>(NodeHealthList.size()));
         }
     }
@@ -3059,7 +3324,8 @@ QueueResult MessageQueue::GetClusterShardStatuses(std::vector<ShardInfo>& OutSha
 uint32_t MessageQueue::SimulateReplication(uint32_t ShardIndex, MessageId Id)
 {
     std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
-    if (ShardIndex >= Cluster.Shards.size()) return 0;
+    if (ShardIndex >= Cluster.Shards.size())
+        return 0;
     const auto& Shard = Cluster.Shards[ShardIndex];
     // 简化：对所有健康Follower计为ACK，最多不超过 MinReplicationAcks
     uint32_t Acked = 0;
@@ -3068,7 +3334,8 @@ uint32_t MessageQueue::SimulateReplication(uint32_t ShardIndex, MessageId Id)
         if (Replica.Role == ReplicaRole::FOLLOWER && Replica.Healthy)
         {
             Acked++;
-            if (Acked >= MinReplicationAcks) break;
+            if (Acked >= MinReplicationAcks)
+                break;
         }
     }
     return Acked;
@@ -3077,30 +3344,51 @@ uint32_t MessageQueue::SimulateReplication(uint32_t ShardIndex, MessageId Id)
 QueueResult MessageQueue::PromoteToLeader(ShardId Shard, const std::string& NodeId)
 {
     std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
-    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    if (Shard >= Cluster.Shards.size())
+        return QueueResult::QUEUE_NOT_FOUND;
     auto& Replicas = Cluster.Shards[Shard].Replicas;
     std::string OldLeader;
-    for (auto& R : Replicas) {
-        if (R.Role == ReplicaRole::LEADER) { OldLeader = R.NodeId; R.Role = ReplicaRole::FOLLOWER; }
+    for (auto& R : Replicas)
+    {
+        if (R.Role == ReplicaRole::LEADER)
+        {
+            OldLeader = R.NodeId;
+            R.Role = ReplicaRole::FOLLOWER;
+        }
     }
     bool Found = false;
-    for (auto& R : Replicas) {
-        if (R.NodeId == NodeId) { R.Role = ReplicaRole::LEADER; Found = true; break; }
+    for (auto& R : Replicas)
+    {
+        if (R.NodeId == NodeId)
+        {
+            R.Role = ReplicaRole::LEADER;
+            Found = true;
+            break;
+        }
     }
-    if (!Found) return QueueResult::QUEUE_NOT_FOUND;
+    if (!Found)
+        return QueueResult::QUEUE_NOT_FOUND;
     Lock.unlock();
-    if (LeaderChangedCb) LeaderChangedCb(Shard, OldLeader, NodeId);
+    if (LeaderChangedCb)
+        LeaderChangedCb(Shard, OldLeader, NodeId);
     return QueueResult::SUCCESS;
 }
 
 QueueResult MessageQueue::DemoteToFollower(ShardId Shard, const std::string& NodeId)
 {
     std::unique_lock<std::shared_mutex> Lock(ClusterMutex);
-    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
+    if (Shard >= Cluster.Shards.size())
+        return QueueResult::QUEUE_NOT_FOUND;
     auto& Replicas = Cluster.Shards[Shard].Replicas;
     bool Found = false;
-    for (auto& R : Replicas) {
-        if (R.NodeId == NodeId) { R.Role = ReplicaRole::FOLLOWER; Found = true; break; }
+    for (auto& R : Replicas)
+    {
+        if (R.NodeId == NodeId)
+        {
+            R.Role = ReplicaRole::FOLLOWER;
+            Found = true;
+            break;
+        }
     }
     return Found ? QueueResult::SUCCESS : QueueResult::QUEUE_NOT_FOUND;
 }
@@ -3108,9 +3396,15 @@ QueueResult MessageQueue::DemoteToFollower(ShardId Shard, const std::string& Nod
 QueueResult MessageQueue::GetCurrentLeader(ShardId Shard, std::string& OutNodeId) const
 {
     std::shared_lock<std::shared_mutex> Lock(ClusterMutex);
-    if (Shard >= Cluster.Shards.size()) return QueueResult::QUEUE_NOT_FOUND;
-    for (const auto& R : Cluster.Shards[Shard].Replicas) {
-        if (R.Role == ReplicaRole::LEADER) { OutNodeId = R.NodeId; return QueueResult::SUCCESS; }
+    if (Shard >= Cluster.Shards.size())
+        return QueueResult::QUEUE_NOT_FOUND;
+    for (const auto& R : Cluster.Shards[Shard].Replicas)
+    {
+        if (R.Role == ReplicaRole::LEADER)
+        {
+            OutNodeId = R.NodeId;
+            return QueueResult::SUCCESS;
+        }
     }
     OutNodeId.clear();
     return QueueResult::QUEUE_NOT_FOUND;
@@ -3137,7 +3431,7 @@ TransactionId MessageQueue::GenerateTransactionId()
 TransactionId MessageQueue::BeginTransaction(const std::string& Description, uint32_t TimeoutMs)
 {
     std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     TransactionId Id = GenerateTransactionId();
     Transaction Transaction;
     Transaction.Id = Id;
@@ -3145,36 +3439,42 @@ TransactionId MessageQueue::BeginTransaction(const std::string& Description, uin
     Transaction.Description = Description;
     Transaction.TimeoutMs = TimeoutMs;
     Transaction.StartTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
     Transaction.IsDistributed = false;
-    
+
     Transactions[Id] = Transaction;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "开始事务: id={}, description={}, timeout={}ms", 
-          Id, Description, TimeoutMs);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "开始事务: id={}, description={}, timeout={}ms",
+          Id,
+          Description,
+          TimeoutMs);
+
     // 唤醒超时检测线程，加速短超时事务处理
     TransactionTimeoutCondition.notify_all();
-    
+
     return Id;
 }
 
 QueueResult MessageQueue::CommitTransaction(TransactionId Id)
 {
     std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     auto It = Transactions.find(Id);
     if (It == Transactions.end())
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务不存在: id={}", Id);
         return QueueResult::TRANSACTION_NOT_FOUND;
     }
-    
+
     Transaction& Transaction = It->second;
 
     // 如果已超时或当前已超过超时时间，按不存在处理
     auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                   std::chrono::system_clock::now().time_since_epoch())
+                   .count();
     if (Transaction.Status == TransactionStatus::TIMEOUT ||
         (Transaction.TimeoutMs > 0 && Transaction.StartTime + Transaction.TimeoutMs < Now))
     {
@@ -3195,15 +3495,18 @@ QueueResult MessageQueue::CommitTransaction(TransactionId Id)
 
     if (Transaction.Status != TransactionStatus::PENDING)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务状态不正确: id={}, status={}", 
-              Id, static_cast<int>(Transaction.Status));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Error,
+              "事务状态不正确: id={}, status={}",
+              Id,
+              static_cast<int>(Transaction.Status));
         return QueueResult::INVALID_STATE;
     }
-    
+
     // 执行所有操作
     bool AllSuccess = true;
     std::string ErrorMessage;
-    
+
     for (const auto& Operation : Transaction.Operations)
     {
         auto Result = ExecuteTransactionOperation(Operation);
@@ -3214,11 +3517,12 @@ QueueResult MessageQueue::CommitTransaction(TransactionId Id)
             break;
         }
     }
-    
+
     // 更新事务状态
     Transaction.EndTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+
     if (AllSuccess)
     {
         Transaction.Status = TransactionStatus::COMMITTED;
@@ -3227,53 +3531,61 @@ QueueResult MessageQueue::CommitTransaction(TransactionId Id)
     else
     {
         Transaction.Status = TransactionStatus::FAILED;
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务提交失败: id={}, error={}", Id, ErrorMessage);
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Error,
+              "事务提交失败: id={}, error={}",
+              Id,
+              ErrorMessage);
     }
-    
+
     // 更新统计信息
     UpdateTransactionStats(Transaction);
-    
+
     // 通知回调
     NotifyTransactionCommit(Id, AllSuccess, ErrorMessage);
-    
+
     return AllSuccess ? QueueResult::SUCCESS : QueueResult::OPERATION_FAILED;
 }
 
 QueueResult MessageQueue::RollbackTransaction(TransactionId Id, const std::string& Reason)
 {
     std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     auto It = Transactions.find(Id);
     if (It == Transactions.end())
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务不存在: id={}", Id);
         return QueueResult::TRANSACTION_NOT_FOUND;
     }
-    
+
     Transaction& Transaction = It->second;
     if (Transaction.Status != TransactionStatus::PENDING)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务状态不正确: id={}, status={}", 
-              Id, static_cast<int>(Transaction.Status));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Error,
+              "事务状态不正确: id={}, status={}",
+              Id,
+              static_cast<int>(Transaction.Status));
         return QueueResult::INVALID_STATE;
     }
-    
+
     // 回滚所有操作
     auto Result = RollbackTransactionOperations(Id);
-    
+
     // 更新事务状态
     Transaction.EndTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
     Transaction.Status = TransactionStatus::ROLLED_BACK;
-    
+
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "事务回滚: id={}, reason={}", Id, Reason);
-    
+
     // 更新统计信息
     UpdateTransactionStats(Transaction);
-    
+
     // 通知回调
     NotifyTransactionRollback(Id, Reason);
-    
+
     return Result;
 }
 
@@ -3282,7 +3594,9 @@ QueueResult MessageQueue::AbortTransaction(TransactionId Id, const std::string& 
     return RollbackTransaction(Id, Reason);
 }
 
-QueueResult MessageQueue::SendMessageInTransaction(TransactionId Id, const std::string& QueueName, MessagePtr Message)
+QueueResult MessageQueue::SendMessageInTransaction(TransactionId Id,
+                                                   const std::string& QueueName,
+                                                   MessagePtr Message)
 {
     if (!Message)
     {
@@ -3302,30 +3616,37 @@ QueueResult MessageQueue::SendMessageInTransaction(TransactionId Id, const std::
             return QueueResult::INVALID_STATE;
         }
     }
-    
+
     TransactionOperation Operation;
     Operation.Type = TransactionOperationType::SEND_MESSAGE;
     Operation.QueueName = QueueName;
     Operation.Message = Message;
     Operation.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
 
     return AddTransactionOperation(Id, Operation);
 }
 
-QueueResult MessageQueue::AcknowledgeMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId)
+QueueResult MessageQueue::AcknowledgeMessageInTransaction(TransactionId Id,
+                                                          const std::string& QueueName,
+                                                          MessageId MessageId)
 {
     TransactionOperation Operation;
     Operation.Type = TransactionOperationType::ACKNOWLEDGE;
     Operation.QueueName = QueueName;
     Operation.TargetMessageId = MessageId;
     Operation.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+
     return AddTransactionOperation(Id, Operation);
 }
 
-QueueResult MessageQueue::RejectMessageInTransaction(TransactionId Id, const std::string& QueueName, MessageId MessageId, const std::string& Reason)
+QueueResult MessageQueue::RejectMessageInTransaction(TransactionId Id,
+                                                     const std::string& QueueName,
+                                                     MessageId MessageId,
+                                                     const std::string& Reason)
 {
     TransactionOperation Operation;
     Operation.Type = TransactionOperationType::REJECT_MESSAGE;
@@ -3333,8 +3654,9 @@ QueueResult MessageQueue::RejectMessageInTransaction(TransactionId Id, const std
     Operation.TargetMessageId = MessageId;
     Operation.ErrorMessage = Reason;
     Operation.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+
     return AddTransactionOperation(Id, Operation);
 }
 
@@ -3345,8 +3667,9 @@ QueueResult MessageQueue::CreateQueueInTransaction(TransactionId Id, const Queue
     Operation.QueueName = Config.Name;
     Operation.TargetQueueConfig = Config;
     Operation.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+
     return AddTransactionOperation(Id, Operation);
 }
 
@@ -3356,36 +3679,45 @@ QueueResult MessageQueue::DeleteQueueInTransaction(TransactionId Id, const std::
     Operation.Type = TransactionOperationType::DELETE_QUEUE;
     Operation.QueueName = QueueName;
     Operation.Timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+
     return AddTransactionOperation(Id, Operation);
 }
 
-QueueResult MessageQueue::AddTransactionOperation(TransactionId Id, const TransactionOperation& Operation)
+QueueResult MessageQueue::AddTransactionOperation(TransactionId Id,
+                                                  const TransactionOperation& Operation)
 {
     // 写操作需要独占锁，避免并发下读取锁导致未定义行为
     std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     auto It = Transactions.find(Id);
     if (It == Transactions.end())
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务不存在: id={}", Id);
         return QueueResult::INVALID_PARAMETER;
     }
-    
+
     Transaction& Transaction = It->second;
     if (Transaction.Status != TransactionStatus::PENDING)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务状态不正确: id={}, status={}", 
-              Id, static_cast<int>(Transaction.Status));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Error,
+              "事务状态不正确: id={}, status={}",
+              Id,
+              static_cast<int>(Transaction.Status));
         return QueueResult::INVALID_STATE;
     }
-    
+
     Transaction.Operations.push_back(Operation);
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "添加事务操作: id={}, type={}, queue={}", 
-          Id, static_cast<int>(Operation.Type), Operation.QueueName);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "添加事务操作: id={}, type={}, queue={}",
+          Id,
+          static_cast<int>(Operation.Type),
+          Operation.QueueName);
+
     return QueueResult::SUCCESS;
 }
 
@@ -3395,21 +3727,25 @@ QueueResult MessageQueue::ExecuteTransactionOperation(const TransactionOperation
     {
         case TransactionOperationType::SEND_MESSAGE:
             return SendMessage(Operation.QueueName, Operation.Message);
-            
+
         case TransactionOperationType::ACKNOWLEDGE:
             return AcknowledgeMessage(Operation.QueueName, Operation.TargetMessageId);
-            
+
         case TransactionOperationType::REJECT_MESSAGE:
-            return RejectMessage(Operation.QueueName, Operation.TargetMessageId, false); // 事务中拒收不重新入队
-            
+            return RejectMessage(
+                Operation.QueueName, Operation.TargetMessageId, false);  // 事务中拒收不重新入队
+
         case TransactionOperationType::CREATE_QUEUE:
             return CreateQueue(Operation.TargetQueueConfig);
-            
+
         case TransactionOperationType::DELETE_QUEUE:
             return DeleteQueue(Operation.QueueName);
-            
+
         default:
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "未知的事务操作类型: {}", static_cast<int>(Operation.Type));
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Error,
+                  "未知的事务操作类型: {}",
+                  static_cast<int>(Operation.Type));
             return QueueResult::INVALID_PARAMETER;
     }
 }
@@ -3420,9 +3756,9 @@ QueueResult MessageQueue::RollbackTransactionOperations(TransactionId Id)
     // 对于消息发送，可以标记为待删除
     // 对于消息确认/拒收，可以恢复消息状态
     // 对于队列创建/删除，可以反向操作
-    
+
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "回滚事务操作: id={}", Id);
-    
+
     // 简化实现：记录回滚操作
     return QueueResult::SUCCESS;
 }
@@ -3430,13 +3766,13 @@ QueueResult MessageQueue::RollbackTransactionOperations(TransactionId Id)
 QueueResult MessageQueue::GetTransactionStatus(TransactionId Id, TransactionStatus& Status)
 {
     std::shared_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     auto It = Transactions.find(Id);
     if (It == Transactions.end())
     {
         return QueueResult::INVALID_PARAMETER;
     }
-    
+
     Status = It->second.Status;
     return QueueResult::SUCCESS;
 }
@@ -3444,13 +3780,13 @@ QueueResult MessageQueue::GetTransactionStatus(TransactionId Id, TransactionStat
 QueueResult MessageQueue::GetTransactionInfo(TransactionId Id, Transaction& Info)
 {
     std::shared_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     auto It = Transactions.find(Id);
     if (It == Transactions.end())
     {
         return QueueResult::INVALID_PARAMETER;
     }
-    
+
     Info = It->second;
     return QueueResult::SUCCESS;
 }
@@ -3480,9 +3816,9 @@ void MessageQueue::SetTransactionTimeoutHandler(TransactionTimeoutHandler Handle
 void MessageQueue::UpdateTransactionStats(const Transaction& Transaction)
 {
     std::lock_guard<std::mutex> Lock(TransactionStatsMutex);
-    
+
     TransactionStatsData.TotalTransactions++;
-    
+
     switch (Transaction.Status)
     {
         case TransactionStatus::COMMITTED:
@@ -3500,34 +3836,45 @@ void MessageQueue::UpdateTransactionStats(const Transaction& Transaction)
         default:
             break;
     }
-    
+
     // 计算成功率
     if (TransactionStatsData.TotalTransactions > 0)
     {
-        TransactionStatsData.SuccessRate = static_cast<double>(TransactionStatsData.CommittedTransactions) / TransactionStatsData.TotalTransactions;
-        TransactionStatsData.RollbackRate = static_cast<double>(TransactionStatsData.RolledBackTransactions) / TransactionStatsData.TotalTransactions;
-        TransactionStatsData.TimeoutRate = static_cast<double>(TransactionStatsData.TimeoutTransactions) / TransactionStatsData.TotalTransactions;
+        TransactionStatsData.SuccessRate =
+            static_cast<double>(TransactionStatsData.CommittedTransactions) /
+            TransactionStatsData.TotalTransactions;
+        TransactionStatsData.RollbackRate =
+            static_cast<double>(TransactionStatsData.RolledBackTransactions) /
+            TransactionStatsData.TotalTransactions;
+        TransactionStatsData.TimeoutRate =
+            static_cast<double>(TransactionStatsData.TimeoutTransactions) /
+            TransactionStatsData.TotalTransactions;
     }
-    
+
     // 计算平均时间
     if (Transaction.EndTime > Transaction.StartTime)
     {
         uint64_t Duration = Transaction.EndTime - Transaction.StartTime;
         if (Transaction.Status == TransactionStatus::COMMITTED)
         {
-            TransactionStatsData.AverageCommitTimeMs = (TransactionStatsData.AverageCommitTimeMs + Duration) / 2.0;
+            TransactionStatsData.AverageCommitTimeMs =
+                (TransactionStatsData.AverageCommitTimeMs + Duration) / 2.0;
         }
         else if (Transaction.Status == TransactionStatus::ROLLED_BACK)
         {
-            TransactionStatsData.AverageRollbackTimeMs = (TransactionStatsData.AverageRollbackTimeMs + Duration) / 2.0;
+            TransactionStatsData.AverageRollbackTimeMs =
+                (TransactionStatsData.AverageRollbackTimeMs + Duration) / 2.0;
         }
     }
-    
+
     TransactionStatsData.LastUpdateTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                                              std::chrono::system_clock::now().time_since_epoch())
+                                              .count();
 }
 
-void MessageQueue::NotifyTransactionCommit(TransactionId Id, bool Success, const std::string& ErrorMessage)
+void MessageQueue::NotifyTransactionCommit(TransactionId Id,
+                                           bool Success,
+                                           const std::string& ErrorMessage)
 {
     if (TransactionCommitHandlerFunc)
     {
@@ -3557,28 +3904,29 @@ void MessageQueue::ProcessTransactionTimeouts()
     {
         std::unique_lock<std::mutex> Lock(TransactionTimeoutMutex);
         TransactionTimeoutCondition.wait_for(Lock, std::chrono::seconds(1));
-        
+
         if (StopTransactionTimeout)
             break;
-        
+
         auto Now = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-        
+                       std::chrono::system_clock::now().time_since_epoch())
+                       .count();
+
         std::vector<TransactionId> TimeoutTransactions;
-        
+
         {
             std::shared_lock<std::shared_mutex> TransactionsLock(TransactionsMutex);
             for (const auto& Pair : Transactions)
             {
                 const Transaction& Transaction = Pair.second;
-                if (Transaction.Status == TransactionStatus::PENDING && 
+                if (Transaction.Status == TransactionStatus::PENDING &&
                     Transaction.StartTime + Transaction.TimeoutMs < Now)
                 {
                     TimeoutTransactions.push_back(Transaction.Id);
                 }
             }
         }
-        
+
         // 处理超时事务：回滚并标记为 TIMEOUT（不删除，便于后续状态查询）
         for (TransactionId Id : TimeoutTransactions)
         {
@@ -3598,17 +3946,19 @@ void MessageQueue::ProcessTransactionTimeouts()
                     // 保留记录，便于 GetTransactionStatus 查询
                 }
             }
-            
+
             NotifyTransactionTimeout(Id);
         }
     }
 }
 
 // 分布式事务支持实现
-QueueResult MessageQueue::BeginDistributedTransaction(const std::string& CoordinatorId, const std::string& Description, uint32_t TimeoutMs)
+QueueResult MessageQueue::BeginDistributedTransaction(const std::string& CoordinatorId,
+                                                      const std::string& Description,
+                                                      uint32_t TimeoutMs)
 {
     std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     TransactionId Id = GenerateTransactionId();
     Transaction Transaction;
     Transaction.Id = Id;
@@ -3616,47 +3966,56 @@ QueueResult MessageQueue::BeginDistributedTransaction(const std::string& Coordin
     Transaction.Description = Description;
     Transaction.TimeoutMs = TimeoutMs;
     Transaction.StartTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
     Transaction.IsDistributed = true;
     Transaction.CoordinatorId = CoordinatorId;
-    
+
     Transactions[Id] = Transaction;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "开始分布式事务: id={}, coordinator={}, description={}, timeout={}ms", 
-          Id, CoordinatorId, Description, TimeoutMs);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "开始分布式事务: id={}, coordinator={}, description={}, timeout={}ms",
+          Id,
+          CoordinatorId,
+          Description,
+          TimeoutMs);
+
     return QueueResult::SUCCESS;
 }
 
 QueueResult MessageQueue::PrepareTransaction(TransactionId Id)
 {
     std::unique_lock<std::shared_mutex> Lock(TransactionsMutex);
-    
+
     auto It = Transactions.find(Id);
     if (It == Transactions.end())
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务不存在: id={}", Id);
         return QueueResult::TRANSACTION_NOT_FOUND;
     }
-    
+
     Transaction& Transaction = It->second;
     if (Transaction.Status != TransactionStatus::PENDING)
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务状态不正确: id={}, status={}", 
-              Id, static_cast<int>(Transaction.Status));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Error,
+              "事务状态不正确: id={}, status={}",
+              Id,
+              static_cast<int>(Transaction.Status));
         return QueueResult::INVALID_STATE;
     }
-    
+
     // 检查所有操作是否可以执行
     bool AllCanPrepare = true;
     std::string ErrorMessage;
-    
+
     for (const auto& Operation : Transaction.Operations)
     {
         // 这里可以添加预检查逻辑
         // 例如：检查队列是否存在、消息是否有效等
     }
-    
+
     if (AllCanPrepare)
     {
         H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "事务准备就绪: id={}", Id);
@@ -3664,7 +4023,11 @@ QueueResult MessageQueue::PrepareTransaction(TransactionId Id)
     }
     else
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, "事务准备失败: id={}, error={}", Id, ErrorMessage);
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Error,
+              "事务准备失败: id={}, error={}",
+              Id,
+              ErrorMessage);
         return QueueResult::OPERATION_FAILED;
     }
 }
@@ -3676,7 +4039,8 @@ QueueResult MessageQueue::CommitDistributedTransaction(TransactionId Id)
     return CommitTransaction(Id);
 }
 
-QueueResult MessageQueue::RollbackDistributedTransaction(TransactionId Id, const std::string& Reason)
+QueueResult MessageQueue::RollbackDistributedTransaction(TransactionId Id,
+                                                         const std::string& Reason)
 {
     // 分布式事务回滚
     return RollbackTransaction(Id, Reason);

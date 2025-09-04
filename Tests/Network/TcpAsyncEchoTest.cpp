@@ -7,9 +7,9 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <mutex>
 
 #include <gtest/gtest.h>
 
@@ -78,7 +78,8 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [&ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [&ServerReady, &MessageReceived, &ReceivedMessage](
+            NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -109,16 +110,17 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
             *StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
                 auto Buffer = std::make_shared<std::vector<char>>(1024);
-                ServerSocket->AsyncReceive(Buffer->data(),
-                                          1024,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-                                          {
-                                              if (Err == NetworkError::NONE && Bytes > 0)
-                                              {
-                                                  Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                  (*StartReceive)();  // 继续接收
-                                              }
-                                          });
+                ServerSocket->AsyncReceive(
+                    Buffer->data(),
+                    1024,
+                    [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
+                    {
+                        if (Err == NetworkError::NONE && Bytes > 0)
+                        {
+                            Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                            (*StartReceive)();  // 继续接收
+                        }
+                    });
             };
             (*StartReceive)();
         });
@@ -140,17 +142,20 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
     // 使用异步连接
     std::atomic<bool> ConnectCompleted = false;
     NetworkError ConnectResult = NetworkError::NONE;
-    
-    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-        ConnectResult = Err;
-        ConnectCompleted = true;
-    });
-    
+
+    ClientSocket->AsyncConnect(ServerAddr,
+                               [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                               {
+                                   ConnectResult = Err;
+                                   ConnectCompleted = true;
+                               });
+
     // 等待连接完成
-    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    
+
     ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
@@ -167,17 +172,18 @@ TEST_F(TcpAsyncEchoTest, SimpleEcho)
     *StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
     {
         auto Buffer = std::make_shared<std::vector<char>>(1024);
-        ClientSocket->AsyncReceive(
-            Buffer->data(),
-            1024,
-            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-            {
-                if (Err == NetworkError::NONE && Bytes > 0)
-                {
-                    ClientProtocol->ProcessReceivedData(Buffer->data(), Bytes);
-                    (*StartClientReceive)();  // 继续接收
-                }
-            });
+        ClientSocket->AsyncReceive(Buffer->data(),
+                                   1024,
+                                   [ClientProtocol, StartClientReceive, Buffer](
+                                       NetworkError Err, size_t Bytes, NetworkAddress)
+                                   {
+                                       if (Err == NetworkError::NONE && Bytes > 0)
+                                       {
+                                           ClientProtocol->ProcessReceivedData(Buffer->data(),
+                                                                               Bytes);
+                                           (*StartClientReceive)();  // 继续接收
+                                       }
+                                   });
     };
     (*StartClientReceive)();
 
@@ -205,7 +211,8 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [&MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [&MessagesReceived, &ReceivedMessages, &MessagesMutex](
+            NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -227,16 +234,17 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
             *StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
                 auto Buffer = std::make_shared<std::vector<char>>(16);  // 小缓冲区模拟分片
-                ServerSocket->AsyncReceive(Buffer->data(),
-                                          16,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-                                          {
-                                              if (Err == NetworkError::NONE && Bytes > 0)
-                                              {
-                                                  Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                  (*StartReceive)();  // 继续接收
-                                              }
-                                          });
+                ServerSocket->AsyncReceive(
+                    Buffer->data(),
+                    16,
+                    [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
+                    {
+                        if (Err == NetworkError::NONE && Bytes > 0)
+                        {
+                            Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                            (*StartReceive)();  // 继续接收
+                        }
+                    });
             };
             (*StartReceive)();
         });
@@ -245,21 +253,24 @@ TEST_F(TcpAsyncEchoTest, FragmentedMessages)
 
     // 创建客户端连接
     auto ClientSocket = std::make_shared<AsyncTcpSocket>(ClientContext);
-    
+
     // 使用异步连接
     std::atomic<bool> ConnectCompleted = false;
     NetworkError ConnectResult = NetworkError::NONE;
-    
-    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-        ConnectResult = Err;
-        ConnectCompleted = true;
-    });
-    
+
+    ClientSocket->AsyncConnect(ServerAddr,
+                               [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                               {
+                                   ConnectResult = Err;
+                                   ConnectCompleted = true;
+                               });
+
     // 等待连接完成
-    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    
+
     ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
@@ -334,7 +345,8 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [&ServerReady, &MessageReceived, &ReceivedMessage](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [&ServerReady, &MessageReceived, &ReceivedMessage](
+            NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -364,17 +376,18 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
             auto StartReceive = std::make_shared<std::function<void()>>();
             *StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
-                auto Buffer = std::make_shared<std::vector<char>>(8192); // 更大的缓冲区
-                ServerSocket->AsyncReceive(Buffer->data(),
-                                          8192,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-                                          {
-                                              if (Err == NetworkError::NONE && Bytes > 0)
-                                              {
-                                                  Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                  (*StartReceive)();  // 继续接收
-                                              }
-                                          });
+                auto Buffer = std::make_shared<std::vector<char>>(8192);  // 更大的缓冲区
+                ServerSocket->AsyncReceive(
+                    Buffer->data(),
+                    8192,
+                    [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
+                    {
+                        if (Err == NetworkError::NONE && Bytes > 0)
+                        {
+                            Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                            (*StartReceive)();  // 继续接收
+                        }
+                    });
             };
             (*StartReceive)();
         });
@@ -397,22 +410,25 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
     // 使用异步连接
     std::atomic<bool> ConnectCompleted = false;
     NetworkError ConnectResult = NetworkError::NONE;
-    
-    ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-        ConnectResult = Err;
-        ConnectCompleted = true;
-    });
-    
+
+    ClientSocket->AsyncConnect(ServerAddr,
+                               [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                               {
+                                   ConnectResult = Err;
+                                   ConnectCompleted = true;
+                               });
+
     // 等待连接完成
-    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i) {
+    for (int i = 0; i < 50 && !ConnectCompleted.load(); ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    
+
     ASSERT_TRUE(ConnectCompleted.load());
     ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 发送大消息
-    std::string LargeMessage = "LargeData:" + std::string(4990, 'X'); // 5000字节消息
+    std::string LargeMessage = "LargeData:" + std::string(4990, 'X');  // 5000字节消息
     auto MessageData = MessageProtocol::EncodeMessage(LargeMessage);
     ClientSocket->AsyncSend(MessageData.data(),
                             MessageData.size(),
@@ -424,17 +440,18 @@ TEST_F(TcpAsyncEchoTest, LargeMessageEcho)
     *StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
     {
         auto Buffer = std::make_shared<std::vector<char>>(8192);
-        ClientSocket->AsyncReceive(
-            Buffer->data(),
-            8192,
-            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-            {
-                if (Err == NetworkError::NONE && Bytes > 0)
-                {
-                    ClientProtocol->ProcessReceivedData(Buffer->data(), Bytes);
-                    (*StartClientReceive)();  // 继续接收
-                }
-            });
+        ClientSocket->AsyncReceive(Buffer->data(),
+                                   8192,
+                                   [ClientProtocol, StartClientReceive, Buffer](
+                                       NetworkError Err, size_t Bytes, NetworkAddress)
+                                   {
+                                       if (Err == NetworkError::NONE && Bytes > 0)
+                                       {
+                                           ClientProtocol->ProcessReceivedData(Buffer->data(),
+                                                                               Bytes);
+                                           (*StartClientReceive)();  // 继续接收
+                                       }
+                                   });
     };
     (*StartClientReceive)();
 
@@ -463,9 +480,14 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
     ASSERT_EQ(BindResult, NetworkError::NONE);
 
     // 递归接受连接的函数
-    std::function<void()> AcceptNextConnection = [&]() {
+    std::function<void()> AcceptNextConnection = [&]()
+    {
         Acceptor->AsyncAccept(
-            [&ConnectedClients, &MessagesReceived, &ReceivedMessages, &MessagesMutex, &AcceptNextConnection](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+            [&ConnectedClients,
+             &MessagesReceived,
+             &ReceivedMessages,
+             &MessagesMutex,
+             &AcceptNextConnection](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
             {
                 EXPECT_EQ(Err, NetworkError::NONE);
                 EXPECT_NE(ServerSocket, nullptr);
@@ -474,7 +496,8 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
                 auto Protocol = std::make_shared<MessageProtocol>();
 
                 Protocol->SetMessageHandler(
-                    [&MessagesReceived, &ReceivedMessages, &MessagesMutex, ServerSocket, Protocol](const std::string& Message)
+                    [&MessagesReceived, &ReceivedMessages, &MessagesMutex, ServerSocket, Protocol](
+                        const std::string& Message)
                     {
                         {
                             std::lock_guard<std::mutex> Lock(MessagesMutex);
@@ -499,15 +522,17 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
                 {
                     auto Buffer = std::make_shared<std::vector<char>>(1024);
                     ServerSocket->AsyncReceive(Buffer->data(),
-                                              1024,
-                                              [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-                                              {
-                                                  if (Err == NetworkError::NONE && Bytes > 0)
-                                                  {
-                                                      Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                      (*StartReceive)();  // 继续接收
-                                                  }
-                                              });
+                                               1024,
+                                               [Protocol, StartReceive, Buffer](
+                                                   NetworkError Err, size_t Bytes, NetworkAddress)
+                                               {
+                                                   if (Err == NetworkError::NONE && Bytes > 0)
+                                                   {
+                                                       Protocol->ProcessReceivedData(Buffer->data(),
+                                                                                     Bytes);
+                                                       (*StartReceive)();  // 继续接收
+                                                   }
+                                               });
                 };
                 (*StartReceive)();
 
@@ -541,17 +566,20 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
         // 使用异步连接
         std::atomic<bool> ConnectCompleted = false;
         NetworkError ConnectResult = NetworkError::NONE;
-        
-        ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-            ConnectResult = Err;
-            ConnectCompleted = true;
-        });
-        
+
+        ClientSocket->AsyncConnect(ServerAddr,
+                                   [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                                   {
+                                       ConnectResult = Err;
+                                       ConnectCompleted = true;
+                                   });
+
         // 等待连接完成
-        for (int j = 0; j < 50 && !ConnectCompleted.load(); ++j) {
+        for (int j = 0; j < 50 && !ConnectCompleted.load(); ++j)
+        {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        
+
         ASSERT_TRUE(ConnectCompleted.load());
         ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
@@ -564,24 +592,26 @@ TEST_F(TcpAsyncEchoTest, ConcurrentConnections)
         ClientSocket->AsyncSend(MessageData.data(),
                                 MessageData.size(),
                                 NetworkAddress{},
-                                [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
+                                [](NetworkError Err, size_t)
+                                { EXPECT_EQ(Err, NetworkError::NONE); });
 
         // 开始接收回显
         auto StartClientReceive = std::make_shared<std::function<void()>>();
         *StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
         {
             auto Buffer = std::make_shared<std::vector<char>>(1024);
-            ClientSocket->AsyncReceive(
-                Buffer->data(),
-                1024,
-                [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-                {
-                    if (Err == NetworkError::NONE && Bytes > 0)
-                    {
-                        ClientProtocol->ProcessReceivedData(Buffer->data(), Bytes);
-                        (*StartClientReceive)();  // 继续接收
-                    }
-                });
+            ClientSocket->AsyncReceive(Buffer->data(),
+                                       1024,
+                                       [ClientProtocol, StartClientReceive, Buffer](
+                                           NetworkError Err, size_t Bytes, NetworkAddress)
+                                       {
+                                           if (Err == NetworkError::NONE && Bytes > 0)
+                                           {
+                                               ClientProtocol->ProcessReceivedData(Buffer->data(),
+                                                                                   Bytes);
+                                               (*StartClientReceive)();  // 继续接收
+                                           }
+                                       });
         };
         (*StartClientReceive)();
     }
@@ -616,7 +646,8 @@ TEST_F(TcpAsyncEchoTest, StressTest)
 
     // 服务器接受连接
     Acceptor->AsyncAccept(
-        [&MessagesReceived, &ReceivedMessages, &MessagesMutex](NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
+        [&MessagesReceived, &ReceivedMessages, &MessagesMutex](
+            NetworkError Err, std::shared_ptr<AsyncTcpSocket> ServerSocket)
         {
             EXPECT_EQ(Err, NetworkError::NONE);
             EXPECT_NE(ServerSocket, nullptr);
@@ -624,7 +655,8 @@ TEST_F(TcpAsyncEchoTest, StressTest)
             auto Protocol = std::make_shared<MessageProtocol>();
 
             Protocol->SetMessageHandler(
-                [&MessagesReceived, &ReceivedMessages, &MessagesMutex, ServerSocket, Protocol](const std::string& Message)
+                [&MessagesReceived, &ReceivedMessages, &MessagesMutex, ServerSocket, Protocol](
+                    const std::string& Message)
                 {
                     {
                         std::lock_guard<std::mutex> Lock(MessagesMutex);
@@ -648,16 +680,17 @@ TEST_F(TcpAsyncEchoTest, StressTest)
             *StartReceive = [ServerSocket, Protocol, StartReceive]()
             {
                 auto Buffer = std::make_shared<std::vector<char>>(1024);
-                ServerSocket->AsyncReceive(Buffer->data(),
-                                          1024,
-                                          [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-                                          {
-                                              if (Err == NetworkError::NONE && Bytes > 0)
-                                              {
-                                                  Protocol->ProcessReceivedData(Buffer->data(), Bytes);
-                                                  (*StartReceive)();  // 继续接收
-                                              }
-                                          });
+                ServerSocket->AsyncReceive(
+                    Buffer->data(),
+                    1024,
+                    [Protocol, StartReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
+                    {
+                        if (Err == NetworkError::NONE && Bytes > 0)
+                        {
+                            Protocol->ProcessReceivedData(Buffer->data(), Bytes);
+                            (*StartReceive)();  // 继续接收
+                        }
+                    });
             };
             (*StartReceive)();
         });
@@ -676,22 +709,25 @@ TEST_F(TcpAsyncEchoTest, StressTest)
             EchoReceived++;
         });
 
-            // 使用异步连接
-        std::atomic<bool> ConnectCompleted = false;
-        NetworkError ConnectResult = NetworkError::NONE;
-        
-        ClientSocket->AsyncConnect(ServerAddr, [&ConnectCompleted, &ConnectResult](NetworkError Err) {
-            ConnectResult = Err;
-            ConnectCompleted = true;
-        });
-        
-        // 等待连接完成
-        for (int j = 0; j < 50 && !ConnectCompleted.load(); ++j) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        
-        ASSERT_TRUE(ConnectCompleted.load());
-        ASSERT_EQ(ConnectResult, NetworkError::NONE);
+    // 使用异步连接
+    std::atomic<bool> ConnectCompleted = false;
+    NetworkError ConnectResult = NetworkError::NONE;
+
+    ClientSocket->AsyncConnect(ServerAddr,
+                               [&ConnectCompleted, &ConnectResult](NetworkError Err)
+                               {
+                                   ConnectResult = Err;
+                                   ConnectCompleted = true;
+                               });
+
+    // 等待连接完成
+    for (int j = 0; j < 50 && !ConnectCompleted.load(); ++j)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    ASSERT_TRUE(ConnectCompleted.load());
+    ASSERT_EQ(ConnectResult, NetworkError::NONE);
 
     // 快速发送大量消息
     for (int i = 0; i < NumMessages; ++i)
@@ -701,7 +737,8 @@ TEST_F(TcpAsyncEchoTest, StressTest)
         ClientSocket->AsyncSend(MessageData.data(),
                                 MessageData.size(),
                                 NetworkAddress{},
-                                [](NetworkError Err, size_t) { EXPECT_EQ(Err, NetworkError::NONE); });
+                                [](NetworkError Err, size_t)
+                                { EXPECT_EQ(Err, NetworkError::NONE); });
     }
 
     // 开始接收回显
@@ -709,17 +746,18 @@ TEST_F(TcpAsyncEchoTest, StressTest)
     *StartClientReceive = [ClientSocket, ClientProtocol, StartClientReceive]()
     {
         auto Buffer = std::make_shared<std::vector<char>>(1024);
-        ClientSocket->AsyncReceive(
-            Buffer->data(),
-            1024,
-            [ClientProtocol, StartClientReceive, Buffer](NetworkError Err, size_t Bytes, NetworkAddress)
-            {
-                if (Err == NetworkError::NONE && Bytes > 0)
-                {
-                    ClientProtocol->ProcessReceivedData(Buffer->data(), Bytes);
-                    (*StartClientReceive)();  // 继续接收
-                }
-            });
+        ClientSocket->AsyncReceive(Buffer->data(),
+                                   1024,
+                                   [ClientProtocol, StartClientReceive, Buffer](
+                                       NetworkError Err, size_t Bytes, NetworkAddress)
+                                   {
+                                       if (Err == NetworkError::NONE && Bytes > 0)
+                                       {
+                                           ClientProtocol->ProcessReceivedData(Buffer->data(),
+                                                                               Bytes);
+                                           (*StartClientReceive)();  // 继续接收
+                                       }
+                                   });
     };
     (*StartClientReceive)();
 

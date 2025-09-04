@@ -1,8 +1,9 @@
 #include "Shared/Scripting/IScriptEngine.h"
 #include "Shared/Scripting/LuaScriptEngine.h"
 
-#include <gtest/gtest.h>
 #include <filesystem>
+
+#include <gtest/gtest.h>
 
 using namespace Helianthus::Scripting;
 
@@ -145,10 +146,10 @@ TEST_F(ScriptingTest, MultipleInitializations)
 TEST_F(ScriptingTest, Shutdown)
 {
     ASSERT_TRUE(Engine->Initialize().Success);
-    
+
     // 关闭引擎
     Engine->Shutdown();
-    
+
     // 关闭后应该仍然可以重新初始化
     auto Result = Engine->Initialize();
     ASSERT_TRUE(Result.Success);

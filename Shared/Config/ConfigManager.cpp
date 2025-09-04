@@ -1,5 +1,4 @@
 #include "ConfigManager.h"
-#include "../Common/Utils.h"
 
 #include <algorithm>
 #include <cctype>
@@ -9,6 +8,8 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+
+#include "../Common/Utils.h"
 
 namespace Helianthus::Config
 {
@@ -21,53 +22,57 @@ std::string ConfigValue::AsString() const
 {
     switch (Type)
     {
-    case ConfigValueType::STRING:
-        return StringValue;
-    case ConfigValueType::INTEGER:
-        return std::to_string(IntValue);
-    case ConfigValueType::FLOAT:
+        case ConfigValueType::STRING:
+            return StringValue;
+        case ConfigValueType::INTEGER:
+            return std::to_string(IntValue);
+        case ConfigValueType::FLOAT:
         {
             // 使用更精确的字符串格式化，避免显示过多小数位
             std::ostringstream oss;
             oss << std::fixed << std::setprecision(3) << FloatValue;
             std::string result = oss.str();
             // 移除末尾的0
-            while (result.back() == '0' && result.find('.') != std::string::npos) {
+            while (result.back() == '0' && result.find('.') != std::string::npos)
+            {
                 result.pop_back();
             }
-            if (result.back() == '.') {
+            if (result.back() == '.')
+            {
                 result.pop_back();
             }
             return result;
         }
-    case ConfigValueType::BOOLEAN:
-        return BoolValue ? "true" : "false";
-    case ConfigValueType::ARRAY:
+        case ConfigValueType::BOOLEAN:
+            return BoolValue ? "true" : "false";
+        case ConfigValueType::ARRAY:
         {
             std::string Result = "[";
             for (size_t i = 0; i < ArrayValue.size(); ++i)
             {
-                if (i > 0) Result += ",";
+                if (i > 0)
+                    Result += ",";
                 Result += "\"" + ArrayValue[i] + "\"";
             }
             Result += "]";
             return Result;
         }
-    case ConfigValueType::OBJECT:
+        case ConfigValueType::OBJECT:
         {
             std::string Result = "{";
             bool First = true;
             for (const auto& [Key, Value] : ObjectValue)
             {
-                if (!First) Result += ",";
+                if (!First)
+                    Result += ",";
                 Result += "\"" + Key + "\":\"" + Value + "\"";
                 First = false;
             }
             Result += "}";
             return Result;
         }
-    default:
-        return "";
+        default:
+            return "";
     }
 }
 
@@ -75,23 +80,23 @@ int64_t ConfigValue::AsInt() const
 {
     switch (Type)
     {
-    case ConfigValueType::INTEGER:
-        return IntValue;
-    case ConfigValueType::STRING:
-        try
-        {
-            return std::stoll(StringValue);
-        }
-        catch (...)
-        {
+        case ConfigValueType::INTEGER:
+            return IntValue;
+        case ConfigValueType::STRING:
+            try
+            {
+                return std::stoll(StringValue);
+            }
+            catch (...)
+            {
+                return 0;
+            }
+        case ConfigValueType::FLOAT:
+            return static_cast<int64_t>(FloatValue);
+        case ConfigValueType::BOOLEAN:
+            return BoolValue ? 1 : 0;
+        default:
             return 0;
-        }
-    case ConfigValueType::FLOAT:
-        return static_cast<int64_t>(FloatValue);
-    case ConfigValueType::BOOLEAN:
-        return BoolValue ? 1 : 0;
-    default:
-        return 0;
     }
 }
 
@@ -99,23 +104,23 @@ double ConfigValue::AsFloat() const
 {
     switch (Type)
     {
-    case ConfigValueType::FLOAT:
-        return FloatValue;
-    case ConfigValueType::INTEGER:
-        return static_cast<double>(IntValue);
-    case ConfigValueType::STRING:
-        try
-        {
-            return std::stod(StringValue);
-        }
-        catch (...)
-        {
+        case ConfigValueType::FLOAT:
+            return FloatValue;
+        case ConfigValueType::INTEGER:
+            return static_cast<double>(IntValue);
+        case ConfigValueType::STRING:
+            try
+            {
+                return std::stod(StringValue);
+            }
+            catch (...)
+            {
+                return 0.0;
+            }
+        case ConfigValueType::BOOLEAN:
+            return BoolValue ? 1.0 : 0.0;
+        default:
             return 0.0;
-        }
-    case ConfigValueType::BOOLEAN:
-        return BoolValue ? 1.0 : 0.0;
-    default:
-        return 0.0;
     }
 }
 
@@ -123,20 +128,20 @@ bool ConfigValue::AsBool() const
 {
     switch (Type)
     {
-    case ConfigValueType::BOOLEAN:
-        return BoolValue;
-    case ConfigValueType::INTEGER:
-        return IntValue != 0;
-    case ConfigValueType::FLOAT:
-        return FloatValue != 0.0;
-    case ConfigValueType::STRING:
+        case ConfigValueType::BOOLEAN:
+            return BoolValue;
+        case ConfigValueType::INTEGER:
+            return IntValue != 0;
+        case ConfigValueType::FLOAT:
+            return FloatValue != 0.0;
+        case ConfigValueType::STRING:
         {
             std::string Lower = StringValue;
             std::transform(Lower.begin(), Lower.end(), Lower.begin(), ::tolower);
             return Lower == "true" || Lower == "1" || Lower == "yes" || Lower == "on";
         }
-    default:
-        return false;
+        default:
+            return false;
     }
 }
 
@@ -162,20 +167,20 @@ bool ConfigValue::IsValid() const
 {
     switch (Type)
     {
-    case ConfigValueType::STRING:
-        return !StringValue.empty();
-    case ConfigValueType::INTEGER:
-        return true; // 所有整数都是有效的
-    case ConfigValueType::FLOAT:
-        return !std::isnan(FloatValue) && !std::isinf(FloatValue);
-    case ConfigValueType::BOOLEAN:
-        return true; // 所有布尔值都是有效的
-    case ConfigValueType::ARRAY:
-        return true; // 空数组也是有效的
-    case ConfigValueType::OBJECT:
-        return true; // 空对象也是有效的
-    default:
-        return false;
+        case ConfigValueType::STRING:
+            return !StringValue.empty();
+        case ConfigValueType::INTEGER:
+            return true;  // 所有整数都是有效的
+        case ConfigValueType::FLOAT:
+            return !std::isnan(FloatValue) && !std::isinf(FloatValue);
+        case ConfigValueType::BOOLEAN:
+            return true;  // 所有布尔值都是有效的
+        case ConfigValueType::ARRAY:
+            return true;  // 空数组也是有效的
+        case ConfigValueType::OBJECT:
+            return true;  // 空对象也是有效的
+        default:
+            return false;
     }
 }
 
@@ -185,9 +190,7 @@ std::string ConfigValue::ToString() const
 }
 
 // ConfigManager 实现
-ConfigManager::ConfigManager()
-{
-}
+ConfigManager::ConfigManager() {}
 
 ConfigManager::~ConfigManager()
 {
@@ -195,15 +198,15 @@ ConfigManager::~ConfigManager()
 }
 
 ConfigManager::ConfigManager(ConfigManager&& Other) noexcept
-    : ConfigItems(std::move(Other.ConfigItems))
-    , InitializedFlag(Other.InitializedFlag.load())
-    , ConfigLocked(Other.ConfigLocked.load())
-    , ConfigPath(std::move(Other.ConfigPath))
-    , ConfigFiles(std::move(Other.ConfigFiles))
-    , Validators(std::move(Other.Validators))
-    , ChangeCallbacks(std::move(Other.ChangeCallbacks))
-    , GlobalChangeCallbacks(std::move(Other.GlobalChangeCallbacks))
-    , ModifiedKeys(std::move(Other.ModifiedKeys))
+    : ConfigItems(std::move(Other.ConfigItems)),
+      InitializedFlag(Other.InitializedFlag.load()),
+      ConfigLocked(Other.ConfigLocked.load()),
+      ConfigPath(std::move(Other.ConfigPath)),
+      ConfigFiles(std::move(Other.ConfigFiles)),
+      Validators(std::move(Other.Validators)),
+      ChangeCallbacks(std::move(Other.ChangeCallbacks)),
+      GlobalChangeCallbacks(std::move(Other.GlobalChangeCallbacks)),
+      ModifiedKeys(std::move(Other.ModifiedKeys))
 {
 }
 
@@ -233,7 +236,7 @@ bool ConfigManager::Initialize(const std::string& InConfigPath)
     }
 
     ConfigPath = InConfigPath;
-    
+
     // 创建配置目录
     try
     {
@@ -291,7 +294,7 @@ bool ConfigManager::LoadFromFile(const std::string& FilePath)
     while (std::getline(File, Line))
     {
         LineNumber++;
-        
+
         // 跳过空行和注释
         if (Line.empty() || Line[0] == '#' || Line[0] == ';')
         {
@@ -302,7 +305,8 @@ bool ConfigManager::LoadFromFile(const std::string& FilePath)
         ConfigValue Value;
         if (!ParseConfigLine(Line, Key, Value))
         {
-            std::cout << "Invalid config line " << LineNumber << " in " << FilePath << ": " << Line << std::endl;
+            std::cout << "Invalid config line " << LineNumber << " in " << FilePath << ": " << Line
+                      << std::endl;
             Success = false;
             continue;
         }
@@ -335,7 +339,7 @@ bool ConfigManager::SaveToFile(const std::string& FilePath) const
     }
 
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     for (const auto& [Key, Item] : ConfigItems)
     {
         if (!Item.Description.empty())
@@ -358,12 +362,12 @@ bool ConfigManager::LoadFromEnvironment()
     }
 
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     for (const auto& [Key, Item] : ConfigItems)
     {
         std::string EnvKey = "HELIANTHUS_" + Key;
         std::transform(EnvKey.begin(), EnvKey.end(), EnvKey.begin(), ::toupper);
-        
+
         const char* EnvValue = std::getenv(EnvKey.c_str());
         if (EnvValue)
         {
@@ -389,7 +393,7 @@ bool ConfigManager::LoadFromCommandLine(int Argc, char* Argv[])
         if (Arg.substr(0, 2) == "--")
         {
             std::string Key = Arg.substr(2);
-            std::string Value = "true"; // 默认值
+            std::string Value = "true";  // 默认值
 
             // 检查是否有等号分隔的值
             size_t EqualPos = Key.find('=');
@@ -402,7 +406,7 @@ bool ConfigManager::LoadFromCommandLine(int Argc, char* Argv[])
             {
                 // 下一个参数是值
                 Value = Argv[i + 1];
-                i++; // 跳过下一个参数
+                i++;  // 跳过下一个参数
             }
 
             SetString(Key, Value);
@@ -433,7 +437,7 @@ bool ConfigManager::SetValue(const std::string& Key, const ConfigValue& Value)
         std::cerr << "Invalid config key: " << Key << std::endl;
         return false;
     }
-    
+
     std::string NormalizedKey = NormalizeKey(Key);
 
     if (!ValidateValue(NormalizedKey, Value))
@@ -443,7 +447,7 @@ bool ConfigManager::SetValue(const std::string& Key, const ConfigValue& Value)
     }
 
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     ConfigValue OldValue;
     auto It = ConfigItems.find(NormalizedKey);
     if (It != ConfigItems.end())
@@ -489,7 +493,8 @@ bool ConfigManager::SetArray(const std::string& Key, const std::vector<std::stri
     return SetValue(Key, ConfigValue(Value));
 }
 
-bool ConfigManager::SetObject(const std::string& Key, const std::unordered_map<std::string, std::string>& Value)
+bool ConfigManager::SetObject(const std::string& Key,
+                              const std::unordered_map<std::string, std::string>& Value)
 {
     return SetValue(Key, ConfigValue(Value));
 }
@@ -503,7 +508,7 @@ ConfigValue ConfigManager::GetValue(const std::string& Key) const
 
     std::string NormalizedKey = NormalizeKey(Key);
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     auto It = ConfigItems.find(NormalizedKey);
     if (It != ConfigItems.end())
     {
@@ -586,12 +591,12 @@ bool ConfigManager::AddConfigItem(const ConfigItem& Item)
     }
 
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     // 创建一个新的 ConfigItem，使用标准化的键
     ConfigItem NormalizedItem = Item;
     NormalizedItem.Key = NormalizedKey;
     ConfigItems[NormalizedKey] = NormalizedItem;
-    
+
     std::cout << "Added config item: " << NormalizedKey << std::endl;
     return true;
 }
@@ -606,7 +611,7 @@ bool ConfigManager::RemoveConfigItem(const std::string& Key)
 
     std::string NormalizedKey = NormalizeKey(Key);
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     auto It = ConfigItems.find(NormalizedKey);
     if (It != ConfigItems.end())
     {
@@ -639,7 +644,7 @@ ConfigItem ConfigManager::GetConfigItem(const std::string& Key) const
 
     std::string NormalizedKey = NormalizeKey(Key);
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     auto It = ConfigItems.find(NormalizedKey);
     if (It != ConfigItems.end())
     {
@@ -659,7 +664,7 @@ std::vector<std::string> ConfigManager::GetAllKeys() const
     std::lock_guard<std::mutex> Lock(ConfigMutex);
     std::vector<std::string> Keys;
     Keys.reserve(ConfigItems.size());
-    
+
     for (const auto& [Key, _] : ConfigItems)
     {
         Keys.push_back(Key);
@@ -676,7 +681,7 @@ bool ConfigManager::ValidateConfig() const
     }
 
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     for (const auto& [Key, Item] : ConfigItems)
     {
         if (!ValidateConfigItemUnlocked(Key))
@@ -697,7 +702,7 @@ bool ConfigManager::ValidateConfigItem(const std::string& Key) const
 
     std::string NormalizedKey = NormalizeKey(Key);
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     return ValidateConfigItemUnlocked(Key);
 }
 
@@ -709,7 +714,7 @@ bool ConfigManager::ValidateConfigItemUnlocked(const std::string& Key) const
     }
 
     std::string NormalizedKey = NormalizeKey(Key);
-    
+
     auto It = ConfigItems.find(NormalizedKey);
     if (It == ConfigItems.end())
     {
@@ -798,7 +803,7 @@ void ConfigManager::LoadDefaultConfig()
     SetBool("app.debug", true);
     SetInt("app.port", 8080);
     SetString("app.host", "localhost");
-    
+
     std::cout << "Loaded default configuration" << std::endl;
 }
 
@@ -806,11 +811,11 @@ void ConfigManager::LoadMessageQueueConfig()
 {
     // 消息队列配置
     SetInt("messagequeue.max_size", 10000);
-    SetInt("messagequeue.max_size_bytes", 100 * 1024 * 1024); // 100MB
+    SetInt("messagequeue.max_size_bytes", 100 * 1024 * 1024);  // 100MB
     SetInt("messagequeue.max_consumers", 100);
     SetInt("messagequeue.max_producers", 100);
-    SetInt("messagequeue.message_ttl_ms", 300000); // 5分钟
-    SetInt("messagequeue.queue_ttl_ms", 0); // 永不过期
+    SetInt("messagequeue.message_ttl_ms", 300000);  // 5分钟
+    SetInt("messagequeue.queue_ttl_ms", 0);         // 永不过期
     SetBool("messagequeue.enable_dead_letter", true);
     SetString("messagequeue.dead_letter_queue", "dead_letter");
     SetInt("messagequeue.max_retries", 3);
@@ -818,12 +823,12 @@ void ConfigManager::LoadMessageQueueConfig()
     SetBool("messagequeue.enable_retry_backoff", true);
     SetFloat("messagequeue.retry_backoff_multiplier", 2.0);
     SetInt("messagequeue.max_retry_delay_ms", 60000);
-    SetInt("messagequeue.dead_letter_ttl_ms", 86400000); // 24小时
+    SetInt("messagequeue.dead_letter_ttl_ms", 86400000);  // 24小时
     SetBool("messagequeue.enable_priority", false);
     SetBool("messagequeue.enable_batching", true);
     SetInt("messagequeue.batch_size", 100);
     SetInt("messagequeue.batch_timeout_ms", 1000);
-    
+
     std::cout << "Loaded message queue configuration" << std::endl;
 }
 
@@ -835,14 +840,14 @@ void ConfigManager::LoadNetworkConfig()
     SetInt("network.read_timeout_ms", 60000);
     SetInt("network.write_timeout_ms", 60000);
     SetInt("network.keep_alive_interval_ms", 30000);
-    SetInt("network.max_message_size", 10 * 1024 * 1024); // 10MB
+    SetInt("network.max_message_size", 10 * 1024 * 1024);  // 10MB
     SetBool("network.enable_compression", true);
     SetBool("network.enable_encryption", false);
     SetString("network.compression_algorithm", "gzip");
     SetString("network.encryption_algorithm", "aes-256-gcm");
     SetInt("network.thread_pool_size", 4);
     SetInt("network.max_pending_requests", 1000);
-    
+
     std::cout << "Loaded network configuration" << std::endl;
 }
 
@@ -859,7 +864,7 @@ void ConfigManager::LoadLoggingConfig()
     SetBool("logging.enable_timestamp", true);
     SetBool("logging.enable_thread_id", true);
     SetBool("logging.enable_color", true);
-    
+
     std::cout << "Loaded logging configuration" << std::endl;
 }
 
@@ -875,7 +880,7 @@ void ConfigManager::LoadMonitoringConfig()
     SetString("monitoring.tracing_endpoint", "http://localhost:14268/api/traces");
     SetBool("monitoring.enable_profiling", false);
     SetInt("monitoring.profiling_port", 6060);
-    
+
     std::cout << "Loaded monitoring configuration" << std::endl;
 }
 
@@ -888,35 +893,36 @@ std::string ConfigManager::ExportToJson() const
 
     std::string Json = "{\n";
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     bool First = true;
     for (const auto& [Key, Item] : ConfigItems)
     {
-        if (!First) Json += ",\n";
-        
+        if (!First)
+            Json += ",\n";
+
         // 根据值的类型正确格式化JSON
         std::string ValueStr;
         switch (Item.Value.Type)
         {
-        case ConfigValueType::STRING:
-            ValueStr = "\"" + Item.Value.AsString() + "\"";
-            break;
-        case ConfigValueType::BOOLEAN:
-            ValueStr = Item.Value.AsString(); // "true" 或 "false"
-            break;
-        case ConfigValueType::ARRAY:
-        case ConfigValueType::OBJECT:
-            ValueStr = Item.Value.AsString(); // 已经是JSON格式
-            break;
-        default:
-            ValueStr = Item.Value.AsString(); // 数字类型
-            break;
+            case ConfigValueType::STRING:
+                ValueStr = "\"" + Item.Value.AsString() + "\"";
+                break;
+            case ConfigValueType::BOOLEAN:
+                ValueStr = Item.Value.AsString();  // "true" 或 "false"
+                break;
+            case ConfigValueType::ARRAY:
+            case ConfigValueType::OBJECT:
+                ValueStr = Item.Value.AsString();  // 已经是JSON格式
+                break;
+            default:
+                ValueStr = Item.Value.AsString();  // 数字类型
+                break;
         }
-        
+
         Json += "  \"" + Key + "\": " + ValueStr;
         First = false;
     }
-    
+
     Json += "\n}";
     return Json;
 }
@@ -930,7 +936,7 @@ std::string ConfigManager::ExportToYaml() const
 
     std::string Yaml;
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     for (const auto& [Key, Item] : ConfigItems)
     {
         if (!Item.Description.empty())
@@ -939,7 +945,7 @@ std::string ConfigManager::ExportToYaml() const
         }
         Yaml += Key + ": " + Item.Value.ToString() + "\n";
     }
-    
+
     return Yaml;
 }
 
@@ -952,7 +958,7 @@ std::string ConfigManager::ExportToIni() const
 
     std::string Ini;
     std::lock_guard<std::mutex> Lock(ConfigMutex);
-    
+
     for (const auto& [Key, Item] : ConfigItems)
     {
         if (!Item.Description.empty())
@@ -961,7 +967,7 @@ std::string ConfigManager::ExportToIni() const
         }
         Ini += Key + " = " + Item.Value.ToString() + "\n";
     }
-    
+
     return Ini;
 }
 
@@ -1091,7 +1097,9 @@ bool ConfigManager::ValidateValue(const std::string& Key, const ConfigValue& Val
     return Value.IsValid();
 }
 
-void ConfigManager::NotifyChangeCallbacks(const std::string& Key, const ConfigValue& OldValue, const ConfigValue& NewValue)
+void ConfigManager::NotifyChangeCallbacks(const std::string& Key,
+                                          const ConfigValue& OldValue,
+                                          const ConfigValue& NewValue)
 {
     // 通知特定键的回调
     auto It = ChangeCallbacks.find(Key);
@@ -1183,32 +1191,32 @@ std::string ConfigManager::EscapeString(const std::string& Str) const
 {
     std::string Escaped;
     Escaped.reserve(Str.length() * 2);
-    
+
     for (char c : Str)
     {
         switch (c)
         {
-        case '\\':
-            Escaped += "\\\\";
-            break;
-        case '"':
-            Escaped += "\\\"";
-            break;
-        case '\n':
-            Escaped += "\\n";
-            break;
-        case '\r':
-            Escaped += "\\r";
-            break;
-        case '\t':
-            Escaped += "\\t";
-            break;
-        default:
-            Escaped += c;
-            break;
+            case '\\':
+                Escaped += "\\\\";
+                break;
+            case '"':
+                Escaped += "\\\"";
+                break;
+            case '\n':
+                Escaped += "\\n";
+                break;
+            case '\r':
+                Escaped += "\\r";
+                break;
+            case '\t':
+                Escaped += "\\t";
+                break;
+            default:
+                Escaped += c;
+                break;
         }
     }
-    
+
     return Escaped;
 }
 
@@ -1216,40 +1224,40 @@ std::string ConfigManager::UnescapeString(const std::string& Str) const
 {
     std::string Unescaped;
     Unescaped.reserve(Str.length());
-    
+
     for (size_t i = 0; i < Str.length(); ++i)
     {
         if (Str[i] == '\\' && i + 1 < Str.length())
         {
             switch (Str[i + 1])
             {
-            case '\\':
-                Unescaped += '\\';
-                break;
-            case '"':
-                Unescaped += '"';
-                break;
-            case 'n':
-                Unescaped += '\n';
-                break;
-            case 'r':
-                Unescaped += '\r';
-                break;
-            case 't':
-                Unescaped += '\t';
-                break;
-            default:
-                Unescaped += Str[i + 1];
-                break;
+                case '\\':
+                    Unescaped += '\\';
+                    break;
+                case '"':
+                    Unescaped += '"';
+                    break;
+                case 'n':
+                    Unescaped += '\n';
+                    break;
+                case 'r':
+                    Unescaped += '\r';
+                    break;
+                case 't':
+                    Unescaped += '\t';
+                    break;
+                default:
+                    Unescaped += Str[i + 1];
+                    break;
             }
-            i++; // 跳过下一个字符
+            i++;  // 跳过下一个字符
         }
         else
         {
             Unescaped += Str[i];
         }
     }
-    
+
     return Unescaped;
 }
 
@@ -1275,13 +1283,13 @@ bool ConfigManager::IsValidKey(const std::string& Key) const
 std::string ConfigManager::NormalizeKey(const std::string& Key) const
 {
     std::string Normalized = Key;
-    
+
     // 转换为小写
     std::transform(Normalized.begin(), Normalized.end(), Normalized.begin(), ::tolower);
-    
+
     // 替换空格为下划线
     std::replace(Normalized.begin(), Normalized.end(), ' ', '_');
-    
+
     return Normalized;
 }
 
@@ -1399,7 +1407,7 @@ bool ReloadConfig()
     return false;
 }
 
-} // namespace Global
+}  // namespace Global
 
 // ConfigTemplate 实现
 void ConfigTemplate::LoadMessageQueueDefaults(ConfigManager& Manager)
@@ -1430,10 +1438,10 @@ void ConfigTemplate::LoadSecurityDefaults(ConfigManager& Manager)
     Manager.SetString("security.key_file", "certs/server.key");
     Manager.SetString("security.ca_file", "certs/ca.crt");
     Manager.SetBool("security.verify_peer", true);
-    Manager.SetInt("security.session_timeout_ms", 3600000); // 1小时
+    Manager.SetInt("security.session_timeout_ms", 3600000);  // 1小时
     Manager.SetString("security.cipher_suite", "TLS_AES_256_GCM_SHA384");
     Manager.SetInt("security.key_size", 256);
-    
+
     std::cout << "Loaded security configuration" << std::endl;
 }
 
@@ -1449,9 +1457,9 @@ void ConfigTemplate::LoadPerformanceDefaults(ConfigManager& Manager)
     Manager.SetString("performance.compression_level", "6");
     Manager.SetBool("performance.enable_caching", true);
     Manager.SetInt("performance.cache_size", 1000);
-    Manager.SetInt("performance.cache_ttl_ms", 300000); // 5分钟
-    
+    Manager.SetInt("performance.cache_ttl_ms", 300000);  // 5分钟
+
     std::cout << "Loaded performance configuration" << std::endl;
 }
 
-} // namespace Helianthus::Config
+}  // namespace Helianthus::Config

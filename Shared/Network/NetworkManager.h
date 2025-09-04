@@ -4,12 +4,12 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <thread>
 #include <unordered_map>
 
 #include "Message/Message.h"
-#include <queue>
 #include "Network/NetworkTypes.h"
 #include "Network/Sockets/TcpSocket.h"
 

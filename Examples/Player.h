@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Player.GEN.h"
 #include "Shared/Reflection/HObject.h"
+
+#include "Player.GEN.h"
 
 // 完全按照您期望的格式
 HCLASS(Scriptable)
@@ -19,7 +20,7 @@ public:
 
     HPROPERTY(ScriptReadable)
     int Diamond = 0;
-    
+
     HFUNCTION(ScriptCallable)
     void OnLevelUp()
     {
@@ -41,9 +42,7 @@ public:
     HFUNCTION(ScriptCallable)
     std::string GetPlayerInfo() const
     {
-        return "Player Level: " + std::to_string(Level) + 
-               " Exp: " + std::to_string(Exp) + 
-               " Gold: " + std::to_string(Gold) + 
-               " Diamond: " + std::to_string(Diamond);
+        return "Player Level: " + std::to_string(Level) + " Exp: " + std::to_string(Exp) +
+               " Gold: " + std::to_string(Gold) + " Diamond: " + std::to_string(Diamond);
     }
 };

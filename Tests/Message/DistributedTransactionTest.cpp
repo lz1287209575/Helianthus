@@ -1,13 +1,14 @@
-#include <gtest/gtest.h>
-#include <memory>
-#include <string>
-#include <vector>
-#include <thread>
-#include <chrono>
-#include <atomic>
-
 #include "Shared/MessageQueue/MessageQueue.h"
 #include "Shared/MessageQueue/MessageTypes.h"
+
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <gtest/gtest.h>
 
 class DistributedTransactionTest : public ::testing::Test
 {
@@ -43,7 +44,7 @@ TEST_F(DistributedTransactionTest, BasicDistributedTransactionFlow)
     std::string CoordinatorId = "coordinator_001";
     std::string Description = "测试分布式事务";
     uint32_t TimeoutMs = 10000;
-    
+
     auto Result = Queue->BeginDistributedTransaction(CoordinatorId, Description, TimeoutMs);
     ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
 
@@ -73,8 +74,9 @@ TEST_F(DistributedTransactionTest, BasicDistributedTransactionFlow)
     Result = Queue->ReceiveMessage(QueueName, ReceivedMessage);
     ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
     ASSERT_NE(ReceivedMessage, nullptr);
-    
-    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(), ReceivedMessage->Payload.Data.end());
+
+    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(),
+                                ReceivedMessage->Payload.Data.end());
     EXPECT_EQ(ReceivedPayload, Payload);
 
     // 验证事务状态
@@ -141,12 +143,13 @@ TEST_F(DistributedTransactionTest, DistributedTransactionTimeout)
 
     // 开始一个超时时间很短的分布式事务
     std::string CoordinatorId = "coordinator_003";
-    uint32_t ShortTimeoutMs = 100; // 100ms 超时
+    uint32_t ShortTimeoutMs = 100;  // 100ms 超时
     auto Result = Queue->BeginDistributedTransaction(CoordinatorId, "超时测试", ShortTimeoutMs);
     ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
 
     // 使用普通事务ID
-    Helianthus::MessageQueue::TransactionId TxId = Queue->BeginTransaction("超时测试", ShortTimeoutMs);
+    Helianthus::MessageQueue::TransactionId TxId =
+        Queue->BeginTransaction("超时测试", ShortTimeoutMs);
     ASSERT_GT(TxId, 0u);
 
     // 在事务中发送消息
@@ -165,7 +168,7 @@ TEST_F(DistributedTransactionTest, DistributedTransactionTimeout)
     Helianthus::MessageQueue::TransactionStatus Status;
     Result = Queue->GetTransactionStatus(TxId, Status);
     ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
-    
+
     // 如果事务还没有超时，再等待一段时间
     if (Status == Helianthus::MessageQueue::TransactionStatus::PENDING)
     {
@@ -173,7 +176,7 @@ TEST_F(DistributedTransactionTest, DistributedTransactionTimeout)
         Result = Queue->GetTransactionStatus(TxId, Status);
         ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
     }
-    
+
     EXPECT_EQ(Status, Helianthus::MessageQueue::TransactionStatus::TIMEOUT);
 
     // 验证消息没有被发送
@@ -203,14 +206,14 @@ TEST_F(DistributedTransactionTest, DistributedTransactionStatistics)
         std::string CoordinatorId = "coordinator_commit_" + std::to_string(i);
         auto Result = Queue->BeginDistributedTransaction(CoordinatorId, "统计测试", 5000);
         ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
-        
+
         Helianthus::MessageQueue::TransactionId TxId = Queue->BeginTransaction("统计测试", 5000);
-        
+
         auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
         Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
         std::string Payload = "提交消息 " + std::to_string(i);
         Message->Payload.Data.assign(Payload.begin(), Payload.end());
-        
+
         Queue->SendMessageInTransaction(TxId, QueueName, Message);
         Queue->PrepareTransaction(TxId);
         Queue->CommitDistributedTransaction(TxId);
@@ -222,14 +225,14 @@ TEST_F(DistributedTransactionTest, DistributedTransactionStatistics)
         std::string CoordinatorId = "coordinator_rollback_" + std::to_string(i);
         auto Result = Queue->BeginDistributedTransaction(CoordinatorId, "统计测试", 5000);
         ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
-        
+
         Helianthus::MessageQueue::TransactionId TxId = Queue->BeginTransaction("统计测试", 5000);
-        
+
         auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
         Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
         std::string Payload = "回滚消息 " + std::to_string(i);
         Message->Payload.Data.assign(Payload.begin(), Payload.end());
-        
+
         Queue->SendMessageInTransaction(TxId, QueueName, Message);
         Queue->RollbackDistributedTransaction(TxId, "测试回滚");
     }
@@ -238,16 +241,17 @@ TEST_F(DistributedTransactionTest, DistributedTransactionStatistics)
     for (int i = 0; i < TimeoutCount; ++i)
     {
         std::string CoordinatorId = "coordinator_timeout_" + std::to_string(i);
-        auto Result = Queue->BeginDistributedTransaction(CoordinatorId, "统计测试", 100); // 短超时
+        auto Result = Queue->BeginDistributedTransaction(CoordinatorId, "统计测试", 100);  // 短超时
         ASSERT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
-        
-        Helianthus::MessageQueue::TransactionId TxId = Queue->BeginTransaction("统计测试", 100); // 短超时
-        
+
+        Helianthus::MessageQueue::TransactionId TxId =
+            Queue->BeginTransaction("统计测试", 100);  // 短超时
+
         auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
         Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
         std::string Payload = "超时消息 " + std::to_string(i);
         Message->Payload.Data.assign(Payload.begin(), Payload.end());
-        
+
         Queue->SendMessageInTransaction(TxId, QueueName, Message);
         // 不提交，让它超时
     }
@@ -265,13 +269,13 @@ TEST_F(DistributedTransactionTest, DistributedTransactionStatistics)
     EXPECT_GE(Stats.TotalTransactions, MinExpected);
     EXPECT_GE(Stats.CommittedTransactions, CommitCount);
     EXPECT_GE(Stats.RolledBackTransactions, RollbackCount);
-    
+
     // 超时事务可能还没有被处理，所以不强制要求
     EXPECT_GE(Stats.TimeoutTransactions, 0);
-    
+
     EXPECT_GT(Stats.SuccessRate, 0.0);
     EXPECT_LE(Stats.SuccessRate, 100.0);
-    
+
     // 平均时间可能为0，如果所有事务都很快完成
     EXPECT_GE(Stats.AverageCommitTimeMs, 0.0);
     EXPECT_GE(Stats.AverageRollbackTimeMs, 0.0);

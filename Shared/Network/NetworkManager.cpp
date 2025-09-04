@@ -451,13 +451,13 @@ std::vector<Message::MessagePtr> NetworkManager::GetAllMessages()
 {
     std::lock_guard<std::mutex> Lock(StatsMutex);
     std::vector<Message::MessagePtr> Messages;
-    
+
     while (!IncomingMessages.empty())
     {
         Messages.push_back(IncomingMessages.front());
         IncomingMessages.pop();
     }
-    
+
     return Messages;
 }
 

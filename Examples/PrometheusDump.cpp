@@ -1,9 +1,9 @@
+#include "Shared/MessageQueue/MessageQueue.h"
+
+#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <thread>
-#include <chrono>
-
-#include "Shared/MessageQueue/MessageQueue.h"
 
 using namespace Helianthus::MessageQueue;
 
@@ -14,7 +14,8 @@ static std::string CollectMetrics(MessageQueue& MQ)
     // 批处理指标帮助与类型
     Os << "# HELP helianthus_batch_commits_total Total number of batch commits per queue\n";
     Os << "# TYPE helianthus_batch_commits_total counter\n";
-    Os << "# HELP helianthus_batch_messages_total Total number of messages committed via batches per queue\n";
+    Os << "# HELP helianthus_batch_messages_total Total number of messages committed via batches "
+          "per queue\n";
     Os << "# TYPE helianthus_batch_messages_total counter\n";
 
     for (const auto& Q : Queues)
@@ -24,16 +25,21 @@ static std::string CollectMetrics(MessageQueue& MQ)
         {
             Os << "helianthus_queue_pending{queue=\"" << Q << "\"} " << S.PendingMessages << "\n";
             Os << "helianthus_queue_total{queue=\"" << Q << "\"} " << S.TotalMessages << "\n";
-            Os << "helianthus_queue_processed{queue=\"" << Q << "\"} " << S.ProcessedMessages << "\n";
-            Os << "helianthus_queue_deadletter{queue=\"" << Q << "\"} " << S.DeadLetterMessages << "\n";
-            Os << "helianthus_queue_throughput{queue=\"" << Q << "\"} " << S.ThroughputPerSecond << "\n";
+            Os << "helianthus_queue_processed{queue=\"" << Q << "\"} " << S.ProcessedMessages
+               << "\n";
+            Os << "helianthus_queue_deadletter{queue=\"" << Q << "\"} " << S.DeadLetterMessages
+               << "\n";
+            Os << "helianthus_queue_throughput{queue=\"" << Q << "\"} " << S.ThroughputPerSecond
+               << "\n";
         }
 
         QueueMetrics M{};
         if (MQ.GetQueueMetrics(Q, M) == QueueResult::SUCCESS)
         {
-            Os << "helianthus_queue_latency_p50_ms{queue=\"" << Q << "\"} " << M.P50LatencyMs << "\n";
-            Os << "helianthus_queue_latency_p95_ms{queue=\"" << Q << "\"} " << M.P95LatencyMs << "\n";
+            Os << "helianthus_queue_latency_p50_ms{queue=\"" << Q << "\"} " << M.P50LatencyMs
+               << "\n";
+            Os << "helianthus_queue_latency_p95_ms{queue=\"" << Q << "\"} " << M.P95LatencyMs
+               << "\n";
             Os << "helianthus_queue_enqueue_rate{queue=\"" << Q << "\"} " << M.EnqueueRate << "\n";
             Os << "helianthus_queue_dequeue_rate{queue=\"" << Q << "\"} " << M.DequeueRate << "\n";
         }
@@ -80,7 +86,9 @@ int main()
 {
     MessageQueue MQ;
     MQ.Initialize();
-    QueueConfig C; C.Name = "dump_metrics"; C.Persistence = PersistenceMode::MEMORY_ONLY;
+    QueueConfig C;
+    C.Name = "dump_metrics";
+    C.Persistence = PersistenceMode::MEMORY_ONLY;
     MQ.CreateQueue(C);
 
     // 触发零拷贝与批处理一次，以便有非零指标
@@ -103,5 +111,3 @@ int main()
     MQ.Shutdown();
     return 0;
 }
-
-

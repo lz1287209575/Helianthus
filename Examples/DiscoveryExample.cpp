@@ -1,17 +1,18 @@
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <memory>
-#include <string>
-#include <vector>
-
-#include "Discovery/ServiceRegistry.h"
-#include "Discovery/ServiceDiscovery.h"
-#include "Discovery/HealthChecker.h"
-#include "Discovery/LoadBalancer.h"
-#include "Discovery/DiscoveryTypes.h"
 #include "Shared/Common/StructuredLogger.h"
 #include "Shared/Network/NetworkTypes.h"
+
+#include <chrono>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "Discovery/DiscoveryTypes.h"
+#include "Discovery/HealthChecker.h"
+#include "Discovery/LoadBalancer.h"
+#include "Discovery/ServiceDiscovery.h"
+#include "Discovery/ServiceRegistry.h"
 
 using namespace Helianthus::Discovery;
 using namespace Helianthus::Common;
@@ -34,13 +35,13 @@ public:
 
         // 创建服务注册中心
         Registry_ = std::make_unique<ServiceRegistry>();
-        
+
         // 配置注册中心
         RegistryConfig config;
         config.MaxServices = 1000;
         config.MaxInstancesPerService = 100;
-        config.DefaultTtlMs = 300000;  // 5分钟
-        config.CleanupIntervalMs = 60000;  // 1分钟
+        config.DefaultTtlMs = 300000;       // 5分钟
+        config.CleanupIntervalMs = 60000;   // 1分钟
         config.HeartbeatTimeoutMs = 90000;  // 1.5分钟
         config.EnablePersistence = false;
         config.EnableReplication = false;
@@ -57,21 +58,23 @@ public:
 
         // 设置回调函数
         Registry_->SetServiceStateChangeCallback(
-            [](ServiceInstanceId instanceId, ServiceState oldState, ServiceState newState) {
-                std::cout << "服务状态变更: 实例 " << instanceId 
-                          << " 从 " << static_cast<int>(oldState) 
-                          << " 变为 " << static_cast<int>(newState) << std::endl;
+            [](ServiceInstanceId instanceId, ServiceState oldState, ServiceState newState)
+            {
+                std::cout << "服务状态变更: 实例 " << instanceId << " 从 "
+                          << static_cast<int>(oldState) << " 变为 " << static_cast<int>(newState)
+                          << std::endl;
             });
 
         Registry_->SetServiceRegistrationCallback(
-            [](ServiceInstanceId instanceId, DiscoveryResult result) {
+            [](ServiceInstanceId instanceId, DiscoveryResult result)
+            {
                 if (result == DiscoveryResult::SUCCESS)
                 {
                     std::cout << "服务注册成功: 实例 " << instanceId << std::endl;
                 }
                 else
                 {
-                    std::cout << "服务注册失败: 实例 " << instanceId 
+                    std::cout << "服务注册失败: 实例 " << instanceId
                               << " 错误: " << static_cast<int>(result) << std::endl;
                 }
             });
@@ -87,10 +90,10 @@ public:
         while (Running_)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            
+
             // 定期清理过期服务
             Registry_->CleanupExpiredServices();
-            
+
             // 显示统计信息
             static int counter = 0;
             if (++counter % 30 == 0)  // 每30秒显示一次
@@ -141,21 +144,23 @@ public:
 
         // 设置回调函数
         Discovery_->SetServiceStateChangeCallback(
-            [](ServiceInstanceId instanceId, ServiceState oldState, ServiceState newState) {
-                std::cout << "服务状态变更: 实例 " << instanceId 
-                          << " 从 " << static_cast<int>(oldState) 
-                          << " 变为 " << static_cast<int>(newState) << std::endl;
+            [](ServiceInstanceId instanceId, ServiceState oldState, ServiceState newState)
+            {
+                std::cout << "服务状态变更: 实例 " << instanceId << " 从 "
+                          << static_cast<int>(oldState) << " 变为 " << static_cast<int>(newState)
+                          << std::endl;
             });
 
         Discovery_->SetServiceRegistrationCallback(
-            [](ServiceInstanceId instanceId, DiscoveryResult result) {
+            [](ServiceInstanceId instanceId, DiscoveryResult result)
+            {
                 if (result == DiscoveryResult::SUCCESS)
                 {
                     std::cout << "服务注册成功: 实例 " << instanceId << std::endl;
                 }
                 else
                 {
-                    std::cout << "服务注册失败: 实例 " << instanceId 
+                    std::cout << "服务注册失败: 实例 " << instanceId
                               << " 错误: " << static_cast<int>(result) << std::endl;
                 }
             });
@@ -303,7 +308,7 @@ private:
         std::cout << "启动健康检查器..." << std::endl;
 
         HealthChecker_ = std::make_unique<HealthChecker>();
-        
+
         // 配置健康检查
         HealthCheckConfig config;
         config.Type = HealthCheckType::TCP_CONNECT;
@@ -318,45 +323,49 @@ private:
 
         // 设置健康检查回调
         HealthChecker_->SetHealthCheckCallback(
-            [this](ServiceInstanceId instanceId, bool isHealthy, HealthScore score) {
-                std::cout << "健康检查结果: 实例 " << instanceId 
-                          << " 健康: " << (isHealthy ? "是" : "否")
-                          << " 分数: " << score << std::endl;
-                
+            [this](ServiceInstanceId instanceId, bool isHealthy, HealthScore score)
+            {
+                std::cout << "健康检查结果: 实例 " << instanceId
+                          << " 健康: " << (isHealthy ? "是" : "否") << " 分数: " << score
+                          << std::endl;
+
                 if (Registry_)
                 {
                     Registry_->UpdateServiceHealth(instanceId, score);
-                    Registry_->UpdateServiceState(instanceId, 
-                        isHealthy ? ServiceState::HEALTHY : ServiceState::UNHEALTHY);
+                    Registry_->UpdateServiceState(
+                        instanceId, isHealthy ? ServiceState::HEALTHY : ServiceState::UNHEALTHY);
                 }
             });
 
         // 启动健康检查线程
-        HealthCheckThread_ = std::thread([this]() {
-            while (Running_)
+        HealthCheckThread_ = std::thread(
+            [this]()
             {
-                if (Registry_)
+                while (Running_)
                 {
-                    auto services = Registry_->GetAllServices();
-                    for (const auto& service : services)
+                    if (Registry_)
                     {
-                        if (service && !service->Endpoints.empty())
+                        auto services = Registry_->GetAllServices();
+                        for (const auto& service : services)
                         {
-                            // 注册健康检查
-                            HealthCheckConfig healthConfig;
-                            healthConfig.Type = HealthCheckType::TCP_CONNECT;
-                            healthConfig.IntervalMs = 30000;
-                            healthConfig.TimeoutMs = 5000;
-                            healthConfig.Enabled = true;
-                            
-                            HealthChecker_->RegisterHealthCheck(service->InstanceId, healthConfig);
-                            HealthChecker_->StartHealthCheck(service->InstanceId);
+                            if (service && !service->Endpoints.empty())
+                            {
+                                // 注册健康检查
+                                HealthCheckConfig healthConfig;
+                                healthConfig.Type = HealthCheckType::TCP_CONNECT;
+                                healthConfig.IntervalMs = 30000;
+                                healthConfig.TimeoutMs = 5000;
+                                healthConfig.Enabled = true;
+
+                                HealthChecker_->RegisterHealthCheck(service->InstanceId,
+                                                                    healthConfig);
+                                HealthChecker_->StartHealthCheck(service->InstanceId);
+                            }
                         }
                     }
+                    std::this_thread::sleep_for(std::chrono::seconds(30));
                 }
-                std::this_thread::sleep_for(std::chrono::seconds(30));
-            }
-        });
+            });
     }
 
     void TestServiceDiscovery()
@@ -377,14 +386,16 @@ private:
         auto calculatorInstance = Discovery_->DiscoverService("CalculatorService");
         if (calculatorInstance)
         {
-            std::cout << "负载均衡选择计算器服务: " << calculatorInstance->InstanceId 
-                      << " 地址: " << calculatorInstance->BaseInfo.HostAddress << ":" << calculatorInstance->BaseInfo.Port << std::endl;
+            std::cout << "负载均衡选择计算器服务: " << calculatorInstance->InstanceId
+                      << " 地址: " << calculatorInstance->BaseInfo.HostAddress << ":"
+                      << calculatorInstance->BaseInfo.Port << std::endl;
         }
 
-        auto dbInstance = Discovery_->DiscoverService("DatabaseService", LoadBalanceStrategy::WEIGHTED_RANDOM);
+        auto dbInstance =
+            Discovery_->DiscoverService("DatabaseService", LoadBalanceStrategy::WEIGHTED_RANDOM);
         if (dbInstance)
         {
-            std::cout << "加权随机选择数据库服务: " << dbInstance->InstanceId 
+            std::cout << "加权随机选择数据库服务: " << dbInstance->InstanceId
                       << " 权重: " << dbInstance->Weight << std::endl;
         }
 
@@ -393,7 +404,7 @@ private:
         std::cout << "所有注册服务: " << allServices.size() << " 个实例" << std::endl;
         for (const auto& service : allServices)
         {
-            std::cout << "  - " << service->BaseInfo.ServiceName << " 实例 " << service->InstanceId 
+            std::cout << "  - " << service->BaseInfo.ServiceName << " 实例 " << service->InstanceId
                       << " 状态: " << static_cast<int>(service->State) << std::endl;
         }
     }
@@ -406,11 +417,11 @@ private:
         std::cout << "轮询负载均衡测试:" << std::endl;
         for (int i = 0; i < 5; ++i)
         {
-            auto instance = Discovery_->DiscoverService("CalculatorService", 
-                                                       LoadBalanceStrategy::ROUND_ROBIN);
+            auto instance =
+                Discovery_->DiscoverService("CalculatorService", LoadBalanceStrategy::ROUND_ROBIN);
             if (instance)
             {
-                std::cout << "  选择实例 " << instance->InstanceId 
+                std::cout << "  选择实例 " << instance->InstanceId
                           << " 端口: " << instance->BaseInfo.Port << std::endl;
             }
         }
@@ -419,12 +430,12 @@ private:
         std::cout << "加权随机负载均衡测试:" << std::endl;
         for (int i = 0; i < 5; ++i)
         {
-            auto instance = Discovery_->DiscoverService("DatabaseService", 
-                                                       LoadBalanceStrategy::WEIGHTED_RANDOM);
+            auto instance = Discovery_->DiscoverService("DatabaseService",
+                                                        LoadBalanceStrategy::WEIGHTED_RANDOM);
             if (instance)
             {
-                std::cout << "  选择实例 " << instance->InstanceId 
-                          << " 权重: " << instance->Weight << std::endl;
+                std::cout << "  选择实例 " << instance->InstanceId << " 权重: " << instance->Weight
+                          << std::endl;
             }
         }
 
@@ -432,11 +443,11 @@ private:
         std::cout << "最少连接负载均衡测试:" << std::endl;
         for (int i = 0; i < 3; ++i)
         {
-            auto instance = Discovery_->DiscoverService("StringService", 
-                                                       LoadBalanceStrategy::LEAST_CONNECTIONS);
+            auto instance = Discovery_->DiscoverService("StringService",
+                                                        LoadBalanceStrategy::LEAST_CONNECTIONS);
             if (instance)
             {
-                std::cout << "  选择实例 " << instance->InstanceId 
+                std::cout << "  选择实例 " << instance->InstanceId
                           << " 连接数: " << instance->ActiveConnections << std::endl;
             }
         }
@@ -507,10 +518,10 @@ private:
 int main(int argc, char* argv[])
 {
     std::cout << "=== Helianthus 服务发现示例程序 ===" << std::endl;
-    
+
     bool runServer = false;
     bool runClient = false;
-    
+
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];

@@ -23,31 +23,31 @@ struct PerformanceConfig
 {
     // 内存池配置
     size_t MemoryPoolSize = 64 * 1024 * 1024;  // 64MB
-    size_t BlockSize = 4096;                    // 4KB块
+    size_t BlockSize = 4096;                   // 4KB块
     size_t MaxPoolSize = 512 * 1024 * 1024;    // 512MB
     bool EnableMemoryPool = true;
-    
+
     // 对象池配置
-    size_t MessagePoolSize = 10000;             // 消息对象池大小
-    size_t MessagePoolMaxSize = 100000;         // 最大消息对象池大小
+    size_t MessagePoolSize = 10000;      // 消息对象池大小
+    size_t MessagePoolMaxSize = 100000;  // 最大消息对象池大小
     bool EnableMessagePool = true;
-    
+
     // 批处理配置
-    uint32_t BatchSize = 100;                   // 批处理大小
-    uint32_t BatchTimeoutMs = 100;              // 批处理超时
+    uint32_t BatchSize = 100;       // 批处理大小
+    uint32_t BatchTimeoutMs = 100;  // 批处理超时
     bool EnableBatching = true;
-    
+
     // 零拷贝配置
     bool EnableZeroCopy = true;
-    size_t ZeroCopyThreshold = 1024;            // 零拷贝阈值
-    
+    size_t ZeroCopyThreshold = 1024;  // 零拷贝阈值
+
     // 预分配配置
-    size_t PreallocatedMessages = 1000;         // 预分配消息数量
+    size_t PreallocatedMessages = 1000;  // 预分配消息数量
     bool EnablePreallocation = true;
-    
+
     // 性能监控配置
     bool EnablePerformanceMonitoring = true;
-    uint32_t MonitoringIntervalMs = 1000;       // 监控间隔
+    uint32_t MonitoringIntervalMs = 1000;  // 监控间隔
 };
 
 // 性能优化器接口
@@ -77,7 +77,8 @@ public:
     virtual ZeroCopyBuffer CreateZeroCopyBuffer(const void* Data, size_t Size) = 0;
     virtual ZeroCopyBuffer CreateZeroCopyBuffer(const std::string& Data) = 0;
     virtual void ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer) = 0;
-    virtual MessagePtr CreateMessageFromZeroCopy(const ZeroCopyBuffer& Buffer, MessageType Type = MessageType::TEXT) = 0;
+    virtual MessagePtr CreateMessageFromZeroCopy(const ZeroCopyBuffer& Buffer,
+                                                 MessageType Type = MessageType::TEXT) = 0;
 
     // 批处理操作
     virtual uint32_t CreateBatch() = 0;
@@ -128,7 +129,8 @@ public:
     ZeroCopyBuffer CreateZeroCopyBuffer(const void* Data, size_t Size) override;
     ZeroCopyBuffer CreateZeroCopyBuffer(const std::string& Data) override;
     void ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer) override;
-    MessagePtr CreateMessageFromZeroCopy(const ZeroCopyBuffer& Buffer, MessageType Type = MessageType::TEXT) override;
+    MessagePtr CreateMessageFromZeroCopy(const ZeroCopyBuffer& Buffer,
+                                         MessageType Type = MessageType::TEXT) override;
 
     // 批处理操作
     uint32_t CreateBatch() override;
@@ -196,16 +198,19 @@ private:
     void InitializeMessagePool();
     void ShutdownMemoryPool();
     void ShutdownMessagePool();
-    
+
     MemoryBlock* FindFreeBlock(size_t Size);
     void MarkBlockAsUsed(MemoryBlock* Block);
     void MarkBlockAsFree(MemoryBlock* Block);
-    
+
     void MonitoringThreadFunc();
     void UpdatePerformanceMetrics();
-    
-    template<typename T>
-    void UpdateAverage(std::atomic<double>& Average, std::atomic<uint64_t>& Total, uint64_t NewValue, uint64_t Count);
+
+    template <typename T>
+    void UpdateAverage(std::atomic<double>& Average,
+                       std::atomic<uint64_t>& Total,
+                       uint64_t NewValue,
+                       uint64_t Count);
 };
 
 // 全局性能优化器实例
@@ -216,4 +221,4 @@ PerformanceOptimizer& GetPerformanceOptimizer();
 bool InitializePerformanceOptimizer(const PerformanceConfig& Config = PerformanceConfig{});
 void ShutdownPerformanceOptimizer();
 
-} // namespace Helianthus::MessageQueue
+}  // namespace Helianthus::MessageQueue

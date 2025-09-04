@@ -1,9 +1,10 @@
 #include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/Reactor.h"
+
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
-#include <atomic>
 #include <vector>
 
 using namespace Helianthus::Network::Asio;
@@ -16,9 +17,7 @@ void DemoBatchProcessing()
     auto Context = std::make_shared<IoContext>();
 
     // 启动事件循环
-    std::thread RunThread([Context]() {
-        Context->Run();
-    });
+    std::thread RunThread([Context]() { Context->Run(); });
 
     // 提交大量任务
     std::atomic<int> TaskCounter = 0;
@@ -31,15 +30,19 @@ void DemoBatchProcessing()
     std::vector<std::thread> SubmitThreads;
     for (int i = 0; i < 8; ++i)
     {
-        SubmitThreads.emplace_back([Context, &TaskCounter, NumTasks]() {
-            for (int j = 0; j < NumTasks / 8; ++j)
+        SubmitThreads.emplace_back(
+            [Context, &TaskCounter, NumTasks]()
             {
-                Context->Post([&TaskCounter]() {
-                    TaskCounter.fetch_add(1);
-                    std::this_thread::sleep_for(std::chrono::microseconds(1));
-                });
-            }
-        });
+                for (int j = 0; j < NumTasks / 8; ++j)
+                {
+                    Context->Post(
+                        [&TaskCounter]()
+                        {
+                            TaskCounter.fetch_add(1);
+                            std::this_thread::sleep_for(std::chrono::microseconds(1));
+                        });
+                }
+            });
     }
 
     for (auto& Thread : SubmitThreads)
@@ -75,14 +78,10 @@ void DemoPerformanceComparison()
 
     for (int i = 0; i < NumTasks; ++i)
     {
-        Context->Post([&TaskCounter]() {
-            TaskCounter.fetch_add(1);
-        });
+        Context->Post([&TaskCounter]() { TaskCounter.fetch_add(1); });
     }
 
-    std::thread RunThread([Context]() {
-        Context->Run();
-    });
+    std::thread RunThread([Context]() { Context->Run(); });
 
     while (TaskCounter.load() < NumTasks)
     {
@@ -95,7 +94,8 @@ void DemoPerformanceComparison()
     Context->Stop();
     RunThread.join();
 
-    std::cout << "  处理 " << NumTasks << " 个任务耗时: " << Duration.count() << " 微秒" << std::endl;
+    std::cout << "  处理 " << NumTasks << " 个任务耗时: " << Duration.count() << " 微秒"
+              << std::endl;
 }
 
 // 自适应批处理示例已移除（当前接口不支持）
@@ -104,17 +104,17 @@ int main()
 {
     std::cout << "批处理功能示例程序" << std::endl;
     std::cout << "========================================" << std::endl;
-    
+
     try
     {
         // 批处理功能演示
         DemoBatchProcessing();
-        
+
         // 性能对比演示
         DemoPerformanceComparison();
-        
+
         // 自适应批处理示例已省略
-        
+
         std::cout << "\n========================================" << std::endl;
         std::cout << "所有演示完成！" << std::endl;
     }
@@ -123,6 +123,6 @@ int main()
         std::cerr << "错误: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

@@ -2,11 +2,12 @@
 
     #include "Shared/Network/Asio/ProactorIocp.h"
 
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <mswsock.h>
-#include <chrono>
-#include <algorithm>
+    #include <algorithm>
+    #include <chrono>
+
+    #include <mswsock.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
 
 namespace Helianthus::Network::Asio
 {
@@ -91,7 +92,7 @@ void ProactorIocp::EnsureAcceptEx(SOCKET ListenSocket)
 {
     if (AcceptExPtr && GetAcceptExSockaddrsPtr)
         return;
-    
+
     // 获取 AcceptEx 函数指针
     if (!AcceptExPtr)
     {
@@ -107,7 +108,7 @@ void ProactorIocp::EnsureAcceptEx(SOCKET ListenSocket)
                  nullptr,
                  nullptr);
     }
-    
+
     // 获取 GetAcceptExSockaddrs 函数指针
     if (!GetAcceptExSockaddrsPtr)
     {
@@ -129,7 +130,7 @@ void ProactorIocp::EnsureConnectEx(SOCKET Socket)
 {
     if (ConnectExPtr)
         return;
-    
+
     // 获取 ConnectEx 函数指针
     GUID GuidConnectEx = WSAID_CONNECTEX;
     DWORD Bytes = 0;
@@ -217,19 +218,21 @@ void ProactorIocp::AsyncWrite(Fd Handle, const char* Data, size_t Size, Completi
     }
 }
 
-void ProactorIocp::AsyncConnect(Fd Handle, const Network::NetworkAddress& Address, ConnectHandler Handler)
+void ProactorIocp::AsyncConnect(Fd Handle,
+                                const Network::NetworkAddress& Address,
+                                ConnectHandler Handler)
 {
     SOCKET Socket = static_cast<SOCKET>(Handle);
     AssociateSocketIfNeeded(Socket);
     EnsureConnectEx(Socket);
-    
+
     if (!ConnectExPtr)
     {
         if (Handler)
             Handler(Network::NetworkError::CONNECTION_FAILED);
         return;
     }
-    
+
     auto* op = new Op{};
     memset(&op->Ov, 0, sizeof(op->Ov));
     op->Socket = Socket;
@@ -243,23 +246,23 @@ void ProactorIocp::AsyncConnect(Fd Handle, const Network::NetworkAddress& Addres
     op->Type = Op::OpType::Connect;
     op->ConnectAddr = Address;
     op->ConnectCb = std::move(Handler);
-    
+
     // 准备目标地址
     sockaddr_in TargetAddr{};
     TargetAddr.sin_family = AF_INET;
     TargetAddr.sin_port = htons(Address.Port);
     inet_pton(AF_INET, Address.Ip.c_str(), &TargetAddr.sin_addr);
-    
+
     // 使用 ConnectEx 提交异步连接
     DWORD Bytes = 0;
     bool ConnectResult = ConnectExPtr(Socket,
-                                     reinterpret_cast<sockaddr*>(&TargetAddr),
-                                     sizeof(TargetAddr),
-                                     nullptr,  // 不发送数据
-                                     0,
-                                     &Bytes,
-                                     &op->Ov);
-    
+                                      reinterpret_cast<sockaddr*>(&TargetAddr),
+                                      sizeof(TargetAddr),
+                                      nullptr,  // 不发送数据
+                                      0,
+                                      &Bytes,
+                                      &op->Ov);
+
     if (!ConnectResult)
     {
         int ErrorCode = WSAGetLastError();
@@ -328,8 +331,9 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
             BufferDescriptor.buf = const_cast<char*>(Operation->ConstData) + Operation->Transferred;
             BufferDescriptor.len = static_cast<ULONG>(Operation->DataSize - Operation->Transferred);
             DWORD More = 0;
-            int R = WSASend(Operation->Socket, &BufferDescriptor, 1, &More, 0, &Operation->Ov, nullptr);
-            
+            int R =
+                WSASend(Operation->Socket, &BufferDescriptor, 1, &More, 0, &Operation->Ov, nullptr);
+
             if (R == SOCKET_ERROR)
             {
                 int ErrorCode = WSAGetLastError();
@@ -371,17 +375,20 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
                 }
             }
         }
-        else if (Operation->Type == Op::OpType::Read && Operation->Transferred < Operation->BufferSize)
+        else if (Operation->Type == Op::OpType::Read &&
+                 Operation->Transferred < Operation->BufferSize)
         {
             // 续传读操作
             memset(&Operation->Ov, 0, sizeof(Operation->Ov));
             WSABUF BufferDescriptor;
             BufferDescriptor.buf = Operation->Buffer + Operation->Transferred;
-            BufferDescriptor.len = static_cast<ULONG>(Operation->BufferSize - Operation->Transferred);
+            BufferDescriptor.len =
+                static_cast<ULONG>(Operation->BufferSize - Operation->Transferred);
             DWORD Flags = 0;
             DWORD More = 0;
-            int R = WSARecv(Operation->Socket, &BufferDescriptor, 1, &More, &Flags, &Operation->Ov, nullptr);
-            
+            int R = WSARecv(
+                Operation->Socket, &BufferDescriptor, 1, &More, &Flags, &Operation->Ov, nullptr);
+
             if (R == SOCKET_ERROR)
             {
                 int ErrorCode = WSAGetLastError();
@@ -431,24 +438,24 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
                        SO_UPDATE_ACCEPT_CONTEXT,
                        reinterpret_cast<const char*>(&Operation->ListenSocket),
                        sizeof(Operation->ListenSocket));
-            
+
             // 使用 GetAcceptExSockaddrs 获取本地和远端地址
             sockaddr* LocalSockaddr = nullptr;
             sockaddr* RemoteSockaddr = nullptr;
             int LocalSockaddrLen = 0;
             int RemoteSockaddrLen = 0;
-            
+
             if (GetAcceptExSockaddrsPtr)
             {
                 GetAcceptExSockaddrsPtr(Operation->Buffer,
-                                       0,
-                                       sizeof(SOCKADDR_IN) + 16,
-                                       sizeof(SOCKADDR_IN) + 16,
-                                       &LocalSockaddr,
-                                       &LocalSockaddrLen,
-                                       &RemoteSockaddr,
-                                       &RemoteSockaddrLen);
-                
+                                        0,
+                                        sizeof(SOCKADDR_IN) + 16,
+                                        sizeof(SOCKADDR_IN) + 16,
+                                        &LocalSockaddr,
+                                        &LocalSockaddrLen,
+                                        &RemoteSockaddr,
+                                        &RemoteSockaddrLen);
+
                 // 保存地址信息
                 if (LocalSockaddr && LocalSockaddrLen >= sizeof(sockaddr_in))
                 {
@@ -459,7 +466,7 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
                     Operation->RemoteAddr = *reinterpret_cast<sockaddr_in*>(RemoteSockaddr);
                 }
             }
-            
+
             // 使用新的 AcceptEx 完成处理
             OnAcceptExComplete(Operation, err);
             return;
@@ -467,12 +474,8 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
         else if (Operation->Type == Op::OpType::Connect)
         {
             // 完成 Connect：更新连接上下文
-            setsockopt(Operation->Socket,
-                       SOL_SOCKET,
-                       SO_UPDATE_CONNECT_CONTEXT,
-                       nullptr,
-                       0);
-            
+            setsockopt(Operation->Socket, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, nullptr, 0);
+
             // 调用连接完成回调
             auto ConnectCb = std::move(Operation->ConnectCb);
             delete Operation;
@@ -490,9 +493,10 @@ void ProactorIocp::ProcessCompletions(int TimeoutMs)
             {
                 char IpStr[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, &Operation->UdpSockAddr.sin_addr, IpStr, INET_ADDRSTRLEN);
-                FromAddress = Network::NetworkAddress(IpStr, ntohs(Operation->UdpSockAddr.sin_port));
+                FromAddress =
+                    Network::NetworkAddress(IpStr, ntohs(Operation->UdpSockAddr.sin_port));
             }
-            
+
             // 调用 UDP 接收完成回调
             auto UdpReceiveCb = std::move(Operation->UdpReceiveCb);
             delete Operation;
@@ -535,10 +539,10 @@ void ProactorIocp::Cancel(Fd Handle)
 {
     SOCKET Socket = static_cast<SOCKET>(Handle);
     HANDLE CancelHandle = reinterpret_cast<HANDLE>(Socket);
-    
+
     // 取消指定句柄上的所有挂起 I/O 操作
     CancelIoEx(CancelHandle, nullptr);
-    
+
     // 如果是监听套接字，也停止相关的 AcceptEx 操作
     auto It = AcceptExManagers.find(Handle);
     if (It != AcceptExManagers.end())
@@ -564,18 +568,19 @@ void ProactorIocp::StartAcceptEx(Fd ListenHandle, AcceptResultHandler Handler, s
     SOCKET ListenSocket = static_cast<SOCKET>(ListenHandle);
     AssociateSocketIfNeeded(ListenSocket);
     EnsureAcceptEx(ListenSocket);
-    
+
     if (!AcceptExPtr)
     {
         if (Handler)
             Handler(Network::NetworkError::SOCKET_CREATE_FAILED, 0);
         return;
     }
-    
+
     // 创建 AcceptEx 管理器
-    auto Manager = std::make_unique<AcceptExManager>(ListenSocket, std::move(Handler), MaxConcurrent);
+    auto Manager =
+        std::make_unique<AcceptExManager>(ListenSocket, std::move(Handler), MaxConcurrent);
     AcceptExManagers[ListenHandle] = std::move(Manager);
-    
+
     // 提交初始的 AcceptEx 操作，创建多个并发接受操作
     auto* ManagerPtr = AcceptExManagers[ListenHandle].get();
     for (size_t i = 0; i < ManagerPtr->GetCurrentTarget(); ++i)
@@ -590,13 +595,13 @@ void ProactorIocp::StopAcceptEx(Fd ListenHandle)
     if (It != AcceptExManagers.end())
     {
         It->second->IsActive = false;
-        
+
         // 取消所有挂起的 AcceptEx 操作
         for (auto* Op : It->second->PendingAccepts)
         {
             CancelIoEx(reinterpret_cast<HANDLE>(Op->Socket), &Op->Ov);
         }
-        
+
         // 清理资源
         for (auto* Op : It->second->PendingAccepts)
         {
@@ -604,7 +609,7 @@ void ProactorIocp::StopAcceptEx(Fd ListenHandle)
             closesocket(Op->Socket);
             delete Op;
         }
-        
+
         AcceptExManagers.erase(It);
     }
 }
@@ -613,22 +618,23 @@ void ProactorIocp::SubmitAcceptEx(AcceptExManager* Manager)
 {
     if (!Manager || !Manager->IsActive)
         return;
-    
+
     // 检查是否达到当前目标并发数
     if (Manager->PendingAccepts.size() >= Manager->GetCurrentTarget())
         return;
-    
+
     // 创建接受套接字
-    SOCKET AcceptSocket = ::WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+    SOCKET AcceptSocket =
+        ::WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
     if (AcceptSocket == INVALID_SOCKET)
     {
         if (Manager->Handler)
             Manager->Handler(Network::NetworkError::SOCKET_CREATE_FAILED, 0);
         return;
     }
-    
+
     AssociateSocketIfNeeded(AcceptSocket);
-    
+
     // 创建 AcceptEx 操作
     const DWORD BufferLength = (sizeof(SOCKADDR_IN) + 16) * 2;
     char* AddrBuffer = new char[BufferLength];
@@ -643,11 +649,11 @@ void ProactorIocp::SubmitAcceptEx(AcceptExManager* Manager)
     AcceptOp->Transferred = 0;
     AcceptOp->Type = Op::OpType::Accept;
     AcceptOp->ListenSocket = Manager->ListenSocket;
-    AcceptOp->AcceptCb = nullptr; // 使用管理器的 Handler
-    
+    AcceptOp->AcceptCb = nullptr;  // 使用管理器的 Handler
+
     // 添加到挂起列表
     Manager->PendingAccepts.push_back(AcceptOp);
-    
+
     // 提交 AcceptEx
     DWORD Bytes = 0;
     bool R = AcceptExPtr(Manager->ListenSocket,
@@ -658,7 +664,7 @@ void ProactorIocp::SubmitAcceptEx(AcceptExManager* Manager)
                          sizeof(SOCKADDR_IN) + 16,
                          &Bytes,
                          &AcceptOp->Ov);
-    
+
     if (!R && WSAGetLastError() != WSA_IO_PENDING)
     {
         // 错误处理
@@ -679,7 +685,7 @@ void ProactorIocp::OnAcceptExComplete(Op* AcceptOp, Network::NetworkError Error)
             break;
         }
     }
-    
+
     if (!Manager)
     {
         // 管理器不存在，清理资源
@@ -688,33 +694,33 @@ void ProactorIocp::OnAcceptExComplete(Op* AcceptOp, Network::NetworkError Error)
         delete AcceptOp;
         return;
     }
-    
+
     // 从挂起列表中移除
     auto It = std::find(Manager->PendingAccepts.begin(), Manager->PendingAccepts.end(), AcceptOp);
     if (It != Manager->PendingAccepts.end())
     {
         Manager->PendingAccepts.erase(It);
     }
-    
+
     if (Error == Network::NetworkError::NONE)
     {
         // 更新统计信息
         Manager->LastAcceptTime = std::chrono::steady_clock::now();
         Manager->AcceptCount++;
-        
+
         // 成功接受连接
         if (Manager->Handler)
         {
             Manager->Handler(Error, static_cast<Fd>(AcceptOp->Socket));
         }
-        
+
         // 清理资源
         delete[] AcceptOp->Buffer;
         delete AcceptOp;
-        
+
         // 动态调整并发数
         Manager->AdjustConcurrency();
-        
+
         // 提交新的 AcceptEx 操作以维持并发数
         if (Manager->IsActive)
         {
@@ -725,39 +731,43 @@ void ProactorIocp::OnAcceptExComplete(Op* AcceptOp, Network::NetworkError Error)
     {
         // 更新错误统计
         Manager->ErrorCount++;
-        
+
         // 错误处理
         if (Manager->Handler)
         {
             Manager->Handler(Error, 0);
         }
-        
+
         // 清理资源
         delete[] AcceptOp->Buffer;
         closesocket(AcceptOp->Socket);
         delete AcceptOp;
-        
+
         // 如果是临时错误，重试
-        if (Manager->IsActive && (Error == Network::NetworkError::TIMEOUT || 
-                                 Error == Network::NetworkError::NETWORK_UNREACHABLE))
+        if (Manager->IsActive && (Error == Network::NetworkError::TIMEOUT ||
+                                  Error == Network::NetworkError::NETWORK_UNREACHABLE))
         {
             SubmitAcceptEx(Manager);
         }
         // 如果错误率过高，减少并发数
         else if (Manager->ErrorCount > 5)
         {
-            Manager->TargetConcurrentAccepts = std::max(Manager->TargetConcurrentAccepts - 1, Manager->MinConcurrentAccepts);
+            Manager->TargetConcurrentAccepts =
+                std::max(Manager->TargetConcurrentAccepts - 1, Manager->MinConcurrentAccepts);
             Manager->ErrorCount = 0;  // 重置错误计数
         }
     }
 }
 
 // UDP 异步操作实现
-void ProactorIocp::AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, UdpReceiveHandler Handler)
+void ProactorIocp::AsyncReceiveFrom(Fd Handle,
+                                    char* Buffer,
+                                    size_t BufferSize,
+                                    UdpReceiveHandler Handler)
 {
     SOCKET Socket = static_cast<SOCKET>(Handle);
     AssociateSocketIfNeeded(Socket);
-    
+
     auto* op = new Op{};
     memset(&op->Ov, 0, sizeof(op->Ov));
     op->Socket = Socket;
@@ -770,7 +780,7 @@ void ProactorIocp::AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, 
     op->Transferred = 0;
     op->Type = Op::OpType::UdpReceiveFrom;
     op->UdpReceiveCb = std::move(Handler);
-    
+
     // 使用 WSARecvFrom 提交异步接收
     WSABUF BufferDescriptor;
     BufferDescriptor.buf = Buffer;
@@ -778,7 +788,7 @@ void ProactorIocp::AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, 
     DWORD Flags = 0;
     DWORD Bytes = 0;
     int SockAddrLen = sizeof(op->UdpSockAddr);
-    
+
     int RecvResult = WSARecvFrom(Socket,
                                  &BufferDescriptor,
                                  1,
@@ -788,7 +798,7 @@ void ProactorIocp::AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, 
                                  &SockAddrLen,
                                  &op->Ov,
                                  nullptr);
-    
+
     if (RecvResult == SOCKET_ERROR)
     {
         int ErrorCode = WSAGetLastError();
@@ -804,11 +814,15 @@ void ProactorIocp::AsyncReceiveFrom(Fd Handle, char* Buffer, size_t BufferSize, 
     }
 }
 
-void ProactorIocp::AsyncSendTo(Fd Handle, const char* Data, size_t Size, const Network::NetworkAddress& Address, UdpSendHandler Handler)
+void ProactorIocp::AsyncSendTo(Fd Handle,
+                               const char* Data,
+                               size_t Size,
+                               const Network::NetworkAddress& Address,
+                               UdpSendHandler Handler)
 {
     SOCKET Socket = static_cast<SOCKET>(Handle);
     AssociateSocketIfNeeded(Socket);
-    
+
     auto* op = new Op{};
     memset(&op->Ov, 0, sizeof(op->Ov));
     op->Socket = Socket;
@@ -822,18 +836,18 @@ void ProactorIocp::AsyncSendTo(Fd Handle, const char* Data, size_t Size, const N
     op->Type = Op::OpType::UdpSendTo;
     op->UdpSendCb = std::move(Handler);
     op->UdpTargetAddr = Address;
-    
+
     // 准备目标地址
     op->UdpSockAddr.sin_family = AF_INET;
     op->UdpSockAddr.sin_port = htons(Address.Port);
     inet_pton(AF_INET, Address.Ip.c_str(), &op->UdpSockAddr.sin_addr);
-    
+
     // 使用 WSASendTo 提交异步发送
     WSABUF BufferDescriptor;
     BufferDescriptor.buf = const_cast<char*>(Data);
     BufferDescriptor.len = static_cast<ULONG>(Size);
     DWORD Bytes = 0;
-    
+
     int SendResult = WSASendTo(Socket,
                                &BufferDescriptor,
                                1,
@@ -843,7 +857,7 @@ void ProactorIocp::AsyncSendTo(Fd Handle, const char* Data, size_t Size, const N
                                sizeof(op->UdpSockAddr),
                                &op->Ov,
                                nullptr);
-    
+
     if (SendResult == SOCKET_ERROR)
     {
         int ErrorCode = WSAGetLastError();

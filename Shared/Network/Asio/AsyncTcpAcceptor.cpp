@@ -5,16 +5,15 @@
 #include "Shared/Network/Asio/Proactor.h"
 #include "Shared/Network/Asio/Reactor.h"
 
-
 #ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
 #else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <fcntl.h>
-#include <unistd.h>
+    #include <arpa/inet.h>
+    #include <fcntl.h>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
 #endif
 
 namespace Helianthus::Network::Asio
@@ -42,7 +41,7 @@ Network::NetworkError AsyncTcpAcceptor::Bind(const Network::NetworkAddress& Addr
 void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
 {
     PendingAccept = std::move(Handler);
-    
+
     // 检查 Socket 是否已经绑定和监听
     Fd ListenFd;
     {
@@ -51,8 +50,8 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
         ListenFd = static_cast<Fd>(Socket.GetNativeHandle());
     }
 
-// 纯 Reactor 路径，依赖事件驱动
-    
+    // 纯 Reactor 路径，依赖事件驱动
+
     // 暂时跳过 Proactor 路径，直接使用 Reactor
     if (!ReactorPtr)
     {
@@ -62,35 +61,39 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
         }
         return;
     }
-    
+
     // 如果已经注册，先移除
     if (IsRegistered)
     {
         ReactorPtr->Del(ListenFd);
         IsRegistered = false;
     }
-    
+
     // 注册到 Reactor
-    bool AddResult = ReactorPtr->Add(ListenFd, EventMask::Read,
+    bool AddResult = ReactorPtr->Add(
+        ListenFd,
+        EventMask::Read,
         [this](EventMask Event)
         {
             if ((static_cast<uint32_t>(Event) & static_cast<uint32_t>(EventMask::Read)) == 0)
             {
                 return;
             }
-            
+
             // 接受连接
             sockaddr_in ClientAddr{};
             socklen_t Len = sizeof(ClientAddr);
-            int ClientFd = ::accept(Socket.GetNativeHandle(), reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
-            
+            int ClientFd =
+                ::accept(Socket.GetNativeHandle(), reinterpret_cast<sockaddr*>(&ClientAddr), &Len);
+
             if (ClientFd >= 0)
             {
                 // 创建新的 AsyncTcpSocket 并采用接受的连接
                 auto NewSocket = std::make_shared<AsyncTcpSocket>(Ctx);
-                NetworkAddress ClientAddrObj(inet_ntoa(ClientAddr.sin_addr), ntohs(ClientAddr.sin_port));
+                NetworkAddress ClientAddrObj(inet_ntoa(ClientAddr.sin_addr),
+                                             ntohs(ClientAddr.sin_port));
                 NewSocket->Native().Adopt(ClientFd, Socket.GetLocalAddress(), ClientAddrObj, true);
-                
+
                 // 调用回调
                 if (PendingAccept)
                 {
@@ -105,7 +108,7 @@ void AsyncTcpAcceptor::AsyncAccept(AcceptHandler Handler)
                     PendingAccept(Network::NetworkError::ACCEPT_FAILED, nullptr);
                 }
             }
-            
+
             // 保持注册，继续接受后续连接
             // 注意：不要移除注册，这样服务器可以持续接受连接
         });

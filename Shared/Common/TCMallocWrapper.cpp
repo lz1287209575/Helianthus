@@ -8,8 +8,8 @@
 // 条件编译：如果有 TCMalloc 头文件，就使用它
 #ifdef HELIANTHUS_USE_TCMALLOC
     // 当真正的 TCMalloc 可用时，取消这些注释
-    #include <tcmalloc/tcmalloc.h>
     #include <tcmalloc/malloc_extension.h>
+    #include <tcmalloc/tcmalloc.h>
     // #include <gperftools/profiler.h>
     #define USE_REAL_TCMALLOC 1  // 启用真正的 TCMalloc
 #else
@@ -47,15 +47,15 @@ bool TCMallocWrapper::Initialize()
     if (Extension)
     {
         // 应用默认配置
-        Extension->SetNumericProperty("tcmalloc.max_total_thread_cache_bytes", 
+        Extension->SetNumericProperty("tcmalloc.max_total_thread_cache_bytes",
                                       GCurrentConfig.MaxTotalThreadCacheBytes);
-        Extension->SetNumericProperty("tcmalloc.max_per_cpu_cache_size", 
+        Extension->SetNumericProperty("tcmalloc.max_per_cpu_cache_size",
                                       GCurrentConfig.MaxThreadCacheBytes);
-        Extension->SetNumericProperty("tcmalloc.page_heap_free_bytes", 
+        Extension->SetNumericProperty("tcmalloc.page_heap_free_bytes",
                                       GCurrentConfig.PageHeapFreeBytes);
-        Extension->SetNumericProperty("tcmalloc.page_heap_unmapped_bytes", 
+        Extension->SetNumericProperty("tcmalloc.page_heap_unmapped_bytes",
                                       GCurrentConfig.PageHeapUnmapBytes);
-        
+
         // 默认禁用采样
         if (!GCurrentConfig.EnableSampling)
         {
@@ -336,28 +336,25 @@ TCMallocWrapper::ThreadCacheStats TCMallocWrapper::GetThreadCacheStats()
 bool TCMallocWrapper::SetRuntimeConfig(const RuntimeConfig& Config)
 {
     std::lock_guard<std::mutex> lock(GConfigMutex);
-    
+
     GCurrentConfig = Config;
-    
+
 #if USE_REAL_TCMALLOC
     auto Extension = tcmalloc::MallocExtension::instance();
     if (!Extension)
     {
         return false;
     }
-    
+
     // 应用线程缓存配置
-    Extension->SetNumericProperty("tcmalloc.max_total_thread_cache_bytes", 
+    Extension->SetNumericProperty("tcmalloc.max_total_thread_cache_bytes",
                                   Config.MaxTotalThreadCacheBytes);
-    Extension->SetNumericProperty("tcmalloc.max_per_cpu_cache_size", 
-                                  Config.MaxThreadCacheBytes);
-    
+    Extension->SetNumericProperty("tcmalloc.max_per_cpu_cache_size", Config.MaxThreadCacheBytes);
+
     // 应用页堆配置
-    Extension->SetNumericProperty("tcmalloc.page_heap_free_bytes", 
-                                  Config.PageHeapFreeBytes);
-    Extension->SetNumericProperty("tcmalloc.page_heap_unmapped_bytes", 
-                                  Config.PageHeapUnmapBytes);
-    
+    Extension->SetNumericProperty("tcmalloc.page_heap_free_bytes", Config.PageHeapFreeBytes);
+    Extension->SetNumericProperty("tcmalloc.page_heap_unmapped_bytes", Config.PageHeapUnmapBytes);
+
     // 应用采样配置
     if (Config.EnableSampling)
     {
@@ -367,7 +364,7 @@ bool TCMallocWrapper::SetRuntimeConfig(const RuntimeConfig& Config)
     {
         Extension->SetNumericProperty("tcmalloc.sampling_rate", 0);
     }
-    
+
     return true;
 #else
     // 标准库实现，仅保存配置
@@ -389,11 +386,11 @@ bool TCMallocWrapper::UpdateRuntimeConfig(const RuntimeConfig& Config)
 bool TCMallocWrapper::SetThreadCacheConfig(size_t MaxTotal, size_t MaxPerThread, size_t CacheSize)
 {
     std::lock_guard<std::mutex> lock(GConfigMutex);
-    
+
     GCurrentConfig.MaxTotalThreadCacheBytes = MaxTotal;
     GCurrentConfig.MaxThreadCacheBytes = MaxPerThread;
     GCurrentConfig.ThreadCacheSize = CacheSize;
-    
+
 #if USE_REAL_TCMALLOC
     auto Extension = tcmalloc::MallocExtension::instance();
     if (Extension)
@@ -411,10 +408,10 @@ bool TCMallocWrapper::SetThreadCacheConfig(size_t MaxTotal, size_t MaxPerThread,
 bool TCMallocWrapper::SetPageHeapConfig(size_t FreeBytes, size_t UnmapBytes)
 {
     std::lock_guard<std::mutex> lock(GConfigMutex);
-    
+
     GCurrentConfig.PageHeapFreeBytes = FreeBytes;
     GCurrentConfig.PageHeapUnmapBytes = UnmapBytes;
-    
+
 #if USE_REAL_TCMALLOC
     auto Extension = tcmalloc::MallocExtension::instance();
     if (Extension)
@@ -432,16 +429,15 @@ bool TCMallocWrapper::SetPageHeapConfig(size_t FreeBytes, size_t UnmapBytes)
 bool TCMallocWrapper::SetSamplingConfig(size_t SampleRate, bool EnableSampling)
 {
     std::lock_guard<std::mutex> lock(GConfigMutex);
-    
+
     GCurrentConfig.SampleRate = SampleRate;
     GCurrentConfig.EnableSampling = EnableSampling;
-    
+
 #if USE_REAL_TCMALLOC
     auto Extension = tcmalloc::MallocExtension::instance();
     if (Extension)
     {
-        Extension->SetNumericProperty("tcmalloc.sampling_rate", 
-                                      EnableSampling ? SampleRate : 0);
+        Extension->SetNumericProperty("tcmalloc.sampling_rate", EnableSampling ? SampleRate : 0);
         return true;
     }
     return false;
@@ -450,14 +446,16 @@ bool TCMallocWrapper::SetSamplingConfig(size_t SampleRate, bool EnableSampling)
 #endif
 }
 
-bool TCMallocWrapper::SetPerformanceConfig(bool AggressiveDecommit, bool LargeAllocs, size_t LargeThreshold)
+bool TCMallocWrapper::SetPerformanceConfig(bool AggressiveDecommit,
+                                           bool LargeAllocs,
+                                           size_t LargeThreshold)
 {
     std::lock_guard<std::mutex> lock(GConfigMutex);
-    
+
     GCurrentConfig.EnableAggressiveDecommit = AggressiveDecommit;
     GCurrentConfig.EnableLargeAllocs = LargeAllocs;
     GCurrentConfig.LargeAllocThreshold = LargeThreshold;
-    
+
     // 这些配置主要影响内部算法，在标准库模式下也可以保存
     return true;
 }
@@ -465,11 +463,11 @@ bool TCMallocWrapper::SetPerformanceConfig(bool AggressiveDecommit, bool LargeAl
 bool TCMallocWrapper::SetDebugConfig(bool DebugMode, bool LeakCheck, size_t StackDepth)
 {
     std::lock_guard<std::mutex> lock(GConfigMutex);
-    
+
     GCurrentConfig.EnableDebugMode = DebugMode;
     GCurrentConfig.EnableMemoryLeakCheck = LeakCheck;
     GCurrentConfig.DebugAllocStackDepth = StackDepth;
-    
+
     // 调试配置在标准库模式下也可以保存
     return true;
 }
@@ -513,13 +511,13 @@ void TCMallocWrapper::FlushThreadCaches()
 TCMallocWrapper::AdvancedStats TCMallocWrapper::GetAdvancedStats()
 {
     AdvancedStats Stats;
-    
+
 #if USE_REAL_TCMALLOC
     auto Extension = tcmalloc::MallocExtension::instance();
     if (Extension)
     {
         size_t Value = 0;
-        
+
         if (Extension->GetNumericProperty("generic.heap_size", &Value))
         {
             Stats.HeapSize = Value;
@@ -540,7 +538,7 @@ TCMallocWrapper::AdvancedStats TCMallocWrapper::GetAdvancedStats()
         {
             Stats.CentralCacheBytes = Value;
         }
-        
+
         // 计算碎片率
         if (Stats.HeapSize > 0)
         {
@@ -554,7 +552,7 @@ TCMallocWrapper::AdvancedStats TCMallocWrapper::GetAdvancedStats()
     Stats.HeapSize = BasicStats.CurrentUsage;
     Stats.FragmentationRatio = 0.1;  // 假设 10% 碎片率
 #endif
-    
+
     return Stats;
 }
 }  // namespace Helianthus::Common

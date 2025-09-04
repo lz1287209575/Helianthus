@@ -1,13 +1,14 @@
-#include "Shared/MessageQueue/MessageQueue.h"
 #include "Shared/Common/LogCategories.h"
 #include "Shared/Common/StructuredLogger.h"
+#include "Shared/MessageQueue/MessageQueue.h"
 
 #include <shared_mutex>
 
 namespace Helianthus::MessageQueue
 {
 
-QueueResult MessageQueue::CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer)
+QueueResult
+MessageQueue::CreateZeroCopyBuffer(const void* Data, size_t Size, ZeroCopyBuffer& OutBuffer)
 {
     auto StartTime = std::chrono::high_resolution_clock::now();
     OutBuffer.Data = const_cast<void*>(Data);
@@ -30,7 +31,8 @@ QueueResult MessageQueue::ReleaseZeroCopyBuffer(ZeroCopyBuffer& Buffer)
     return QueueResult::SUCCESS;
 }
 
-QueueResult MessageQueue::SendMessageZeroCopy(const std::string& QueueName, const ZeroCopyBuffer& Buffer)
+QueueResult MessageQueue::SendMessageZeroCopy(const std::string& QueueName,
+                                              const ZeroCopyBuffer& Buffer)
 {
     auto StartTime = std::chrono::high_resolution_clock::now();
     auto Msg = std::make_shared<Message>();
@@ -41,7 +43,12 @@ QueueResult MessageQueue::SendMessageZeroCopy(const std::string& QueueName, cons
     auto EndTime = std::chrono::high_resolution_clock::now();
     double ElapsedMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
     UpdatePerformanceStats("zero_copy", ElapsedMs, Buffer.Size);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose, "零拷贝发送消息: queue={}, size={}, code={}", QueueName, Buffer.Size, static_cast<int>(Result));
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Verbose,
+          "零拷贝发送消息: queue={}, size={}, code={}",
+          QueueName,
+          Buffer.Size,
+          static_cast<int>(Result));
     return Result;
 }
 
@@ -96,9 +103,12 @@ QueueResult MessageQueue::AddToBatch(uint32_t BatchId, MessagePtr Message)
         }
         auto& Batch = It->second;
         Batch.Messages.push_back(std::move(Message));
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Verbose,
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Verbose,
               "添加到批处理: batch_id={}, queue={}, count={}",
-              BatchId, Batch.QueueName, Batch.Messages.size());
+              BatchId,
+              Batch.QueueName,
+              Batch.Messages.size());
 
         // 不在此处自动提交，避免调用方在同一批次继续添加时出现批次被提前清空的问题
     }
@@ -149,8 +159,12 @@ QueueResult MessageQueue::CommitBatch(uint32_t BatchId)
     auto EndTime = std::chrono::high_resolution_clock::now();
     double ElapsedMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
     UpdatePerformanceStats("batch", ElapsedMs, Messages.size());
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display,
-          "提交批处理: id={}, queue={}, messages={}", BatchId, QueueName, Messages.size());
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "提交批处理: id={}, queue={}, messages={}",
+          BatchId,
+          QueueName,
+          Messages.size());
     if (!QueueName.empty())
     {
         std::lock_guard<std::mutex> Ck(BatchCountersMutex);
@@ -180,9 +194,11 @@ QueueResult MessageQueue::GetBatchCounters(const std::string& QueueName,
     OutCommitCount = 0;
     OutMessageCount = 0;
     auto ItC = BatchCommitCountByQueue.find(QueueName);
-    if (ItC != BatchCommitCountByQueue.end()) OutCommitCount = ItC->second;
+    if (ItC != BatchCommitCountByQueue.end())
+        OutCommitCount = ItC->second;
     auto ItM = BatchMessageCountByQueue.find(QueueName);
-    if (ItM != BatchMessageCountByQueue.end()) OutMessageCount = ItM->second;
+    if (ItM != BatchMessageCountByQueue.end())
+        OutMessageCount = ItM->second;
     return QueueResult::SUCCESS;
 }
 
@@ -225,6 +241,4 @@ void MessageQueue::DecompressBatch(BatchMessage& Batch)
     Batch.IsCompressed = false;
 }
 
-} // namespace Helianthus::MessageQueue
-
-
+}  // namespace Helianthus::MessageQueue

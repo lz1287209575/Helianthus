@@ -79,55 +79,56 @@ public:
     struct RuntimeConfig
     {
         // 线程缓存配置
-        size_t MaxTotalThreadCacheBytes = 64 * 1024 * 1024;    // 64MB 默认总线程缓存
-        size_t MaxThreadCacheBytes = 4 * 1024 * 1024;          // 4MB 默认单线程缓存
-        size_t ThreadCacheSize = 2 * 1024 * 1024;              // 2MB 线程缓存大小
-        
+        size_t MaxTotalThreadCacheBytes = 64 * 1024 * 1024;  // 64MB 默认总线程缓存
+        size_t MaxThreadCacheBytes = 4 * 1024 * 1024;        // 4MB 默认单线程缓存
+        size_t ThreadCacheSize = 2 * 1024 * 1024;            // 2MB 线程缓存大小
+
         // 页堆配置
-        size_t PageHeapFreeBytes = 256 * 1024 * 1024;          // 256MB 页堆空闲字节
-        size_t PageHeapUnmapBytes = 128 * 1024 * 1024;         // 128MB 页堆取消映射阈值
-        
+        size_t PageHeapFreeBytes = 256 * 1024 * 1024;   // 256MB 页堆空闲字节
+        size_t PageHeapUnmapBytes = 128 * 1024 * 1024;  // 128MB 页堆取消映射阈值
+
         // 采样配置
-        size_t SampleRate = 1024 * 1024;                       // 1MB 采样率
-        bool EnableSampling = false;                           // 默认禁用采样
-        
+        size_t SampleRate = 1024 * 1024;  // 1MB 采样率
+        bool EnableSampling = false;      // 默认禁用采样
+
         // 性能配置
-        bool EnableAggressiveDecommit = false;                 // 是否启用激进的内存释放
-        bool EnableLargeAllocs = true;                         // 是否启用大内存分配优化
-        size_t LargeAllocThreshold = 32 * 1024;                // 32KB 大内存分配阈值
-        
+        bool EnableAggressiveDecommit = false;   // 是否启用激进的内存释放
+        bool EnableLargeAllocs = true;           // 是否启用大内存分配优化
+        size_t LargeAllocThreshold = 32 * 1024;  // 32KB 大内存分配阈值
+
         // 调试配置
-        bool EnableDebugMode = false;                          // 调试模式
-        bool EnableMemoryLeakCheck = false;                    // 内存泄漏检查
-        size_t DebugAllocStackDepth = 0;                       // 调试分配栈深度
-        
+        bool EnableDebugMode = false;        // 调试模式
+        bool EnableMemoryLeakCheck = false;  // 内存泄漏检查
+        size_t DebugAllocStackDepth = 0;     // 调试分配栈深度
+
         // 统计配置
-        bool EnableDetailedStats = false;                      // 详细统计
-        bool EnablePerThreadStats = false;                     // 每线程统计
-        
+        bool EnableDetailedStats = false;   // 详细统计
+        bool EnablePerThreadStats = false;  // 每线程统计
+
         // 垃圾回收配置
-        size_t GCThreshold = 128 * 1024 * 1024;               // 128MB GC 触发阈值
-        bool EnablePeriodicGC = false;                         // 定期 GC
-        size_t GCIntervalMs = 30000;                           // 30秒 GC 间隔
+        size_t GCThreshold = 128 * 1024 * 1024;  // 128MB GC 触发阈值
+        bool EnablePeriodicGC = false;           // 定期 GC
+        size_t GCIntervalMs = 30000;             // 30秒 GC 间隔
     };
 
     // 运行时配置管理
     static bool SetRuntimeConfig(const RuntimeConfig& Config);
     static RuntimeConfig GetRuntimeConfig();
     static bool UpdateRuntimeConfig(const RuntimeConfig& Config);
-    
+
     // 单独设置配置项
     static bool SetThreadCacheConfig(size_t MaxTotal, size_t MaxPerThread, size_t CacheSize);
     static bool SetPageHeapConfig(size_t FreeBytes, size_t UnmapBytes);
     static bool SetSamplingConfig(size_t SampleRate, bool EnableSampling);
-    static bool SetPerformanceConfig(bool AggressiveDecommit, bool LargeAllocs, size_t LargeThreshold);
+    static bool
+    SetPerformanceConfig(bool AggressiveDecommit, bool LargeAllocs, size_t LargeThreshold);
     static bool SetDebugConfig(bool DebugMode, bool LeakCheck, size_t StackDepth);
-    
+
     // 运行时操作
     static void ForceGarbageCollection();
     static void ReleaseMemoryToSystem();
     static void FlushThreadCaches();
-    
+
     // 高级统计
     struct AdvancedStats
     {
@@ -142,7 +143,7 @@ public:
         size_t SampledObjects = 0;
         double FragmentationRatio = 0.0;
     };
-    
+
     static AdvancedStats GetAdvancedStats();
 };
 
@@ -181,7 +182,8 @@ void operator delete[](void* Ptr, std::align_val_t Alignment, const std::nothrow
 // 运行时配置便利宏
 #define TCMALLOC_SET_CONFIG(config) Helianthus::Common::TCMallocWrapper::SetRuntimeConfig(config)
 #define TCMALLOC_GET_CONFIG() Helianthus::Common::TCMallocWrapper::GetRuntimeConfig()
-#define TCMALLOC_UPDATE_CONFIG(config) Helianthus::Common::TCMallocWrapper::UpdateRuntimeConfig(config)
+#define TCMALLOC_UPDATE_CONFIG(config)                                                             \
+    Helianthus::Common::TCMallocWrapper::UpdateRuntimeConfig(config)
 
 // 运行时操作便利宏
 #define TCMALLOC_FORCE_GC() Helianthus::Common::TCMallocWrapper::ForceGarbageCollection()

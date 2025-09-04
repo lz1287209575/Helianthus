@@ -8,8 +8,8 @@
 #include <gtest/gtest.h>
 
 #if defined(__linux__)
-    #include <unistd.h>
     #include <string.h>
+    #include <unistd.h>
 #endif
 
 using namespace Helianthus::Network::Asio;

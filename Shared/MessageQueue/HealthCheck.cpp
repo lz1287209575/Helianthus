@@ -1,13 +1,15 @@
 #include "HealthCheck.h"
-#include "Common/ResourceMonitor.h"
-#include "Common/StructuredLogger.h"
-#include "Common/LogCategories.h"
-#include "MessageQueue.h"
+
 #include <algorithm>
 #include <condition_variable>
 #include <filesystem>
 #include <future>
 #include <sstream>
+
+#include "Common/LogCategories.h"
+#include "Common/ResourceMonitor.h"
+#include "Common/StructuredLogger.h"
+#include "MessageQueue.h"
 
 namespace Helianthus::MessageQueue
 {
@@ -72,12 +74,12 @@ void HealthChecker::Shutdown()
 
     H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "关闭健康检查器");
     StopHealthChecks();
-    
+
     if (HealthCheckThread.joinable())
     {
         HealthCheckThread.join();
     }
-    
+
     Initialized.store(false);
 }
 
@@ -89,10 +91,13 @@ bool HealthChecker::IsInitialized() const
 bool HealthChecker::RegisterHealthCheck(HealthCheckType Type, const HealthCheckConfig& Config)
 {
     std::unique_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     if (HealthChecks.find(Type) != HealthChecks.end())
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "健康检查类型已注册: {}", HealthCheckTypeToString(Type));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "健康检查类型已注册: {}",
+              HealthCheckTypeToString(Type));
         return false;
     }
 
@@ -104,49 +109,64 @@ bool HealthChecker::RegisterHealthCheck(HealthCheckType Type, const HealthCheckC
     Entry.IsRunning = false;
 
     HealthChecks[Type] = Entry;
-    
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "注册健康检查: {} (间隔: {}ms)", 
-          HealthCheckTypeToString(Type), Config.IntervalMs);
-    
+
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "注册健康检查: {} (间隔: {}ms)",
+          HealthCheckTypeToString(Type),
+          Config.IntervalMs);
+
     return true;
 }
 
 bool HealthChecker::UnregisterHealthCheck(HealthCheckType Type)
 {
     std::unique_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     auto It = HealthChecks.find(Type);
     if (It == HealthChecks.end())
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "健康检查类型未注册: {}", HealthCheckTypeToString(Type));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "健康检查类型未注册: {}",
+              HealthCheckTypeToString(Type));
         return false;
     }
 
     HealthChecks.erase(It);
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "注销健康检查: {}", HealthCheckTypeToString(Type));
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "注销健康检查: {}",
+          HealthCheckTypeToString(Type));
     return true;
 }
 
 bool HealthChecker::UpdateHealthCheckConfig(HealthCheckType Type, const HealthCheckConfig& Config)
 {
     std::unique_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     auto It = HealthChecks.find(Type);
     if (It == HealthChecks.end())
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "健康检查类型未注册: {}", HealthCheckTypeToString(Type));
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Warning,
+              "健康检查类型未注册: {}",
+              HealthCheckTypeToString(Type));
         return false;
     }
 
     It->second.Config = Config;
-    H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, "更新健康检查配置: {}", HealthCheckTypeToString(Type));
+    H_LOG(MQ,
+          Helianthus::Common::LogVerbosity::Display,
+          "更新健康检查配置: {}",
+          HealthCheckTypeToString(Type));
     return true;
 }
 
 HealthCheckConfig HealthChecker::GetHealthCheckConfig(HealthCheckType Type) const
 {
     std::shared_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     auto It = HealthChecks.find(Type);
     if (It == HealthChecks.end())
     {
@@ -200,7 +220,7 @@ bool HealthChecker::AreHealthChecksRunning() const
 HealthCheckStatus HealthChecker::PerformHealthCheck(HealthCheckType Type)
 {
     std::unique_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     auto It = HealthChecks.find(Type);
     if (It == HealthChecks.end())
     {
@@ -243,9 +263,11 @@ HealthCheckStatus HealthChecker::PerformHealthCheck(HealthCheckType Type)
     }
 
     auto EndTime = std::chrono::steady_clock::now();
-    Status.ResponseTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count();
+    Status.ResponseTimeMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count();
     Status.LastCheckTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                               std::chrono::system_clock::now().time_since_epoch())
+                               .count();
 
     // 更新状态
     It->second.Status = Status;
@@ -267,18 +289,20 @@ HealthCheckStatus HealthChecker::PerformHealthCheck(HealthCheckType Type)
         It->second.Status.LastFailureTime = Status.LastCheckTime;
     }
 
-    It->second.Status.SuccessRate = static_cast<float>(It->second.Status.TotalChecks - It->second.Status.TotalFailures) / 
-                                   static_cast<float>(It->second.Status.TotalChecks);
+    It->second.Status.SuccessRate =
+        static_cast<float>(It->second.Status.TotalChecks - It->second.Status.TotalFailures) /
+        static_cast<float>(It->second.Status.TotalChecks);
 
     // 通知回调
     NotifyHealthCheckCallback(Type, Status);
 
     if (LoggingEnabled.load())
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Display, 
-              "健康检查完成: {} = {} (响应时间: {}ms)", 
-              HealthCheckTypeToString(Type), 
-              HealthCheckResultToString(Status.Result), 
+        H_LOG(MQ,
+              Helianthus::Common::LogVerbosity::Display,
+              "健康检查完成: {} = {} (响应时间: {}ms)",
+              HealthCheckTypeToString(Type),
+              HealthCheckResultToString(Status.Result),
               Status.ResponseTimeMs);
     }
 
@@ -287,18 +311,17 @@ HealthCheckStatus HealthChecker::PerformHealthCheck(HealthCheckType Type)
 
 std::future<HealthCheckStatus> HealthChecker::PerformHealthCheckAsync(HealthCheckType Type)
 {
-    return std::async(std::launch::async, [this, Type]() {
-        return PerformHealthCheck(Type);
-    });
+    return std::async(std::launch::async, [this, Type]() { return PerformHealthCheck(Type); });
 }
 
 OverallHealthStatus HealthChecker::PerformAllHealthChecks()
 {
     std::unique_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     OverallHealthStatus Status;
     Status.LastUpdateTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
 
     for (auto& Pair : HealthChecks)
     {
@@ -336,9 +359,11 @@ OverallHealthStatus HealthChecker::PerformAllHealthChecks()
         }
 
         auto EndTime = std::chrono::steady_clock::now();
-        HealthStatus.ResponseTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count();
+        HealthStatus.ResponseTimeMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count();
         HealthStatus.LastCheckTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
+                                         std::chrono::system_clock::now().time_since_epoch())
+                                         .count();
 
         // 更新状态
         Pair.second.Status = HealthStatus;
@@ -360,8 +385,9 @@ OverallHealthStatus HealthChecker::PerformAllHealthChecks()
             Pair.second.Status.LastFailureTime = HealthStatus.LastCheckTime;
         }
 
-        Pair.second.Status.SuccessRate = static_cast<float>(Pair.second.Status.TotalChecks - Pair.second.Status.TotalFailures) / 
-                                       static_cast<float>(Pair.second.Status.TotalChecks);
+        Pair.second.Status.SuccessRate =
+            static_cast<float>(Pair.second.Status.TotalChecks - Pair.second.Status.TotalFailures) /
+            static_cast<float>(Pair.second.Status.TotalChecks);
 
         // 添加到整体状态
         Status.CheckStatuses[Pair.first] = HealthStatus;
@@ -374,15 +400,18 @@ OverallHealthStatus HealthChecker::PerformAllHealthChecks()
                 break;
             case HealthCheckResult::UNHEALTHY:
                 Status.UnhealthyChecks++;
-                Status.Issues.push_back(HealthCheckTypeToString(Pair.first) + ": " + HealthStatus.Message);
+                Status.Issues.push_back(HealthCheckTypeToString(Pair.first) + ": " +
+                                        HealthStatus.Message);
                 break;
             case HealthCheckResult::DEGRADED:
                 Status.DegradedChecks++;
-                Status.Warnings.push_back(HealthCheckTypeToString(Pair.first) + ": " + HealthStatus.Message);
+                Status.Warnings.push_back(HealthCheckTypeToString(Pair.first) + ": " +
+                                          HealthStatus.Message);
                 break;
             case HealthCheckResult::CRITICAL:
                 Status.CriticalChecks++;
-                Status.Issues.push_back(HealthCheckTypeToString(Pair.first) + ": " + HealthStatus.Message);
+                Status.Issues.push_back(HealthCheckTypeToString(Pair.first) + ": " +
+                                        HealthStatus.Message);
                 break;
             default:
                 break;
@@ -428,7 +457,7 @@ OverallHealthStatus HealthChecker::PerformAllHealthChecks()
 HealthCheckStatus HealthChecker::GetHealthStatus(HealthCheckType Type) const
 {
     std::shared_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     auto It = HealthChecks.find(Type);
     if (It == HealthChecks.end())
     {
@@ -475,7 +504,7 @@ void HealthChecker::RemoveCallbacks()
 void HealthChecker::ResetStatistics()
 {
     std::unique_lock<std::shared_mutex> Lock(HealthCheckMutex);
-    
+
     for (auto& Pair : HealthChecks)
     {
         auto& Status = Pair.second.Status;
@@ -511,14 +540,15 @@ void HealthChecker::HealthCheckLoop()
 
         {
             std::shared_lock<std::shared_mutex> Lock(HealthCheckMutex);
-            
+
             for (auto& Pair : HealthChecks)
             {
                 if (!Pair.second.Config.Enabled)
                     continue;
 
                 auto TimeSinceLastCheck = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    Now - Pair.second.LastCheckTime).count();
+                                              Now - Pair.second.LastCheckTime)
+                                              .count();
 
                 if (TimeSinceLastCheck >= Pair.second.Config.IntervalMs)
                 {
@@ -552,7 +582,7 @@ void HealthChecker::HealthCheckLoop()
 HealthCheckStatus HealthChecker::PerformQueueHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         // 这里应该检查消息队列的状态
@@ -574,7 +604,7 @@ HealthCheckStatus HealthChecker::PerformQueueHealthCheck(const HealthCheckConfig
 HealthCheckStatus HealthChecker::PerformPersistenceHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         // 检查持久化目录是否存在和可写
@@ -586,8 +616,8 @@ HealthCheckStatus HealthChecker::PerformPersistenceHealthCheck(const HealthCheck
                 // 检查磁盘空间
                 auto Space = std::filesystem::space(PersistenceDir);
                 auto AvailableGB = Space.available / (1024 * 1024 * 1024);
-                
-                if (AvailableGB > 1) // 至少1GB可用空间
+
+                if (AvailableGB > 1)  // 至少1GB可用空间
                 {
                     Status.Result = HealthCheckResult::HEALTHY;
                     Status.Message = "持久化存储正常";
@@ -624,13 +654,13 @@ HealthCheckStatus HealthChecker::PerformPersistenceHealthCheck(const HealthCheck
 HealthCheckStatus HealthChecker::PerformMemoryHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         // 使用ResourceMonitor检查内存使用情况
         auto& ResourceMonitor = Helianthus::Common::GetResourceMonitor();
         auto Stats = ResourceMonitor.GetCurrentStats();
-        
+
         if (Stats.MemoryUsagePercent < 80.0)
         {
             Status.Result = HealthCheckResult::HEALTHY;
@@ -646,9 +676,10 @@ HealthCheckStatus HealthChecker::PerformMemoryHealthCheck(const HealthCheckConfi
             Status.Result = HealthCheckResult::CRITICAL;
             Status.Message = "内存使用过高";
         }
-        
+
         Status.Details["memory_usage_percent"] = std::to_string(Stats.MemoryUsagePercent);
-        Status.Details["available_memory_mb"] = std::to_string(Stats.AvailableMemoryBytes / (1024 * 1024));
+        Status.Details["available_memory_mb"] =
+            std::to_string(Stats.AvailableMemoryBytes / (1024 * 1024));
     }
     catch (const std::exception& e)
     {
@@ -662,16 +693,16 @@ HealthCheckStatus HealthChecker::PerformMemoryHealthCheck(const HealthCheckConfi
 HealthCheckStatus HealthChecker::PerformDiskHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         auto& ResourceMonitor = Helianthus::Common::GetResourceMonitor();
         auto Stats = ResourceMonitor.GetCurrentStats();
-        
+
         if (!Stats.DiskStatsList.empty())
         {
-            const auto& DiskStats = Stats.DiskStatsList[0]; // 使用第一个磁盘
-            
+            const auto& DiskStats = Stats.DiskStatsList[0];  // 使用第一个磁盘
+
             if (DiskStats.UsagePercent < 80.0)
             {
                 Status.Result = HealthCheckResult::HEALTHY;
@@ -687,9 +718,10 @@ HealthCheckStatus HealthChecker::PerformDiskHealthCheck(const HealthCheckConfig&
                 Status.Result = HealthCheckResult::CRITICAL;
                 Status.Message = "磁盘使用过高";
             }
-            
+
             Status.Details["disk_usage_percent"] = std::to_string(DiskStats.UsagePercent);
-            Status.Details["available_gb"] = std::to_string(DiskStats.AvailableBytes / (1024 * 1024 * 1024));
+            Status.Details["available_gb"] =
+                std::to_string(DiskStats.AvailableBytes / (1024 * 1024 * 1024));
             Status.Details["disk_name"] = DiskStats.MountPoint;
         }
         else
@@ -710,16 +742,16 @@ HealthCheckStatus HealthChecker::PerformDiskHealthCheck(const HealthCheckConfig&
 HealthCheckStatus HealthChecker::PerformNetworkHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         auto& ResourceMonitor = Helianthus::Common::GetResourceMonitor();
         auto Stats = ResourceMonitor.GetCurrentStats();
-        
+
         if (!Stats.NetworkStatsList.empty())
         {
-            const auto& NetworkStats = Stats.NetworkStatsList[0]; // 使用第一个网络接口
-            
+            const auto& NetworkStats = Stats.NetworkStatsList[0];  // 使用第一个网络接口
+
             Status.Result = HealthCheckResult::HEALTHY;
             Status.Message = "网络连接正常";
             Status.Details["interface_name"] = NetworkStats.InterfaceName;
@@ -744,7 +776,7 @@ HealthCheckStatus HealthChecker::PerformNetworkHealthCheck(const HealthCheckConf
 HealthCheckStatus HealthChecker::PerformDatabaseHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         // 这里应该检查数据库连接
@@ -765,7 +797,7 @@ HealthCheckStatus HealthChecker::PerformDatabaseHealthCheck(const HealthCheckCon
 HealthCheckStatus HealthChecker::PerformCustomHealthCheck(const HealthCheckConfig& Config)
 {
     HealthCheckStatus Status;
-    
+
     try
     {
         // 这里应该执行自定义健康检查
@@ -799,8 +831,8 @@ void HealthChecker::NotifyHealthCheckCallback(HealthCheckType Type, const Health
         }
         catch (const std::exception& e)
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, 
-                  "健康检查回调执行失败: {}", e.what());
+            H_LOG(
+                MQ, Helianthus::Common::LogVerbosity::Error, "健康检查回调执行失败: {}", e.what());
         }
     }
 }
@@ -815,8 +847,10 @@ void HealthChecker::NotifyOverallHealthCallback(const OverallHealthStatus& Statu
         }
         catch (const std::exception& e)
         {
-            H_LOG(MQ, Helianthus::Common::LogVerbosity::Error, 
-                  "整体健康检查回调执行失败: {}", e.what());
+            H_LOG(MQ,
+                  Helianthus::Common::LogVerbosity::Error,
+                  "整体健康检查回调执行失败: {}",
+                  e.what());
         }
     }
 }
@@ -825,12 +859,18 @@ std::string HealthChecker::HealthCheckResultToString(HealthCheckResult Result) c
 {
     switch (Result)
     {
-        case HealthCheckResult::HEALTHY: return "HEALTHY";
-        case HealthCheckResult::UNHEALTHY: return "UNHEALTHY";
-        case HealthCheckResult::DEGRADED: return "DEGRADED";
-        case HealthCheckResult::CRITICAL: return "CRITICAL";
-        case HealthCheckResult::UNKNOWN: return "UNKNOWN";
-        default: return "UNKNOWN";
+        case HealthCheckResult::HEALTHY:
+            return "HEALTHY";
+        case HealthCheckResult::UNHEALTHY:
+            return "UNHEALTHY";
+        case HealthCheckResult::DEGRADED:
+            return "DEGRADED";
+        case HealthCheckResult::CRITICAL:
+            return "CRITICAL";
+        case HealthCheckResult::UNKNOWN:
+            return "UNKNOWN";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -838,15 +878,23 @@ std::string HealthChecker::HealthCheckTypeToString(HealthCheckType Type) const
 {
     switch (Type)
     {
-        case HealthCheckType::QUEUE_HEALTH: return "QUEUE_HEALTH";
-        case HealthCheckType::PERSISTENCE_HEALTH: return "PERSISTENCE_HEALTH";
-        case HealthCheckType::MEMORY_HEALTH: return "MEMORY_HEALTH";
-        case HealthCheckType::DISK_HEALTH: return "DISK_HEALTH";
-        case HealthCheckType::NETWORK_HEALTH: return "NETWORK_HEALTH";
-        case HealthCheckType::DATABASE_HEALTH: return "DATABASE_HEALTH";
-        case HealthCheckType::CUSTOM_HEALTH: return "CUSTOM_HEALTH";
-        default: return "UNKNOWN";
+        case HealthCheckType::QUEUE_HEALTH:
+            return "QUEUE_HEALTH";
+        case HealthCheckType::PERSISTENCE_HEALTH:
+            return "PERSISTENCE_HEALTH";
+        case HealthCheckType::MEMORY_HEALTH:
+            return "MEMORY_HEALTH";
+        case HealthCheckType::DISK_HEALTH:
+            return "DISK_HEALTH";
+        case HealthCheckType::NETWORK_HEALTH:
+            return "NETWORK_HEALTH";
+        case HealthCheckType::DATABASE_HEALTH:
+            return "DATABASE_HEALTH";
+        case HealthCheckType::CUSTOM_HEALTH:
+            return "CUSTOM_HEALTH";
+        default:
+            return "UNKNOWN";
     }
 }
 
-} // namespace Helianthus::MessageQueue
+}  // namespace Helianthus::MessageQueue

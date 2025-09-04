@@ -1,8 +1,8 @@
+#include "Shared/Common/Logger.h"
+#include "Shared/Network/Asio/IoContext.h"
+#include "Shared/Scripting/HotReloadManager.h"
 #include "Shared/Scripting/IScriptEngine.h"
 #include "Shared/Scripting/LuaScriptEngine.h"
-#include "Shared/Scripting/HotReloadManager.h"
-#include "Shared/Network/Asio/IoContext.h"
-#include "Shared/Common/Logger.h"
 
 #include <atomic>
 #include <chrono>
@@ -35,11 +35,11 @@ public:
         // 初始化热更新管理器
         HotReload = std::make_unique<HotReloadManager>();
         HotReload->SetEngine(ScriptEngine);
-        HotReload->SetPollIntervalMs(1000); // 1秒轮询间隔
+        HotReload->SetPollIntervalMs(1000);  // 1秒轮询间隔
         HotReload->SetFileExtensions({".lua"});
-        HotReload->SetOnFileReloaded([this](const std::string& ScriptPath, bool Success, const std::string& ErrorMessage) {
-            OnScriptReloaded(ScriptPath, Success, ErrorMessage);
-        });
+        HotReload->SetOnFileReloaded(
+            [this](const std::string& ScriptPath, bool Success, const std::string& ErrorMessage)
+            { OnScriptReloaded(ScriptPath, Success, ErrorMessage); });
 
         // 添加脚本目录监控
         HotReload->AddWatchPath("Scripts");
@@ -71,14 +71,10 @@ public:
         Logger::Info("Hot reload manager started");
 
         // 启动网络事件循环
-        NetworkThread = std::thread([this]() {
-            NetworkContext->Run();
-        });
+        NetworkThread = std::thread([this]() { NetworkContext->Run(); });
 
         // 启动游戏逻辑循环
-        GameThread = std::thread([this]() {
-            GameLoop();
-        });
+        GameThread = std::thread([this]() { GameLoop(); });
 
         Logger::Info("Game Server started successfully");
         return true;
@@ -131,7 +127,7 @@ private:
         if (Result.Success)
         {
             Logger::Info("Loaded initial script: Scripts/hello.lua");
-            
+
             // 调用脚本中的函数
             ScriptEngine->CallFunction("Greet", {"GameServer"});
         }
@@ -145,10 +141,10 @@ private:
         if (Result.Success)
         {
             Logger::Info("Loaded game logic script: Scripts/Game/game_logic.lua");
-            
+
             // 初始化游戏逻辑
             ScriptEngine->CallFunction("GameLogic.Initialize", {});
-            
+
             // 添加一些测试玩家
             ScriptEngine->CallFunction("GameLogic.AddPlayer", {"Alice"});
             ScriptEngine->CallFunction("GameLogic.AddPlayer", {"Bob"});
@@ -163,7 +159,7 @@ private:
         if (Result.Success)
         {
             Logger::Info("Loaded test hot reload script: Scripts/Game/test_hotreload.lua");
-            
+
             // 调用测试函数
             ScriptEngine->CallFunction("TestModule.Hello", {});
         }
@@ -173,12 +169,13 @@ private:
         }
     }
 
-    void OnScriptReloaded(const std::string& ScriptPath, bool Success, const std::string& ErrorMessage)
+    void
+    OnScriptReloaded(const std::string& ScriptPath, bool Success, const std::string& ErrorMessage)
     {
         if (Success)
         {
             Logger::Info("Script reloaded successfully: " + ScriptPath);
-            
+
             // 根据重载的脚本类型执行不同的逻辑
             if (ScriptPath.find("hello.lua") != std::string::npos)
             {
@@ -190,7 +187,7 @@ private:
                 // 游戏逻辑脚本重载
                 Logger::Info("Game logic script reloaded, reinitializing...");
                 ScriptEngine->CallFunction("GameLogic.Initialize", {});
-                
+
                 // 重新添加玩家（保持游戏状态）
                 ScriptEngine->CallFunction("GameLogic.AddPlayer", {"Alice"});
                 ScriptEngine->CallFunction("GameLogic.AddPlayer", {"Bob"});
@@ -218,17 +215,18 @@ private:
         {
             // 游戏逻辑循环
             auto Now = std::chrono::steady_clock::now();
-            auto Elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(Now - StartTime).count();
+            auto Elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(Now - StartTime).count();
 
             // 每秒执行一次游戏逻辑
             if (Elapsed >= TickCount * 1000)
             {
                 // 调用脚本中的游戏逻辑更新函数
                 ScriptEngine->CallFunction("GameLogic.Update", {"1.0"});
-                
+
                 TickCount++;
-                
-                if (TickCount % 10 == 0) // 每10秒输出一次状态
+
+                if (TickCount % 10 == 0)  // 每10秒输出一次状态
                 {
                     std::ostringstream Oss;
                     Oss << "Game Server running for " << TickCount << " seconds";
@@ -245,7 +243,7 @@ private:
     std::shared_ptr<IScriptEngine> ScriptEngine;
     std::unique_ptr<HotReloadManager> HotReload;
     std::shared_ptr<IoContext> NetworkContext;
-    
+
     std::thread NetworkThread;
     std::thread GameThread;
 };
@@ -255,7 +253,7 @@ int main()
     Logger::Info("Starting Helianthus Game Server with Hot Reload...");
 
     GameServer Server;
-    
+
     if (!Server.Start())
     {
         Logger::Error("Failed to start game server");

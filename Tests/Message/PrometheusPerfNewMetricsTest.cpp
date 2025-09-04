@@ -1,7 +1,9 @@
-#include <gtest/gtest.h>
+#include "Shared/MessageQueue/MessageQueue.h"
+
 #include <sstream>
 #include <string>
-#include "Shared/MessageQueue/MessageQueue.h"
+
+#include <gtest/gtest.h>
 
 using namespace Helianthus::MessageQueue;
 
@@ -9,7 +11,9 @@ TEST(PrometheusPerfNewMetricsTest, ExportsBatchAndZeroCopyDurations)
 {
     MessageQueue MQ;
     ASSERT_EQ(MQ.Initialize(), QueueResult::SUCCESS);
-    QueueConfig C; C.Name = "perf_q"; C.Persistence = PersistenceMode::MEMORY_ONLY;
+    QueueConfig C;
+    C.Name = "perf_q";
+    C.Persistence = PersistenceMode::MEMORY_ONLY;
     ASSERT_EQ(MQ.CreateQueue(C), QueueResult::SUCCESS);
 
     // 触发一次零拷贝路径
@@ -51,5 +55,3 @@ TEST(PrometheusPerfNewMetricsTest, ExportsBatchAndZeroCopyDurations)
 
     MQ.Shutdown();
 }
-
-

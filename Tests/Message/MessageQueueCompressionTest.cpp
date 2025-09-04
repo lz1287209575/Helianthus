@@ -1,10 +1,11 @@
-#include <gtest/gtest.h>
+#include "Shared/MessageQueue/MessageQueue.h"
+#include "Shared/MessageQueue/MessageTypes.h"
+
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "Shared/MessageQueue/MessageQueue.h"
-#include "Shared/MessageQueue/MessageTypes.h"
+#include <gtest/gtest.h>
 
 class MessageQueueCompressionTest : public ::testing::Test
 {
@@ -45,7 +46,7 @@ TEST_F(MessageQueueCompressionTest, GzipCompressionWorks)
 
     // 创建大消息
     auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
-    std::string LargePayload(1000, 'A'); // 1KB 重复数据，应该压缩得很好
+    std::string LargePayload(1000, 'A');  // 1KB 重复数据，应该压缩得很好
     Message->Payload.Data.assign(LargePayload.begin(), LargePayload.end());
     Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
 
@@ -58,7 +59,8 @@ TEST_F(MessageQueueCompressionTest, GzipCompressionWorks)
     Result = Queue->ReceiveMessage(QueueName, ReceivedMessage);
     EXPECT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
     EXPECT_NE(ReceivedMessage, nullptr);
-    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(), ReceivedMessage->Payload.Data.end());
+    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(),
+                                ReceivedMessage->Payload.Data.end());
     EXPECT_EQ(ReceivedPayload, LargePayload);
 }
 
@@ -73,8 +75,8 @@ TEST_F(MessageQueueCompressionTest, Aes128CbcEncryptionWorks)
     // 配置加密
     Helianthus::MessageQueue::EncryptionConfig EncConfig;
     EncConfig.Algorithm = Helianthus::MessageQueue::EncryptionAlgorithm::AES_128_CBC;
-    EncConfig.Key = "MySecretKey12345"; // 16字节密钥
-    EncConfig.IV = "MyIV1234567890123"; // 16字节IV
+    EncConfig.Key = "MySecretKey12345";  // 16字节密钥
+    EncConfig.IV = "MyIV1234567890123";  // 16字节IV
     EncConfig.EnableAutoEncryption = true;
 
     Queue->SetEncryptionConfig(QueueName, EncConfig);
@@ -94,7 +96,8 @@ TEST_F(MessageQueueCompressionTest, Aes128CbcEncryptionWorks)
     Result = Queue->ReceiveMessage(QueueName, ReceivedMessage);
     EXPECT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
     EXPECT_NE(ReceivedMessage, nullptr);
-    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(), ReceivedMessage->Payload.Data.end());
+    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(),
+                                ReceivedMessage->Payload.Data.end());
     EXPECT_EQ(ReceivedPayload, Payload);
 }
 
@@ -109,8 +112,8 @@ TEST_F(MessageQueueCompressionTest, Aes256GcmEncryptionWorks)
     // 配置加密
     Helianthus::MessageQueue::EncryptionConfig EncConfig;
     EncConfig.Algorithm = Helianthus::MessageQueue::EncryptionAlgorithm::AES_256_GCM;
-    EncConfig.Key = "MySecretKey123456789012345678901234"; // 32字节密钥
-    EncConfig.IV = "MyIV123456789"; // 12字节IV
+    EncConfig.Key = "MySecretKey123456789012345678901234";  // 32字节密钥
+    EncConfig.IV = "MyIV123456789";                         // 12字节IV
     EncConfig.EnableAutoEncryption = true;
 
     Queue->SetEncryptionConfig(QueueName, EncConfig);
@@ -130,7 +133,8 @@ TEST_F(MessageQueueCompressionTest, Aes256GcmEncryptionWorks)
     Result = Queue->ReceiveMessage(QueueName, ReceivedMessage);
     EXPECT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
     EXPECT_NE(ReceivedMessage, nullptr);
-    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(), ReceivedMessage->Payload.Data.end());
+    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(),
+                                ReceivedMessage->Payload.Data.end());
     EXPECT_EQ(ReceivedPayload, Payload);
 }
 
@@ -161,7 +165,7 @@ TEST_F(MessageQueueCompressionTest, CompressionAndEncryptionCombined)
 
     // 创建大消息
     auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
-    std::string LargePayload(2000, 'A'); // 2KB 重复数据
+    std::string LargePayload(2000, 'A');  // 2KB 重复数据
     Message->Payload.Data.assign(LargePayload.begin(), LargePayload.end());
     Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
 
@@ -174,7 +178,8 @@ TEST_F(MessageQueueCompressionTest, CompressionAndEncryptionCombined)
     Result = Queue->ReceiveMessage(QueueName, ReceivedMessage);
     EXPECT_EQ(Result, Helianthus::MessageQueue::QueueResult::SUCCESS);
     EXPECT_NE(ReceivedMessage, nullptr);
-    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(), ReceivedMessage->Payload.Data.end());
+    std::string ReceivedPayload(ReceivedMessage->Payload.Data.begin(),
+                                ReceivedMessage->Payload.Data.end());
     EXPECT_EQ(ReceivedPayload, LargePayload);
 }
 
@@ -199,7 +204,7 @@ TEST_F(MessageQueueCompressionTest, CompressionStatsAreUpdated)
     for (int i = 0; i < 5; ++i)
     {
         auto Message = std::make_shared<Helianthus::MessageQueue::Message>();
-        std::string Payload(500, 'A' + i); // 不同内容的大消息
+        std::string Payload(500, 'A' + i);  // 不同内容的大消息
         Message->Payload.Data.assign(Payload.begin(), Payload.end());
         Message->Header.Type = Helianthus::MessageQueue::MessageType::TEXT;
 

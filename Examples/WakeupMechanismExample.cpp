@@ -1,8 +1,9 @@
 #include "Shared/Network/Asio/IoContext.h"
+
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
-#include <atomic>
 #include <vector>
 
 using namespace Helianthus::Network::Asio;
@@ -15,9 +16,7 @@ void DemoWakeupBasics()
     auto Context = std::make_shared<IoContext>();
 
     // 启动事件循环线程
-    std::thread RunThread([Context]() {
-        Context->Run();
-    });
+    std::thread RunThread([Context]() { Context->Run(); });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
@@ -25,22 +24,27 @@ void DemoWakeupBasics()
     const int NumThreads = 4;
     const int TasksPerThread = 100;
 
-    std::cout << "启动 " << NumThreads << " 个线程，每个提交 " << TasksPerThread << " 个任务..." << std::endl;
+    std::cout << "启动 " << NumThreads << " 个线程，每个提交 " << TasksPerThread << " 个任务..."
+              << std::endl;
 
     auto StartTime = std::chrono::high_resolution_clock::now();
 
     std::vector<std::thread> PostThreads;
     for (int i = 0; i < NumThreads; ++i)
     {
-        PostThreads.emplace_back([Context, &TaskCounter, TasksPerThread]() {
-            for (int j = 0; j < TasksPerThread; ++j)
+        PostThreads.emplace_back(
+            [Context, &TaskCounter, TasksPerThread]()
             {
-                Context->Post([&TaskCounter]() {
-                    TaskCounter.fetch_add(1);
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
-                });
-            }
-        });
+                for (int j = 0; j < TasksPerThread; ++j)
+                {
+                    Context->Post(
+                        [&TaskCounter]()
+                        {
+                            TaskCounter.fetch_add(1);
+                            std::this_thread::sleep_for(std::chrono::microseconds(10));
+                        });
+                }
+            });
     }
 
     for (auto& Thread : PostThreads)

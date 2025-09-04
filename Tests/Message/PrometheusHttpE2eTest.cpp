@@ -1,10 +1,11 @@
-#include <gtest/gtest.h>
-#include <thread>
+#include "Shared/MessageQueue/MessageQueue.h"
+#include "Shared/Monitoring/PrometheusExporter.h"
+
 #include <chrono>
 #include <string>
+#include <thread>
 
-#include "Shared/Monitoring/PrometheusExporter.h"
-#include "Shared/MessageQueue/MessageQueue.h"
+#include <gtest/gtest.h>
 
 using namespace Helianthus::Monitoring;
 using namespace Helianthus::MessageQueue;
@@ -13,26 +14,35 @@ TEST(PrometheusHttpE2eTest, MetricsEndpointReturnsTransactionMetrics)
 {
     MessageQueue MQ;
     ASSERT_EQ(MQ.Initialize(), QueueResult::SUCCESS);
-    QueueConfig C; C.Name = "tx_http_q"; C.Persistence = PersistenceMode::MEMORY_ONLY;
+    QueueConfig C;
+    C.Name = "tx_http_q";
+    C.Persistence = PersistenceMode::MEMORY_ONLY;
     ASSERT_EQ(MQ.CreateQueue(C), QueueResult::SUCCESS);
 
     // 测试指标收集功能，不启动HTTP服务器
     std::string MetricsOutput;
-    auto MetricsProvider = [&]() -> std::string {
+    auto MetricsProvider = [&]() -> std::string
+    {
         std::ostringstream Os;
         std::vector<std::string> Queues = MQ.ListQueues();
         Os << "# HELP helianthus_batch_commits_total Total number of batch commits per queue\n";
         Os << "# TYPE helianthus_batch_commits_total counter\n";
-        Os << "# HELP helianthus_batch_messages_total Total number of messages committed via batches per queue\n";
+        Os << "# HELP helianthus_batch_messages_total Total number of messages committed via "
+              "batches per queue\n";
         Os << "# TYPE helianthus_batch_messages_total counter\n";
-        for (const auto& Q : Queues) {
-            QueueStats S{}; if (MQ.GetQueueStats(Q, S) == QueueResult::SUCCESS) {
-                Os << "helianthus_queue_pending{queue=\"" << Q << "\"} " << S.PendingMessages << "\n";
+        for (const auto& Q : Queues)
+        {
+            QueueStats S{};
+            if (MQ.GetQueueStats(Q, S) == QueueResult::SUCCESS)
+            {
+                Os << "helianthus_queue_pending{queue=\"" << Q << "\"} " << S.PendingMessages
+                   << "\n";
                 Os << "helianthus_queue_total{queue=\"" << Q << "\"} " << S.TotalMessages << "\n";
             }
         }
         TransactionStats TS{};
-        if (MQ.GetTransactionStats(TS) == QueueResult::SUCCESS) {
+        if (MQ.GetTransactionStats(TS) == QueueResult::SUCCESS)
+        {
             Os << "# HELP helianthus_tx_total Total number of transactions\n";
             Os << "# TYPE helianthus_tx_total counter\n";
             Os << "helianthus_tx_total " << TS.TotalTransactions << "\n";
@@ -75,5 +85,3 @@ TEST(PrometheusHttpE2eTest, MetricsEndpointReturnsTransactionMetrics)
 
     MQ.Shutdown();
 }
-
-

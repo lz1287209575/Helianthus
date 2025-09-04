@@ -1,9 +1,10 @@
 #include "Shared/Common/Logger.h"
 
-#include <vector>
 #include <cstdlib>
-#include <regex>
 #include <iostream>
+#include <regex>
+#include <vector>
+
 #include <spdlog/pattern_formatter.h>
 
 // Avoid Windows DEBUG/ERROR macro collisions with enum LogLevel members
@@ -30,19 +31,36 @@ std::atomic<bool> CategoryLogger::ShuttingDownFlag{false};
 class CustomLevelFormatter : public spdlog::custom_flag_formatter
 {
 public:
-    void format(const spdlog::details::log_msg& Msg, const std::tm&, spdlog::memory_buf_t& Dest) override
+    void
+    format(const spdlog::details::log_msg& Msg, const std::tm&, spdlog::memory_buf_t& Dest) override
     {
         std::string LevelStr;
         switch (Msg.level)
         {
-            case spdlog::level::trace: LevelStr = "TRACE"; break;
-            case spdlog::level::debug: LevelStr = "DEBUG"; break;
-            case spdlog::level::info: LevelStr = "INFO"; break;
-            case spdlog::level::warn: LevelStr = "WARN"; break;
-            case spdlog::level::err: LevelStr = "ERROR"; break;
-            case spdlog::level::critical: LevelStr = "CRITICAL"; break;
-            case spdlog::level::off: LevelStr = "OFF"; break;
-            default: LevelStr = "UNKNOWN"; break;
+            case spdlog::level::trace:
+                LevelStr = "TRACE";
+                break;
+            case spdlog::level::debug:
+                LevelStr = "DEBUG";
+                break;
+            case spdlog::level::info:
+                LevelStr = "INFO";
+                break;
+            case spdlog::level::warn:
+                LevelStr = "WARN";
+                break;
+            case spdlog::level::err:
+                LevelStr = "ERROR";
+                break;
+            case spdlog::level::critical:
+                LevelStr = "CRITICAL";
+                break;
+            case spdlog::level::off:
+                LevelStr = "OFF";
+                break;
+            default:
+                LevelStr = "UNKNOWN";
+                break;
         }
         Dest.append(LevelStr.data(), LevelStr.data() + LevelStr.size());
     }
@@ -57,7 +75,8 @@ static std::string Trim(const std::string& S)
 {
     auto Start = S.find_first_not_of(" \t\n\r");
     auto End = S.find_last_not_of(" \t\n\r");
-    if (Start == std::string::npos) return "";
+    if (Start == std::string::npos)
+        return "";
     return S.substr(Start, End - Start + 1);
 }
 
@@ -65,11 +84,16 @@ spdlog::level::level_enum Logger::ConvertLogLevel(LogLevel Level)
 {
     switch (Level)
     {
-        case LogLevel::DEBUG: return spdlog::level::debug;
-        case LogLevel::INFO: return spdlog::level::info;
-        case LogLevel::WARN: return spdlog::level::warn;
-        case LogLevel::ERROR: return spdlog::level::err;
-        default: return spdlog::level::info;
+        case LogLevel::DEBUG:
+            return spdlog::level::debug;
+        case LogLevel::INFO:
+            return spdlog::level::info;
+        case LogLevel::WARN:
+            return spdlog::level::warn;
+        case LogLevel::ERROR:
+            return spdlog::level::err;
+        default:
+            return spdlog::level::info;
     }
 }
 
@@ -77,11 +101,16 @@ LogLevel Logger::ConvertLogLevel(spdlog::level::level_enum Level)
 {
     switch (Level)
     {
-        case spdlog::level::debug: return LogLevel::DEBUG;
-        case spdlog::level::info: return LogLevel::INFO;
-        case spdlog::level::warn: return LogLevel::WARN;
-        case spdlog::level::err: return LogLevel::ERROR;
-        default: return LogLevel::INFO;
+        case spdlog::level::debug:
+            return LogLevel::DEBUG;
+        case spdlog::level::info:
+            return LogLevel::INFO;
+        case spdlog::level::warn:
+            return LogLevel::WARN;
+        case spdlog::level::err:
+            return LogLevel::ERROR;
+        default:
+            return LogLevel::INFO;
     }
 }
 
@@ -91,15 +120,16 @@ void Logger::Initialize(const LoggerConfig& Config)
         return;
     ShuttingDownFlag.store(false, std::memory_order_release);
     CurrentConfig = Config;
-    ProcessName = [](){
+    ProcessName = []()
+    {
 #ifdef __linux__
         char Buf[256] = {0};
-        ssize_t n = ::readlink("/proc/self/exe", Buf, sizeof(Buf)-1);
+        ssize_t n = ::readlink("/proc/self/exe", Buf, sizeof(Buf) - 1);
         if (n > 0)
         {
             std::string Path(Buf, static_cast<size_t>(n));
             auto pos = Path.find_last_of('/');
-            return pos == std::string::npos ? Path : Path.substr(pos+1);
+            return pos == std::string::npos ? Path : Path.substr(pos + 1);
         }
 #endif
         return std::string("helianthus");
@@ -127,9 +157,12 @@ void Logger::Initialize(const LoggerConfig& Config)
 
     if (Config.UseAsync)
     {
-        LoggerInstance = std::make_shared<spdlog::async_logger>(
-            "helianthus", begin(Sinks), end(Sinks), spdlog::thread_pool(),
-            spdlog::async_overflow_policy::block);
+        LoggerInstance =
+            std::make_shared<spdlog::async_logger>("helianthus",
+                                                   begin(Sinks),
+                                                   end(Sinks),
+                                                   spdlog::thread_pool(),
+                                                   spdlog::async_overflow_policy::block);
         spdlog::register_logger(LoggerInstance);
     }
     else
@@ -139,11 +172,12 @@ void Logger::Initialize(const LoggerConfig& Config)
     }
 
     LoggerInstance->set_level(ConvertLogLevel(Config.Level));
-    
+
     // 创建自定义格式化器
     auto CustomFormatter = std::make_unique<spdlog::pattern_formatter>();
     CustomFormatter->add_flag<CustomLevelFormatter>('L');
-    CustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName + "] [%n] [%s:%#] %v");
+    CustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName +
+                                 "] [%n] [%s:%#] %v");
     LoggerInstance->set_formatter(std::move(CustomFormatter));
     LoggerInstance->flush_on(spdlog::level::info);
 
@@ -192,12 +226,14 @@ bool Logger::IsShuttingDown()
 CategoryLogger Logger::GetOrCreateCategory(const std::string& CategoryName)
 {
     // 检查分类名称是否为空
-    if (CategoryName.empty()) {
+    if (CategoryName.empty())
+    {
         return CategoryLogger(nullptr);
     }
-    
+
     auto It = CategoryLoggers.find(CategoryName);
-    if (It != CategoryLoggers.end()) return CategoryLogger(It->second);
+    if (It != CategoryLoggers.end())
+        return CategoryLogger(It->second);
 
     std::vector<spdlog::sink_ptr> Sinks;
     if (CurrentConfig.EnableConsole)
@@ -209,25 +245,31 @@ CategoryLogger Logger::GetOrCreateCategory(const std::string& CategoryName)
     if (CurrentConfig.EnableFile)
     {
         auto Path = std::string("logs/") + CategoryName + ".log";
-        auto FileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(Path, CurrentConfig.MaxFileSize, CurrentConfig.MaxFiles);
+        auto FileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+            Path, CurrentConfig.MaxFileSize, CurrentConfig.MaxFiles);
         Sinks.push_back(FileSink);
     }
 
     std::shared_ptr<spdlog::logger> CatLogger;
     if (CurrentConfig.UseAsync)
     {
-        CatLogger = std::make_shared<spdlog::async_logger>(CategoryName, begin(Sinks), end(Sinks), spdlog::thread_pool(), spdlog::async_overflow_policy::block);
+        CatLogger = std::make_shared<spdlog::async_logger>(CategoryName,
+                                                           begin(Sinks),
+                                                           end(Sinks),
+                                                           spdlog::thread_pool(),
+                                                           spdlog::async_overflow_policy::block);
     }
     else
     {
         CatLogger = std::make_shared<spdlog::logger>(CategoryName, begin(Sinks), end(Sinks));
     }
     CatLogger->set_level(ConvertLogLevel(CurrentConfig.Level));
-    
+
     // 为分类日志器设置自定义格式化器
     auto CatCustomFormatter = std::make_unique<spdlog::pattern_formatter>();
     CatCustomFormatter->add_flag<CustomLevelFormatter>('L');
-    CatCustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName + "] [%n] [%s:%#] %v");
+    CatCustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName +
+                                    "] [%n] [%s:%#] %v");
     CatLogger->set_formatter(std::move(CatCustomFormatter));
     spdlog::register_logger(CatLogger);
     CategoryLoggers[CategoryName] = CatLogger;
@@ -244,25 +286,30 @@ void Logger::ConfigureCategoryFile(const std::string& CategoryName,
     {
         Sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
     }
-    Sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>(FilePath, MaxFileSize, MaxFiles));
+    Sinks.push_back(
+        std::make_shared<spdlog::sinks::rotating_file_sink_mt>(FilePath, MaxFileSize, MaxFiles));
 
     std::shared_ptr<spdlog::logger> CatLogger;
     if (CurrentConfig.UseAsync)
     {
-        CatLogger = std::make_shared<spdlog::async_logger>(
-            std::string("cat_") + CategoryName, begin(Sinks), end(Sinks), spdlog::thread_pool(),
-            spdlog::async_overflow_policy::block);
+        CatLogger = std::make_shared<spdlog::async_logger>(std::string("cat_") + CategoryName,
+                                                           begin(Sinks),
+                                                           end(Sinks),
+                                                           spdlog::thread_pool(),
+                                                           spdlog::async_overflow_policy::block);
     }
     else
     {
-        CatLogger = std::make_shared<spdlog::logger>(std::string("cat_") + CategoryName, begin(Sinks), end(Sinks));
+        CatLogger = std::make_shared<spdlog::logger>(
+            std::string("cat_") + CategoryName, begin(Sinks), end(Sinks));
     }
     CatLogger->set_level(ConvertLogLevel(CurrentConfig.Level));
-    
+
     // 为分类日志器设置自定义格式化器
     auto CatCustomFormatter = std::make_unique<spdlog::pattern_formatter>();
     CatCustomFormatter->add_flag<CustomLevelFormatter>('L');
-    CatCustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName + "] [%n] [%s:%#] %v");
+    CatCustomFormatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%L%$] [%P-%t-CID] [" + ProcessName +
+                                    "] [%n] [%s:%#] %v");
     CatLogger->set_formatter(std::move(CatCustomFormatter));
     spdlog::register_logger(CatLogger);
 
@@ -328,7 +375,8 @@ void Logger::LoadCategoryFromEnv()
     // 约定：H_LOG_CATEGORY_<NAME>=/path/to/file.log（逗号可分隔多个配置）
     // 例：H_LOG_CATEGORY_Net=logs/net.log;H_LOG_CATEGORY_Perf=logs/perf.log
     const char* Env = std::getenv("H_LOG_CATEGORY");
-    if (!Env) return;
+    if (!Env)
+        return;
     std::string All = Env;
 
     // 支持分号或逗号分隔： Net=path;Perf=path2
@@ -344,7 +392,8 @@ void Logger::LoadCategoryFromEnv()
             auto Path = Trim(M[2].str());
             if (!Name.empty() && !Path.empty())
             {
-                ConfigureCategoryFile(Name, Path, CurrentConfig.MaxFileSize, CurrentConfig.MaxFiles);
+                ConfigureCategoryFile(
+                    Name, Path, CurrentConfig.MaxFileSize, CurrentConfig.MaxFiles);
             }
         }
     }

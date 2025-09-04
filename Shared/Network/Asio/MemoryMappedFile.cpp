@@ -1,22 +1,22 @@
 #include "Shared/Network/Asio/MemoryMappedFile.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <vector>
-#include <cstring>
 
 #ifdef _WIN32
     #ifndef WIN32_LEAN_AND_MEAN
         #define WIN32_LEAN_AND_MEAN
     #endif
-    #include <windows.h>
     #include <io.h>
+    #include <windows.h>
 #else
+    #include <errno.h>
+    #include <fcntl.h>
     #include <sys/mman.h>
     #include <sys/stat.h>
-    #include <fcntl.h>
     #include <unistd.h>
-    #include <errno.h>
 #endif
 
 namespace Helianthus::Network::Asio
@@ -40,7 +40,7 @@ MemoryMappedFile::MemoryMappedFile(MemoryMappedFile&& Other) noexcept
     FileDescriptor = Other.FileDescriptor;
     Other.FileDescriptor = -1;
 #endif
-    
+
     Other.MappedData = nullptr;
     Other.MappedSize = 0;
 }
@@ -51,12 +51,12 @@ MemoryMappedFile& MemoryMappedFile::operator=(MemoryMappedFile&& Other) noexcept
     {
         // 清理当前资源
         Unmap();
-        
+
         // 移动资源
         MappedData = Other.MappedData;
         MappedSize = Other.MappedSize;
         Mode = Other.Mode;
-        
+
 #ifdef _WIN32
         FileHandle = Other.FileHandle;
         MappingHandle = Other.MappingHandle;
@@ -66,18 +66,21 @@ MemoryMappedFile& MemoryMappedFile::operator=(MemoryMappedFile&& Other) noexcept
         FileDescriptor = Other.FileDescriptor;
         Other.FileDescriptor = -1;
 #endif
-        
+
         Other.MappedData = nullptr;
         Other.MappedSize = 0;
     }
     return *this;
 }
 
-bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingMode, size_t Offset, size_t Length)
+bool MemoryMappedFile::MapFile(const std::string& FilePath,
+                               MappingMode MappingMode,
+                               size_t Offset,
+                               size_t Length)
 {
     // 先取消之前的映射
     Unmap();
-    
+
     Mode = MappingMode;
 
 #ifdef _WIN32
@@ -85,7 +88,7 @@ bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingM
     DWORD FileAccess = 0;
     DWORD MappingProtection = 0;
     DWORD ViewAccess = 0;
-    
+
     switch (MappingMode)
     {
         case MappingMode::ReadOnly:
@@ -104,17 +107,23 @@ bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingM
             ViewAccess = FILE_MAP_WRITE;
             break;
     }
-    
+
     // 打开文件
-    FileHandle = CreateFileA(FilePath.c_str(), FileAccess, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    
+    FileHandle = CreateFileA(FilePath.c_str(),
+                             FileAccess,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE,
+                             nullptr,
+                             OPEN_EXISTING,
+                             FILE_ATTRIBUTE_NORMAL,
+                             nullptr);
+
     if (FileHandle == INVALID_HANDLE_VALUE)
     {
-        std::cerr << "Failed to open file: " << FilePath << ", Error: " << GetLastError() << std::endl;
+        std::cerr << "Failed to open file: " << FilePath << ", Error: " << GetLastError()
+                  << std::endl;
         return false;
     }
-    
+
     // 获取文件大小
     LARGE_INTEGER FileSize;
     if (!GetFileSizeEx(FileHandle, &FileSize))
@@ -123,44 +132,46 @@ bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingM
         CleanupResources();
         return false;
     }
-    
+
     size_t ActualFileSize = static_cast<size_t>(FileSize.QuadPart);
-    
+
     // 计算映射大小
     if (Length == 0)
     {
         Length = ActualFileSize - Offset;
     }
-    
+
     if (Offset + Length > ActualFileSize)
     {
         std::cerr << "Mapping range exceeds file size" << std::endl;
         CleanupResources();
         return false;
     }
-    
+
     // 对于完整文件映射，不需要对齐处理
     DWORD AlignedOffset = static_cast<DWORD>(Offset);
     DWORD OffsetDelta = 0;
     DWORD AlignedLength = static_cast<DWORD>(Length);
-    
+
     // 对于部分映射或大文件，需要对齐到分配粒度
     SYSTEM_INFO SysInfo;
     GetSystemInfo(&SysInfo);
     DWORD AllocationGranularity = SysInfo.dwAllocationGranularity;
-    
+
     if ((Offset > 0 || Length < ActualFileSize) && ActualFileSize >= AllocationGranularity)
     {
         // 计算对齐后的偏移量和大小
         AlignedOffset = static_cast<DWORD>(Offset / AllocationGranularity) * AllocationGranularity;
         OffsetDelta = static_cast<DWORD>(Offset - AlignedOffset);
-        AlignedLength = static_cast<DWORD>((Length + OffsetDelta + AllocationGranularity - 1) / AllocationGranularity) * AllocationGranularity;
-        
+        AlignedLength = static_cast<DWORD>((Length + OffsetDelta + AllocationGranularity - 1) /
+                                           AllocationGranularity) *
+                        AllocationGranularity;
+
         // Debug output removed for production
     }
-    
+
     MappedSize = Length;  // 保持原始大小用于用户访问
-    
+
     // 创建文件映射对象
     MappingHandle = CreateFileMappingA(FileHandle, nullptr, MappingProtection, 0, 0, nullptr);
     if (MappingHandle == nullptr)
@@ -169,25 +180,27 @@ bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingM
         CleanupResources();
         return false;
     }
-    
+
     // 映射视图
-    MappedData = MapViewOfFile(MappingHandle, ViewAccess, 
-                              static_cast<DWORD>((static_cast<ULONGLONG>(AlignedOffset) >> 32) & 0xFFFFFFFF), 
-                              static_cast<DWORD>(AlignedOffset & 0xFFFFFFFF), 
-                              AlignedLength);
-    
+    MappedData = MapViewOfFile(
+        MappingHandle,
+        ViewAccess,
+        static_cast<DWORD>((static_cast<ULONGLONG>(AlignedOffset) >> 32) & 0xFFFFFFFF),
+        static_cast<DWORD>(AlignedOffset & 0xFFFFFFFF),
+        AlignedLength);
+
     if (MappedData == nullptr)
     {
         std::cerr << "Failed to map view of file, Error: " << GetLastError() << std::endl;
         CleanupResources();
         return false;
     }
-    
+
 #else
     // POSIX 实现
     int FileFlags = 0;
     int MmapProtection = 0;
-    
+
     switch (MappingMode)
     {
         case MappingMode::ReadOnly:
@@ -203,15 +216,16 @@ bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingM
             MmapProtection = PROT_WRITE;
             break;
     }
-    
+
     // 打开文件
     FileDescriptor = open(FilePath.c_str(), FileFlags);
     if (FileDescriptor == -1)
     {
-        std::cerr << "Failed to open file: " << FilePath << ", Error: " << strerror(errno) << std::endl;
+        std::cerr << "Failed to open file: " << FilePath << ", Error: " << strerror(errno)
+                  << std::endl;
         return false;
     }
-    
+
     // 获取文件大小
     struct stat FileStats;
     if (fstat(FileDescriptor, &FileStats) == -1)
@@ -220,27 +234,28 @@ bool MemoryMappedFile::MapFile(const std::string& FilePath, MappingMode MappingM
         CleanupResources();
         return false;
     }
-    
+
     size_t ActualFileSize = static_cast<size_t>(FileStats.st_size);
-    
+
     // 计算映射大小
     if (Length == 0)
     {
         Length = ActualFileSize - Offset;
     }
-    
+
     if (Offset + Length > ActualFileSize)
     {
         std::cerr << "Mapping range exceeds file size" << std::endl;
         CleanupResources();
         return false;
     }
-    
+
     MappedSize = Length;
-    
+
     // 执行内存映射
-    MappedData = mmap(nullptr, Length, MmapProtection, MAP_SHARED, FileDescriptor, static_cast<off_t>(Offset));
-    
+    MappedData = mmap(
+        nullptr, Length, MmapProtection, MAP_SHARED, FileDescriptor, static_cast<off_t>(Offset));
+
     if (MappedData == MAP_FAILED)
     {
         std::cerr << "Failed to map file, Error: " << strerror(errno) << std::endl;
@@ -265,7 +280,7 @@ void MemoryMappedFile::Unmap()
         MappedData = nullptr;
         MappedSize = 0;
     }
-    
+
     CleanupResources();
 }
 
@@ -275,7 +290,7 @@ bool MemoryMappedFile::Sync(bool Async)
     {
         return false;
     }
-    
+
 #ifdef _WIN32
     return FlushViewOfFile(MappedData, MappedSize) != 0;
 #else
@@ -290,28 +305,28 @@ bool MemoryMappedFile::Prefetch(size_t Offset, size_t Length)
     {
         return false;
     }
-    
+
     if (Length == 0)
     {
         Length = MappedSize - Offset;
     }
-    
+
     if (Offset + Length > MappedSize)
     {
         return false;
     }
-    
+
 #ifdef _WIN32
     // Windows: 简单地触摸内存页面来实现预取效果
     volatile char* Ptr = static_cast<char*>(MappedData) + Offset;
     size_t PageSize = 4096;  // 假设 4KB 页面大小
-    
+
     for (size_t i = 0; i < Length; i += PageSize)
     {
         volatile char Touch = Ptr[i];
         (void)Touch;  // 避免未使用变量警告
     }
-    
+
     return true;
 #else
     // POSIX: 使用 madvise
@@ -325,17 +340,17 @@ bool MemoryMappedFile::AdviseAccess(AdviceMode AdviceMode, size_t Offset, size_t
     {
         return false;
     }
-    
+
     if (Length == 0)
     {
         Length = MappedSize - Offset;
     }
-    
+
     if (Offset + Length > MappedSize)
     {
         return false;
     }
-    
+
 #ifdef _WIN32
     // Windows 没有直接的 madvise 等价物，这里返回 true
     return true;
@@ -359,7 +374,7 @@ bool MemoryMappedFile::AdviseAccess(AdviceMode AdviceMode, size_t Offset, size_t
             Advice = MADV_DONTNEED;
             break;
     }
-    
+
     return madvise(static_cast<char*>(MappedData) + Offset, Length, Advice) == 0;
 #endif
 }
@@ -367,21 +382,26 @@ bool MemoryMappedFile::AdviseAccess(AdviceMode AdviceMode, size_t Offset, size_t
 size_t MemoryMappedFile::GetFileSize(const std::string& FilePath)
 {
 #ifdef _WIN32
-    HANDLE FileHandle = CreateFileA(FilePath.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                                   nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    
+    HANDLE FileHandle = CreateFileA(FilePath.c_str(),
+                                    GENERIC_READ,
+                                    FILE_SHARE_READ,
+                                    nullptr,
+                                    OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL,
+                                    nullptr);
+
     if (FileHandle == INVALID_HANDLE_VALUE)
     {
         return 0;
     }
-    
+
     LARGE_INTEGER FileSize;
     if (!GetFileSizeEx(FileHandle, &FileSize))
     {
         CloseHandle(FileHandle);
         return 0;
     }
-    
+
     CloseHandle(FileHandle);
     return static_cast<size_t>(FileSize.QuadPart);
 #else
@@ -390,7 +410,7 @@ size_t MemoryMappedFile::GetFileSize(const std::string& FilePath)
     {
         return 0;
     }
-    
+
     return static_cast<size_t>(FileStats.st_size);
 #endif
 }
@@ -409,7 +429,7 @@ void MemoryMappedFile::CleanupResources()
         CloseHandle(MappingHandle);
         MappingHandle = nullptr;
     }
-    
+
     if (FileHandle != INVALID_HANDLE_VALUE)
     {
         CloseHandle(FileHandle);
@@ -425,7 +445,9 @@ void MemoryMappedFile::CleanupResources()
 }
 
 // MemoryMappedBufferFragment 实现
-MemoryMappedBufferFragment::MemoryMappedBufferFragment(std::shared_ptr<MemoryMappedFile> FilePtr, size_t OffsetIn, size_t SizeIn)
+MemoryMappedBufferFragment::MemoryMappedBufferFragment(std::shared_ptr<MemoryMappedFile> FilePtr,
+                                                       size_t OffsetIn,
+                                                       size_t SizeIn)
     : File(std::move(FilePtr)), Offset(OffsetIn), Size(SizeIn)
 {
     // 验证参数
@@ -444,7 +466,7 @@ const void* MemoryMappedBufferFragment::GetData() const
     {
         return nullptr;
     }
-    
+
     return static_cast<const char*>(File->GetConstData()) + Offset;
 }
 
@@ -454,15 +476,16 @@ void* MemoryMappedBufferFragment::GetMutableData() const
     {
         return nullptr;
     }
-    
+
     return static_cast<char*>(File->GetData()) + Offset;
 }
 
 // LargeFileTransferOptimizer 实现
-LargeFileTransferOptimizer::TransferConfig LargeFileTransferOptimizer::GetOptimalConfig(size_t FileSize)
+LargeFileTransferOptimizer::TransferConfig
+LargeFileTransferOptimizer::GetOptimalConfig(size_t FileSize)
 {
     TransferConfig Config;
-    
+
     // 根据文件大小调整配置
     if (FileSize < 1024 * 1024)  // < 1MB
     {
@@ -482,54 +505,55 @@ LargeFileTransferOptimizer::TransferConfig LargeFileTransferOptimizer::GetOptima
         Config.MaxConcurrentChunks = 8;
         Config.UseMemoryMapping = true;
     }
-    
+
     return Config;
 }
 
-std::vector<MemoryMappedBufferFragment> LargeFileTransferOptimizer::CreateOptimizedFragments(
-    const std::string& FilePath, const TransferConfig& Config)
+std::vector<MemoryMappedBufferFragment>
+LargeFileTransferOptimizer::CreateOptimizedFragments(const std::string& FilePath,
+                                                     const TransferConfig& Config)
 {
     std::vector<MemoryMappedBufferFragment> Fragments;
-    
+
     size_t FileSize = MemoryMappedFile::GetFileSize(FilePath);
     if (FileSize == 0)
     {
         return Fragments;
     }
-    
+
     if (!Config.UseMemoryMapping || !ShouldUseMemoryMapping(FileSize))
     {
         // 不使用内存映射，返回空列表
         return Fragments;
     }
-    
+
     // 创建内存映射文件
     auto MappedFile = std::make_shared<MemoryMappedFile>();
     if (!MappedFile->MapFile(FilePath, MappingMode::ReadOnly))
     {
         return Fragments;
     }
-    
+
     // 设置访问模式建议
     if (Config.UseSequentialAccess)
     {
         MappedFile->AdviseAccess(MemoryMappedFile::AdviceMode::Sequential);
     }
-    
+
     // 预取第一块数据
     if (Config.UsePrefetch)
     {
         size_t PrefetchSize = std::min(Config.ChunkSize * Config.MaxConcurrentChunks, FileSize);
         MappedFile->Prefetch(0, PrefetchSize);
     }
-    
+
     // 创建片段
     for (size_t Offset = 0; Offset < FileSize; Offset += Config.ChunkSize)
     {
         size_t ChunkSize = std::min(Config.ChunkSize, FileSize - Offset);
         Fragments.emplace_back(MappedFile, Offset, ChunkSize);
     }
-    
+
     return Fragments;
 }
 
@@ -537,26 +561,26 @@ bool LargeFileTransferOptimizer::ShouldUseMemoryMapping(size_t FileSize)
 {
     // 获取系统内存信息
     MemoryInfo MemInfo = GetSystemMemoryInfo();
-    
+
     // 如果文件大小超过可用内存的 50%，不使用内存映射
     if (FileSize > MemInfo.AvailablePhysicalMemory / 2)
     {
         return false;
     }
-    
+
     // 如果文件小于 64KB，不使用内存映射
     if (FileSize < 64 * 1024)
     {
         return false;
     }
-    
+
     return true;
 }
 
 LargeFileTransferOptimizer::MemoryInfo LargeFileTransferOptimizer::GetSystemMemoryInfo()
 {
     MemoryInfo Info;
-    
+
 #ifdef _WIN32
     MEMORYSTATUSEX MemStatus;
     MemStatus.dwLength = sizeof(MemStatus);
@@ -572,22 +596,22 @@ LargeFileTransferOptimizer::MemoryInfo LargeFileTransferOptimizer::GetSystemMemo
     long PageSize = sysconf(_SC_PAGESIZE);
     long TotalPages = sysconf(_SC_PHYS_PAGES);
     long AvailablePages = sysconf(_SC_AVPHYS_PAGES);
-    
+
     if (PageSize > 0 && TotalPages > 0)
     {
         Info.TotalPhysicalMemory = static_cast<size_t>(PageSize * TotalPages);
     }
-    
+
     if (PageSize > 0 && AvailablePages > 0)
     {
         Info.AvailablePhysicalMemory = static_cast<size_t>(PageSize * AvailablePages);
     }
-    
+
     // 虚拟内存信息在 POSIX 中较难获取，这里设置为物理内存的两倍作为估计
     Info.TotalVirtualMemory = Info.TotalPhysicalMemory * 2;
     Info.AvailableVirtualMemory = Info.AvailablePhysicalMemory * 2;
 #endif
-    
+
     return Info;
 }
 

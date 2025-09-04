@@ -2,17 +2,18 @@
 
 #include "Shared/Network/Asio/IoContext.h"
 #include "Shared/Network/Asio/Reactor.h"
+
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
 
 #ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+    #include <arpa/inet.h>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
 #endif
 
 namespace Helianthus::Network::Asio
@@ -47,7 +48,8 @@ Network::NetworkError AsyncTcpSocket::Bind(const Network::NetworkAddress& Addres
     return Err;
 }
 
-void AsyncTcpSocket::AsyncConnectLegacy(const Network::NetworkAddress& Address, std::function<void(Network::NetworkError)> Handler)
+void AsyncTcpSocket::AsyncConnectLegacy(const Network::NetworkAddress& Address,
+                                        std::function<void(Network::NetworkError)> Handler)
 {
     if (ClosedFlag)
     {
@@ -85,35 +87,38 @@ void AsyncTcpSocket::AsyncConnectLegacy(const Network::NetworkAddress& Address, 
                 }
                 return;
             }
-            
+
             // 保存连接回调
             PendingConnectCb = std::move(Handler);
             PendingConnectAddr = Address;
-            
+
             // 注册写事件，等待连接完成
-            if (ReactorPtr->Add(FdValue, EventMask::Write,
-                [this](EventMask Event) {
-                    if ((static_cast<uint32_t>(Event) & static_cast<uint32_t>(EventMask::Write)) == 0)
-                    {
-                        return;
-                    }
-                    
-                    // 检查连接状态
-                    auto ConnectErr = Socket.CheckConnectionStatus();
-                    
-                    // 移除注册
-                    const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
-                    ReactorPtr->Del(FdValue);
-                    ConnectRegistered = false;
-                    
-                    // 调用回调
-                    auto Cb = std::move(PendingConnectCb);
-                    PendingConnectCb = nullptr;
-                    if (Cb)
-                    {
-                        Cb(ConnectErr);
-                    }
-                }))
+            if (ReactorPtr->Add(FdValue,
+                                EventMask::Write,
+                                [this](EventMask Event)
+                                {
+                                    if ((static_cast<uint32_t>(Event) &
+                                         static_cast<uint32_t>(EventMask::Write)) == 0)
+                                    {
+                                        return;
+                                    }
+
+                                    // 检查连接状态
+                                    auto ConnectErr = Socket.CheckConnectionStatus();
+
+                                    // 移除注册
+                                    const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
+                                    ReactorPtr->Del(FdValue);
+                                    ConnectRegistered = false;
+
+                                    // 调用回调
+                                    auto Cb = std::move(PendingConnectCb);
+                                    PendingConnectCb = nullptr;
+                                    if (Cb)
+                                    {
+                                        Cb(ConnectErr);
+                                    }
+                                }))
             {
                 ConnectRegistered = true;
                 return;
@@ -129,7 +134,7 @@ void AsyncTcpSocket::AsyncConnectLegacy(const Network::NetworkAddress& Address, 
             return;
         }
     }
-    
+
     // 如果所有异步方法都失败，返回错误
     if (Handler)
     {
@@ -177,75 +182,77 @@ void AsyncTcpSocket::AsyncReceiveLegacy(char* Buffer, size_t BufferSize, Receive
         }
         return;
     }
-    
+
     // 注册到 Reactor
-    if (ReactorPtr->Add(FdValue, EventMask::Read,
-        [this](EventMask Event)
-        {
-            if (ClosedFlag)
-            {
-                return;
-            }
-            
-            if ((static_cast<uint32_t>(Event) & static_cast<uint32_t>(EventMask::Read)) == 0)
-            {
-                return;
-            }
-            
-            // 如果当前没有挂起的接收回调，避免错误消费字节
-            if (!PendingRecv)
-            {
-                return;
-            }
+    if (ReactorPtr->Add(FdValue,
+                        EventMask::Read,
+                        [this](EventMask Event)
+                        {
+                            if (ClosedFlag)
+                            {
+                                return;
+                            }
 
-            size_t Received = 0;
-            bool PeerClosed = false;
-            // 读尽直到 EAGAIN/无数据 或 缓冲满
-            while (true)
-            {
-                size_t chunk = 0;
-                Network::NetworkError errNow = Socket.Receive(
-                    PendingRecvBuf + Received,
-                    PendingRecvSize - Received,
-                    chunk);
-                if (errNow == Network::NetworkError::NONE && chunk > 0)
-                {
-                    Received += chunk;
-                    if (Received >= PendingRecvSize)
-                    {
-                        break;
-                    }
-                    continue;
-                }
-                if (errNow == Network::NetworkError::CONNECTION_CLOSED)
-                {
-                    PeerClosed = true;
-                }
-                // 对于非致命情况（如 EAGAIN 映射为 RECEIVE_FAILED），跳出等待下一次事件
-                break;
-            }
+                            if ((static_cast<uint32_t>(Event) &
+                                 static_cast<uint32_t>(EventMask::Read)) == 0)
+                            {
+                                return;
+                            }
 
-            // 仅在读到数据或对端关闭时回调并清理状态；否则保留 PendingRecv 以等待下一次事件
-            if (Received > 0 || PeerClosed)
-            {
-                auto Callback = PendingRecv;
-                PendingRecv = nullptr;
-                PendingRecvBuf = nullptr;
-                PendingRecvSize = 0;
+                            // 如果当前没有挂起的接收回调，避免错误消费字节
+                            if (!PendingRecv)
+                            {
+                                return;
+                            }
 
-                // 保持注册，不在此处删除，避免与后续再次注册产生竞态
-                if (Callback)
-                {
-                    Callback(PeerClosed ? Network::NetworkError::CONNECTION_CLOSED
-                                        : Network::NetworkError::NONE,
-                             Received);
-                }
-                if (PeerClosed)
-                {
-                    Close();
-                }
-            }
-        }))
+                            size_t Received = 0;
+                            bool PeerClosed = false;
+                            // 读尽直到 EAGAIN/无数据 或 缓冲满
+                            while (true)
+                            {
+                                size_t chunk = 0;
+                                Network::NetworkError errNow = Socket.Receive(
+                                    PendingRecvBuf + Received, PendingRecvSize - Received, chunk);
+                                if (errNow == Network::NetworkError::NONE && chunk > 0)
+                                {
+                                    Received += chunk;
+                                    if (Received >= PendingRecvSize)
+                                    {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                if (errNow == Network::NetworkError::CONNECTION_CLOSED)
+                                {
+                                    PeerClosed = true;
+                                }
+                                // 对于非致命情况（如 EAGAIN 映射为
+                                // RECEIVE_FAILED），跳出等待下一次事件
+                                break;
+                            }
+
+                            // 仅在读到数据或对端关闭时回调并清理状态；否则保留 PendingRecv
+                            // 以等待下一次事件
+                            if (Received > 0 || PeerClosed)
+                            {
+                                auto Callback = PendingRecv;
+                                PendingRecv = nullptr;
+                                PendingRecvBuf = nullptr;
+                                PendingRecvSize = 0;
+
+                                // 保持注册，不在此处删除，避免与后续再次注册产生竞态
+                                if (Callback)
+                                {
+                                    Callback(PeerClosed ? Network::NetworkError::CONNECTION_CLOSED
+                                                        : Network::NetworkError::NONE,
+                                             Received);
+                                }
+                                if (PeerClosed)
+                                {
+                                    Close();
+                                }
+                            }
+                        }))
     {
         IsRegistered = true;
     }
@@ -254,7 +261,7 @@ void AsyncTcpSocket::AsyncReceiveLegacy(char* Buffer, size_t BufferSize, Receive
 void AsyncTcpSocket::AsyncSendLegacy(const char* Data, size_t Size, SendHandler Handler)
 {
     const auto FdValue = static_cast<Fd>(Socket.GetNativeHandle());
-    
+
     PendingSendPtr = Data;
     PendingSendRemaining = Size;
     PendingSendTotalSent = 0;
@@ -272,36 +279,47 @@ void AsyncTcpSocket::AsyncSendLegacy(const char* Data, size_t Size, SendHandler 
         {
             auto cb = PendingSendHandler;
             PendingSendHandler = nullptr;
-            if (cb) cb(Network::NetworkError::NONE, PendingSendTotalSent);
+            if (cb)
+                cb(Network::NetworkError::NONE, PendingSendTotalSent);
             return;
         }
     }
 
     // 未完全发送，注册写事件
-    if (!ReactorPtr) {
+    if (!ReactorPtr)
+    {
         auto cb = PendingSendHandler;
         PendingSendHandler = nullptr;
-        if (cb) cb(Network::NetworkError::NOT_INITIALIZED, PendingSendTotalSent);
+        if (cb)
+            cb(Network::NetworkError::NOT_INITIALIZED, PendingSendTotalSent);
         return;
     }
 
-    if (ReactorPtr->Add(FdValue, EventMask::Write,
-        [this](EventMask ev){
-            if ((static_cast<uint32_t>(ev) & static_cast<uint32_t>(EventMask::Write)) == 0) return;
-            if (PendingSendRemaining == 0) return;
-            size_t SentNow = 0;
-            Network::NetworkError ErrNow = Socket.Send(PendingSendPtr, PendingSendRemaining, SentNow);
-            if (ErrNow != Network::NetworkError::NONE && SentNow == 0) return; // 等待下一次可写
-            PendingSendPtr += SentNow;
-            PendingSendRemaining -= SentNow;
-            PendingSendTotalSent += SentNow;
-            if (PendingSendRemaining == 0)
-            {
-                auto cb = PendingSendHandler;
-                PendingSendHandler = nullptr;
-                if (cb) cb(Network::NetworkError::NONE, PendingSendTotalSent);
-            }
-        }))
+    if (ReactorPtr->Add(FdValue,
+                        EventMask::Write,
+                        [this](EventMask ev)
+                        {
+                            if ((static_cast<uint32_t>(ev) &
+                                 static_cast<uint32_t>(EventMask::Write)) == 0)
+                                return;
+                            if (PendingSendRemaining == 0)
+                                return;
+                            size_t SentNow = 0;
+                            Network::NetworkError ErrNow =
+                                Socket.Send(PendingSendPtr, PendingSendRemaining, SentNow);
+                            if (ErrNow != Network::NetworkError::NONE && SentNow == 0)
+                                return;  // 等待下一次可写
+                            PendingSendPtr += SentNow;
+                            PendingSendRemaining -= SentNow;
+                            PendingSendTotalSent += SentNow;
+                            if (PendingSendRemaining == 0)
+                            {
+                                auto cb = PendingSendHandler;
+                                PendingSendHandler = nullptr;
+                                if (cb)
+                                    cb(Network::NetworkError::NONE, PendingSendTotalSent);
+                            }
+                        }))
     {
         SendRegistered = true;
     }
@@ -319,9 +337,9 @@ void AsyncTcpSocket::Close()
         return;
     }
     ClosedFlag = true;
-    
+
     const auto Handle = static_cast<Fd>(Socket.GetNativeHandle());
-    
+
     // 从 Reactor 移除
     if (ReactorPtr)
     {
@@ -341,36 +359,40 @@ void AsyncTcpSocket::Close()
             ConnectRegistered = false;
         }
     }
-    
+
     // 清理回调
     if (PendingRecv)
     {
         PendingRecv(Network::NetworkError::CONNECTION_CLOSED, 0);
         PendingRecv = nullptr;
     }
-    
+
     if (PendingSendHandler)
     {
         PendingSendHandler(Network::NetworkError::CONNECTION_CLOSED, 0);
         PendingSendHandler = nullptr;
     }
-    
+
     if (PendingConnectCb)
     {
         PendingConnectCb(Network::NetworkError::CONNECTION_CLOSED);
         PendingConnectCb = nullptr;
     }
-    
+
     Socket.Disconnect();
 }
 
 // 统一接口实现
-void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, AsyncReceiveHandler Handler,
-                                 CancelToken Token, uint32_t TimeoutMs)
+void AsyncTcpSocket::AsyncReceive(char* Buffer,
+                                  size_t BufferSize,
+                                  AsyncReceiveHandler Handler,
+                                  CancelToken Token,
+                                  uint32_t TimeoutMs)
 {
     if (ClosedFlag)
     {
-        if (Handler) Handler(Network::NetworkError::CONNECTION_CLOSED, 0, Network::NetworkAddress{});
+        if (Handler)
+            Handler(Network::NetworkError::CONNECTION_CLOSED, 0, Network::NetworkAddress{});
         return;
     }
 
@@ -382,32 +404,44 @@ void AsyncTcpSocket::AsyncReceive(char* Buffer, size_t BufferSize, AsyncReceiveH
     }
 
     // 使用兼容性接口，然后转换回调
-    AsyncReceiveLegacy(Buffer, BufferSize, [this, Handler, Token](Network::NetworkError Error, size_t Bytes) {
-        // 检查是否被取消
-        if (Token && IsCancelled(Token))
+    AsyncReceiveLegacy(
+        Buffer,
+        BufferSize,
+        [this, Handler, Token](Network::NetworkError Error, size_t Bytes)
         {
-            if (Handler) Handler(Network::NetworkError::OPERATION_CANCELLED, 0, Network::NetworkAddress{});
-        }
-        else
-        {
-            if (Handler) Handler(Error, Bytes, Network::NetworkAddress{}); // TCP没有地址信息
-        }
-        
-        // 清理操作跟踪
-        if (Token)
-        {
-            std::lock_guard<std::mutex> Lock(OperationsMutex);
-            ActiveOperations.erase(Token);
-        }
-    });
+            // 检查是否被取消
+            if (Token && IsCancelled(Token))
+            {
+                if (Handler)
+                    Handler(
+                        Network::NetworkError::OPERATION_CANCELLED, 0, Network::NetworkAddress{});
+            }
+            else
+            {
+                if (Handler)
+                    Handler(Error, Bytes, Network::NetworkAddress{});  // TCP没有地址信息
+            }
+
+            // 清理操作跟踪
+            if (Token)
+            {
+                std::lock_guard<std::mutex> Lock(OperationsMutex);
+                ActiveOperations.erase(Token);
+            }
+        });
 }
 
-void AsyncTcpSocket::AsyncSend(const char* Data, size_t Size, const Network::NetworkAddress& Address,
-                              AsyncSendHandler Handler, CancelToken Token, uint32_t TimeoutMs)
+void AsyncTcpSocket::AsyncSend(const char* Data,
+                               size_t Size,
+                               const Network::NetworkAddress& Address,
+                               AsyncSendHandler Handler,
+                               CancelToken Token,
+                               uint32_t TimeoutMs)
 {
     if (ClosedFlag)
     {
-        if (Handler) Handler(Network::NetworkError::CONNECTION_CLOSED, 0);
+        if (Handler)
+            Handler(Network::NetworkError::CONNECTION_CLOSED, 0);
         return;
     }
 
@@ -419,32 +453,40 @@ void AsyncTcpSocket::AsyncSend(const char* Data, size_t Size, const Network::Net
     }
 
     // 使用兼容性接口，然后转换回调
-    AsyncSendLegacy(Data, Size, [this, Handler, Token](Network::NetworkError Error, size_t Bytes) {
-        // 检查是否被取消
-        if (Token && IsCancelled(Token))
-        {
-            if (Handler) Handler(Network::NetworkError::OPERATION_CANCELLED, 0);
-        }
-        else
-        {
-            if (Handler) Handler(Error, Bytes);
-        }
-        
-        // 清理操作跟踪
-        if (Token)
-        {
-            std::lock_guard<std::mutex> Lock(OperationsMutex);
-            ActiveOperations.erase(Token);
-        }
-    });
+    AsyncSendLegacy(Data,
+                    Size,
+                    [this, Handler, Token](Network::NetworkError Error, size_t Bytes)
+                    {
+                        // 检查是否被取消
+                        if (Token && IsCancelled(Token))
+                        {
+                            if (Handler)
+                                Handler(Network::NetworkError::OPERATION_CANCELLED, 0);
+                        }
+                        else
+                        {
+                            if (Handler)
+                                Handler(Error, Bytes);
+                        }
+
+                        // 清理操作跟踪
+                        if (Token)
+                        {
+                            std::lock_guard<std::mutex> Lock(OperationsMutex);
+                            ActiveOperations.erase(Token);
+                        }
+                    });
 }
 
-void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address, AsyncConnectHandler Handler,
-                                 CancelToken Token, uint32_t TimeoutMs)
+void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address,
+                                  AsyncConnectHandler Handler,
+                                  CancelToken Token,
+                                  uint32_t TimeoutMs)
 {
     if (ClosedFlag)
     {
-        if (Handler) Handler(Network::NetworkError::CONNECTION_CLOSED);
+        if (Handler)
+            Handler(Network::NetworkError::CONNECTION_CLOSED);
         return;
     }
 
@@ -456,24 +498,28 @@ void AsyncTcpSocket::AsyncConnect(const Network::NetworkAddress& Address, AsyncC
     }
 
     // 使用兼容性接口，然后转换回调
-    AsyncConnectLegacy(Address, [this, Handler, Token](Network::NetworkError Error) {
-        // 检查是否被取消
-        if (Token && IsCancelled(Token))
-        {
-            if (Handler) Handler(Network::NetworkError::OPERATION_CANCELLED);
-        }
-        else
-        {
-            if (Handler) Handler(Error);
-        }
-        
-        // 清理操作跟踪
-        if (Token)
-        {
-            std::lock_guard<std::mutex> Lock(OperationsMutex);
-            ActiveOperations.erase(Token);
-        }
-    });
+    AsyncConnectLegacy(Address,
+                       [this, Handler, Token](Network::NetworkError Error)
+                       {
+                           // 检查是否被取消
+                           if (Token && IsCancelled(Token))
+                           {
+                               if (Handler)
+                                   Handler(Network::NetworkError::OPERATION_CANCELLED);
+                           }
+                           else
+                           {
+                               if (Handler)
+                                   Handler(Error);
+                           }
+
+                           // 清理操作跟踪
+                           if (Token)
+                           {
+                               std::lock_guard<std::mutex> Lock(OperationsMutex);
+                               ActiveOperations.erase(Token);
+                           }
+                       });
 }
 
 void AsyncTcpSocket::CancelOperation(CancelToken Token)
