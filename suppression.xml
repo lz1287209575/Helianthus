@@ -29,8 +29,8 @@
     <!-- Precise suppression for underscore.js CVE-2021-23358 only -->
     <suppress>
         <notes>Limit to underscore.js CVE-2021-23358 reported by OWASP DC</notes>
-        <!-- npm/purl naming used by Dependency-Check for JS packages -->
-        <packageUrl regex="true">^pkg:(npm|javascript)/underscore(@|:).*?</packageUrl>
+        <!-- Match purl used by Dependency-Check for JS packages (observed: pkg:javascript/underscore...) -->
+        <packageUrl regex="true">^pkg:javascript/underscore.*$</packageUrl>
         <cve>CVE-2021-23358</cve>
     </suppress>
 </suppressions>
