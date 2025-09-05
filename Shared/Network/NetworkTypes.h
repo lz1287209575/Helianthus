@@ -109,7 +109,9 @@ struct NetworkConfig
     bool ReuseAddr = false;  // 允许地址复用
     bool KeepAlive = false;  // 启用 TCP 保活机制
     uint32_t ConnectionTimeoutMs = HELIANTHUS_NETWORK_TIMEOUT_MS;
-    uint32_t KeepAliveIntervalMs = 30000;
+    uint32_t KeepAliveIntervalMs = 30000;  // 两次保活探测间隔（毫秒）
+    uint32_t KeepAliveIdleSec = 60;        // 空闲多久开始保活（秒）
+    uint32_t KeepAliveProbes = 5;          // 失败多少次判定断开
     uint32_t ThreadPoolSize = HELIANTHUS_DEFAULT_THREAD_POOL_SIZE;
     bool EnableNagle = false;
     bool EnableKeepalive = true;

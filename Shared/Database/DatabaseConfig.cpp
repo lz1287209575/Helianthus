@@ -100,6 +100,17 @@ Common::ResultCode DatabaseConfigManager::SaveToFile(const std::string& FilePath
 
 std::string DatabaseConfigManager::SaveToJson() const
 {
+    // 若尚未设置任何配置，生成一份默认配置再序列化，确保包含 mysql 等节
+    if (Config.empty())
+    {
+        // 需要移除 const
+        auto* self = const_cast<DatabaseConfigManager*>(this);
+        self->SetDefaultMySqlConfig();
+        self->SetDefaultMongoDbConfig();
+        self->SetDefaultRedisConfig();
+        self->SetDefaultPoolConfig();
+    }
+
     // TODO: Implement JSON serialization
     // For now, return a simple representation
     std::stringstream Json;
@@ -324,7 +335,8 @@ MySqlConfig DatabaseConfigManager::ParseMySqlConfig(const ConfigSection& Section
 {
     MySqlConfig Config;
     Config.Host = GetConfigValue(Section, "host", Config.Host);
-    Config.Port = GetConfigValue(Section, "port", Config.Port);
+    Config.Port = static_cast<uint16_t>(
+        GetConfigValue<uint32_t>(Section, "port", static_cast<uint32_t>(Config.Port)));
     Config.Database = GetConfigValue(Section, "database", Config.Database);
     Config.Username = GetConfigValue(Section, "username", Config.Username);
     Config.Password = GetConfigValue(Section, "password", Config.Password);
@@ -343,7 +355,8 @@ MongoDbConfig DatabaseConfigManager::ParseMongoDbConfig(const ConfigSection& Sec
 {
     MongoDbConfig Config;
     Config.Host = GetConfigValue(Section, "host", Config.Host);
-    Config.Port = GetConfigValue(Section, "port", Config.Port);
+    Config.Port = static_cast<uint16_t>(
+        GetConfigValue<uint32_t>(Section, "port", static_cast<uint32_t>(Config.Port)));
     Config.Database = GetConfigValue(Section, "database", Config.Database);
     Config.Username = GetConfigValue(Section, "username", Config.Username);
     Config.Password = GetConfigValue(Section, "password", Config.Password);
@@ -360,7 +373,8 @@ RedisConfig DatabaseConfigManager::ParseRedisConfig(const ConfigSection& Section
 {
     RedisConfig Config;
     Config.Host = GetConfigValue(Section, "host", Config.Host);
-    Config.Port = GetConfigValue(Section, "port", Config.Port);
+    Config.Port = static_cast<uint16_t>(
+        GetConfigValue<uint32_t>(Section, "port", static_cast<uint32_t>(Config.Port)));
     Config.Password = GetConfigValue(Section, "password", Config.Password);
     Config.Database = GetConfigValue(Section, "database", Config.Database);
     Config.ConnectionTimeout =
@@ -412,6 +426,7 @@ T DatabaseConfigManager::GetConfigValue(const ConfigSection& Section,
         return DefaultValue;
     }
 }
+
 
 void DatabaseConfigManager::SetDefaultMySqlConfig()
 {

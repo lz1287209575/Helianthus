@@ -41,6 +41,10 @@ struct PersistenceConfig
     bool EnableCompression = false;
     bool EnableEncryption = false;
     std::string EncryptionKey;
+
+    // Flush 策略（可调节，提升吞吐）
+    uint32_t FlushEveryN = 64;        // 累积写入 N 次后触发 flush
+    uint32_t FlushIntervalMs = 50;    // 或者经过此毫秒数后触发 flush
 };
 
 /**
@@ -208,6 +212,13 @@ private:
     mutable std::shared_mutex IndexMutex;
     mutable std::shared_mutex QueueDataMutex;
     std::mutex FileMutex;
+
+    // 写入缓冲与批量flush策略
+    std::atomic<uint64_t> PendingWriteCount{0};
+    std::atomic<uint64_t> PendingWriteBytes{0};
+    uint32_t FlushEveryN = 64;           // 每 N 次写入触发一次 flush
+    uint32_t FlushIntervalMs = 50;       // 或者间隔达到此毫秒数触发 flush
+    std::chrono::steady_clock::time_point LastFlushTime;
 
     // 持久化耗时统计
     struct PersistenceMetrics

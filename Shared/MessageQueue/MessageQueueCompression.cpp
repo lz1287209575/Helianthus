@@ -474,11 +474,11 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message,
             EVP_CIPHER_CTX_free(Ctx);
             return QueueResult::INTERNAL_ERROR;
         }
-        std::vector<unsigned char> Out;
+        std::vector<char> Out;
         Out.resize(Message->Payload.Data.size() + EVP_CIPHER_block_size(EVP_aes_128_cbc()));
         int OutLen1 = 0, OutLen2 = 0;
         Ok = EVP_EncryptUpdate(Ctx,
-                               Out.data(),
+                               reinterpret_cast<unsigned char*>(Out.data()),
                                &OutLen1,
                                reinterpret_cast<const unsigned char*>(Message->Payload.Data.data()),
                                static_cast<int>(Message->Payload.Data.size()));
@@ -487,12 +487,14 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message,
             EVP_CIPHER_CTX_free(Ctx);
             return QueueResult::INTERNAL_ERROR;
         }
-        Ok = EVP_EncryptFinal_ex(Ctx, Out.data() + OutLen1, &OutLen2);
+        Ok = EVP_EncryptFinal_ex(Ctx,
+                                 reinterpret_cast<unsigned char*>(Out.data()) + OutLen1,
+                                 &OutLen2);
         EVP_CIPHER_CTX_free(Ctx);
         if (Ok != 1)
             return QueueResult::INTERNAL_ERROR;
         Out.resize(static_cast<size_t>(OutLen1 + OutLen2));
-        Message->Payload.Data.assign(Out.begin(), Out.end());
+        Message->Payload.Data.swap(Out);
         Message->Header.Properties["Encrypted"] = "1";
         Message->Header.Properties["EncryptionAlgorithm"] = "aes-128-cbc";
         return QueueResult::SUCCESS;
@@ -549,11 +551,11 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message,
             return QueueResult::INTERNAL_ERROR;
         }
 
-        std::vector<unsigned char> Cipher;
+        std::vector<char> Cipher;
         Cipher.resize(Message->Payload.Data.size());
         int OutLen = 0, Tmp = 0;
         Ok = EVP_EncryptUpdate(Ctx,
-                               Cipher.data(),
+                               reinterpret_cast<unsigned char*>(Cipher.data()),
                                &OutLen,
                                reinterpret_cast<const unsigned char*>(Message->Payload.Data.data()),
                                static_cast<int>(Message->Payload.Data.size()));
@@ -562,7 +564,9 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message,
             EVP_CIPHER_CTX_free(Ctx);
             return QueueResult::INTERNAL_ERROR;
         }
-        Ok = EVP_EncryptFinal_ex(Ctx, Cipher.data() + OutLen, &Tmp);
+        Ok = EVP_EncryptFinal_ex(Ctx,
+                                 reinterpret_cast<unsigned char*>(Cipher.data()) + OutLen,
+                                 &Tmp);
         if (Ok != 1)
         {
             EVP_CIPHER_CTX_free(Ctx);
@@ -577,13 +581,15 @@ QueueResult MessageQueue::EncryptMessage(MessagePtr Message,
             return QueueResult::INTERNAL_ERROR;
 
         Cipher.resize(static_cast<size_t>(OutLen));
-        std::vector<unsigned char> Packed;
+        std::vector<char> Packed;
         Packed.reserve(12 + Cipher.size() + 16);
-        Packed.insert(Packed.end(), Nonce, Nonce + 12);
+        Packed.insert(Packed.end(), reinterpret_cast<const char*>(Nonce),
+                      reinterpret_cast<const char*>(Nonce) + 12);
         Packed.insert(Packed.end(), Cipher.begin(), Cipher.end());
-        Packed.insert(Packed.end(), Tag, Tag + 16);
+        Packed.insert(Packed.end(), reinterpret_cast<const char*>(Tag),
+                      reinterpret_cast<const char*>(Tag) + 16);
 
-        Message->Payload.Data.assign(Packed.begin(), Packed.end());
+        Message->Payload.Data.swap(Packed);
         Message->Payload.Size = Message->Payload.Data.size();
         Message->Header.Properties["Encrypted"] = "1";
         Message->Header.Properties["EncryptionAlgorithm"] = "aes-256-gcm";
@@ -645,11 +651,11 @@ QueueResult MessageQueue::DecryptMessage(MessagePtr Message)
             EVP_CIPHER_CTX_free(Ctx);
             return QueueResult::INTERNAL_ERROR;
         }
-        std::vector<unsigned char> Out;
+        std::vector<char> Out;
         Out.resize(Message->Payload.Data.size());
         int OutLen1 = 0, OutLen2 = 0;
         Ok = EVP_DecryptUpdate(Ctx,
-                               Out.data(),
+                               reinterpret_cast<unsigned char*>(Out.data()),
                                &OutLen1,
                                reinterpret_cast<const unsigned char*>(Message->Payload.Data.data()),
                                static_cast<int>(Message->Payload.Data.size()));
@@ -658,12 +664,14 @@ QueueResult MessageQueue::DecryptMessage(MessagePtr Message)
             EVP_CIPHER_CTX_free(Ctx);
             return QueueResult::INTERNAL_ERROR;
         }
-        Ok = EVP_DecryptFinal_ex(Ctx, Out.data() + OutLen1, &OutLen2);
+        Ok = EVP_DecryptFinal_ex(Ctx,
+                                 reinterpret_cast<unsigned char*>(Out.data()) + OutLen1,
+                                 &OutLen2);
         EVP_CIPHER_CTX_free(Ctx);
         if (Ok != 1)
             return QueueResult::INTERNAL_ERROR;
         Out.resize(static_cast<size_t>(OutLen1 + OutLen2));
-        Message->Payload.Data.assign(Out.begin(), Out.end());
+        Message->Payload.Data.swap(Out);
         Message->Header.Properties.erase("Encrypted");
         Message->Header.Properties.erase("EncryptionAlgorithm");
         return QueueResult::SUCCESS;
@@ -706,10 +714,14 @@ QueueResult MessageQueue::DecryptMessage(MessagePtr Message)
             return QueueResult::INTERNAL_ERROR;
         }
 
-        std::vector<unsigned char> Plain;
+        std::vector<char> Plain;
         Plain.resize(CipherLen);
         int OutLen = 0;
-        Ok = EVP_DecryptUpdate(Ctx, Plain.data(), &OutLen, Cipher, static_cast<int>(CipherLen));
+        Ok = EVP_DecryptUpdate(Ctx,
+                               reinterpret_cast<unsigned char*>(Plain.data()),
+                               &OutLen,
+                               Cipher,
+                               static_cast<int>(CipherLen));
         if (Ok != 1)
         {
             EVP_CIPHER_CTX_free(Ctx);
@@ -721,12 +733,13 @@ QueueResult MessageQueue::DecryptMessage(MessagePtr Message)
             EVP_CIPHER_CTX_free(Ctx);
             return QueueResult::INTERNAL_ERROR;
         }
-        int FinalOk = EVP_DecryptFinal_ex(Ctx, Plain.data() + OutLen, &OutLen);
+        int FinalOk = EVP_DecryptFinal_ex(Ctx,
+                                          reinterpret_cast<unsigned char*>(Plain.data()) + OutLen,
+                                          &OutLen);
         EVP_CIPHER_CTX_free(Ctx);
         if (FinalOk != 1)
             return QueueResult::INTERNAL_ERROR;
-
-        Message->Payload.Data.assign(Plain.begin(), Plain.end());
+        Message->Payload.Data.swap(Plain);
         Message->Payload.Size = Message->Payload.Data.size();
         Message->Header.Properties.erase("Encrypted");
         Message->Header.Properties.erase("EncryptionAlgorithm");

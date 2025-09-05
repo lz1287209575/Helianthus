@@ -132,7 +132,7 @@ QueueResult MessageQueue::CommitBatch(uint32_t BatchId)
             return QueueResult::INVALID_PARAMETER;
         }
         Messages = std::move(It->second.Messages);
-        QueueName = It->second.QueueName;
+        QueueName = std::move(It->second.QueueName);
         ActiveBatches.erase(It);
     }
 
@@ -208,20 +208,33 @@ void MessageQueue::ProcessBatchTimeout()
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
 
-    std::lock_guard<std::mutex> BatchesLock(BatchesMutex);
+    // 1) 在锁内仅做扫描，尽量缩短持锁时间
     std::vector<uint32_t> ExpiredIds;
-    for (const auto& Kv : ActiveBatches)
     {
-        const auto& Batch = Kv.second;
-        if (Batch.ExpireTime > 0 && Batch.ExpireTime <= Now)
+        std::lock_guard<std::mutex> BatchesLock(BatchesMutex);
+        ExpiredIds.reserve(ActiveBatches.size());
+        for (const auto& Kv : ActiveBatches)
         {
-            ExpiredIds.push_back(Kv.first);
+            const auto& Batch = Kv.second;
+            if (Batch.ExpireTime > 0 && Batch.ExpireTime <= Now)
+            {
+                ExpiredIds.push_back(Kv.first);
+            }
         }
     }
-    for (auto Id : ExpiredIds)
+
+    // 2) 在锁外进行日志与准备工作，然后再加锁批量删除
+    if (!ExpiredIds.empty())
     {
-        H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "批处理超时: id={}", Id);
-        ActiveBatches.erase(Id);
+        for (auto Id : ExpiredIds)
+        {
+            H_LOG(MQ, Helianthus::Common::LogVerbosity::Warning, "批处理超时: id={}", Id);
+        }
+        std::lock_guard<std::mutex> BatchesLock(BatchesMutex);
+        for (auto Id : ExpiredIds)
+        {
+            ActiveBatches.erase(Id);
+        }
     }
 }
 

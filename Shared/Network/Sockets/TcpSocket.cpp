@@ -648,6 +648,23 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
         {
             // 处理错误
         }
+        // TCP keepalive 参数（平台可用时）
+#ifdef TCP_KEEPIDLE
+        int idle = static_cast<int>(Config.KeepAliveIdleSec);
+        setsockopt(SockImpl->Fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+#endif
+#ifdef TCP_KEEPINTVL
+        int intvl = static_cast<int>(Config.KeepAliveIntervalMs / 1000);
+        if (intvl <= 0)
+            intvl = 1;
+        setsockopt(SockImpl->Fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+#endif
+#ifdef TCP_KEEPCNT
+        int cnt = static_cast<int>(Config.KeepAliveProbes);
+        if (cnt <= 0)
+            cnt = 3;
+        setsockopt(SockImpl->Fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
+#endif
 #endif
     }
 }

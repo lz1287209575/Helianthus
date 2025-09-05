@@ -1,7 +1,0 @@
-filegroup(
-    name = "scripts",
-    srcs = glob(["*.lua"]),
-    visibility = ["//visibility:public"],
-)
-
-exports_files(["hello.lua"])

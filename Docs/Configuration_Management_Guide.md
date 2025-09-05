@@ -75,6 +75,19 @@ int main()
 
 ## 配置源
 
+## 持久化相关配置与调优
+
+### 刷盘策略（I/O 性能）
+- `PersistenceConfig.FlushEveryN`（默认 `64`）
+  - 累积写入次数达到 N 时触发一次 flush，降低每条消息的 flush 频率以提升吞吐。
+- `PersistenceConfig.FlushIntervalMs`（默认 `50`）
+  - 自上次 flush 以来的毫秒数超过该值则触发 flush，作为时间上限保证数据落盘的及时性。
+
+调优建议：
+- 高吞吐压测：增大 `FlushEveryN` 或 `FlushIntervalMs`（如 `FlushEveryN=256`, `FlushIntervalMs=200`）。
+- 低延迟场景：减小两个值以提升持久化及时性（如 `FlushEveryN=16`, `FlushIntervalMs=20`）。
+- 结合介质与负载特征（SSD/HDD）观察 `PersistenceStats` 写耗时分布进行调整。
+
 ### 1. 配置文件
 
 支持 INI 格式的配置文件：

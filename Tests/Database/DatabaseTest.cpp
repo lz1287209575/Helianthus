@@ -1,6 +1,10 @@
 #include "../../Shared/Database/DatabaseConfig.h"
 #include "../../Shared/Database/DatabaseTypes.h"
+#ifndef HELIANTHUS_DISABLE_MYSQL
 #include "../../Shared/Database/MySQL/MySqlConnection.h"
+#else
+#include <gtest/gtest.h>
+#endif
 #include <gtest/gtest.h>
 // #include "../../Shared/Database/Redis/RedisConnection.h"  // Temporarily disabled due to hiredis
 // compilation issues
@@ -118,10 +122,14 @@ TEST_F(DatabaseConfigTest, LoadFromEnvironment)
     EXPECT_EQ(Result, ResultCode::SUCCESS);
 
     // Test default MySQL configuration
+#ifdef HELIANTHUS_DISABLE_MYSQL
+    GTEST_SKIP() << "MySQL headers not available; skipping MySQL config assertions";
+#else
     MySqlConfig MySqlCfg = ConfigManager->GetMySqlConfig();
     EXPECT_EQ(MySqlCfg.Host, "localhost");
     EXPECT_EQ(MySqlCfg.Port, 3306);
     EXPECT_EQ(MySqlCfg.Database, "helianthus");
+#endif
 }
 
 TEST_F(DatabaseConfigTest, ConfigurationValidation)

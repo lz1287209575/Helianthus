@@ -18,6 +18,9 @@ on:
           - quick
           - test-only
 
+  schedule:
+    - cron: '0 2 * * *'
+
 env:
   BAZEL_VERSION: 8.4.0
 
@@ -53,7 +56,7 @@ jobs:
     - name: Setup Bazel
       uses: bazelbuild/setup-bazelisk@v3
       with:
-        version: ${{ env.BAZEL_VERSION }}
+        bazelisk-version: ${{ env.BAZEL_VERSION }}
 
     - name: Setup C++ toolchain (Linux)
       if: matrix.os != 'windows-latest'
@@ -183,7 +186,7 @@ jobs:
     - name: Setup Bazel
       uses: bazelbuild/setup-bazelisk@v3
       with:
-        version: ${{ env.BAZEL_VERSION }}
+        bazelisk-version: ${{ env.BAZEL_VERSION }}
 
     - name: Install analysis tools
       run: |
@@ -245,7 +248,7 @@ jobs:
     - name: Setup Bazel
       uses: bazelbuild/setup-bazelisk@v3
       with:
-        version: ${{ env.BAZEL_VERSION }}
+        bazelisk-version: ${{ env.BAZEL_VERSION }}
 
     - name: Install performance tools
       run: |
@@ -322,7 +325,7 @@ jobs:
     - name: Setup Bazel
       uses: bazelbuild/setup-bazelisk@v3
       with:
-        version: ${{ env.BAZEL_VERSION }}
+        bazelisk-version: ${{ env.BAZEL_VERSION }}
 
     - name: Install Podman & Skopeo
       run: |
@@ -403,7 +406,7 @@ jobs:
     - name: Setup Bazel
       uses: bazelbuild/setup-bazelisk@v3
       with:
-        version: ${{ env.BAZEL_VERSION }}
+        bazelisk-version: ${{ env.BAZEL_VERSION }}
 
     - name: Build release artifacts
       run: |
@@ -486,3 +489,75 @@ jobs:
         echo "Code Quality: ${{ needs.code-quality.result }}"
         echo "Security Scan: ${{ needs.security-scan.result }}"
         exit 1
+
+  # Nightly 容器构建与推送（定时）
+  container-nightly:
+    name: Container Nightly (Podman/Skopeo)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'schedule'
+
+    env:
+      IMAGE_TAG: nightly
+      IMAGE_NAME: helianthus
+      REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+      REGISTRY_USER: ${{ secrets.CONTAINER_REGISTRY_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Bazel
+      uses: bazelbuild/setup-bazelisk@v3
+      with:
+        bazelisk-version: ${{ env.BAZEL_VERSION }}
+
+    - name: Install Podman & Skopeo
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman skopeo
+
+    - name: Generate DATE_TAG (UTC)
+      run: |
+        echo "DATE_TAG=$(date -u +%Y%m%d-%H%M%S)" >> $GITHUB_ENV
+
+    - name: Build rootfs tar
+      run: |
+        bazel clean --expunge || true
+        bazel build //Containers:helianthus_rootfs_tar --verbose_failures
+
+    - name: Podman login (optional)
+      if: env.REGISTRY != ''
+      run: |
+        echo "$REGISTRY_PASSWORD" | podman login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
+
+    - name: Build image with Podman (nightly tag)
+      run: |
+        HELIANTHUS_TAG=${IMAGE_NAME}:${IMAGE_TAG} \
+        ROOTFS_TAR=bazel-bin/Containers/helianthus-rootfs.tar \
+        ./Containers/podman_import.sh
+
+    - name: Push nightly tag
+      if: env.REGISTRY != ''
+      env:
+        SRC: containers-storage:${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        DST: docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+      run: |
+        ./Containers/skopeo_copy.sh
+
+    - name: Push DATE_TAG
+      if: env.REGISTRY != ''
+      env:
+        SRC: containers-storage:${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        DST: docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DATE_TAG }}
+      run: |
+        ./Containers/skopeo_copy.sh
+
+    - name: Upload rootfs tar artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: helianthus-rootfs-tar-nightly
+        path: bazel-bin/Containers/helianthus-rootfs.tar

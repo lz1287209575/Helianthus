@@ -24,3 +24,6 @@ skopeo copy "${SRC}" "${DST}"
 echo "完成。"
 
 
+
+
+

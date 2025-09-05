@@ -139,6 +139,24 @@ int main()
               << ConfigManager->GetInt("monitoring.health_check_interval_ms", 30000) << "ms"
               << std::endl;
 
+    // 持久化配置（示例：刷盘策略）
+    std::cout << "\n持久化配置:" << std::endl;
+    std::cout << "  类型: " << ConfigManager->GetString("persistence.type", "file_based")
+              << std::endl;
+    std::cout << "  数据目录: "
+              << ConfigManager->GetString("persistence.data_directory", "./message_queue_data")
+              << std::endl;
+    std::cout << "  消息文件: "
+              << ConfigManager->GetString("persistence.message_data_file", "messages.bin")
+              << std::endl;
+    std::cout << "  索引文件: "
+              << ConfigManager->GetString("persistence.index_file", "index.bin") << std::endl;
+    std::cout << "  FlushEveryN: " << ConfigManager->GetInt("persistence.flush_every_n", 64)
+              << std::endl;
+    std::cout << "  FlushIntervalMs: "
+              << ConfigManager->GetInt("persistence.flush_interval_ms", 50) << "ms"
+              << std::endl;
+
     // 6. 演示配置修改
     std::cout << "\n6. 配置修改演示..." << std::endl;
 

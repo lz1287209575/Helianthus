@@ -139,6 +139,11 @@ Containers/                     # Dockerfiles and deployment manifests
 5. **Containerize**: `docker build -f Containers/Dockerfile -t helianthus:latest .`
 6. **Verify**: Check `message_queue_data/`, Prometheus endpoints, container health
 
+### Persistence flush tuning (I/O 性能调优)
+- `PersistenceConfig.FlushEveryN`（默认 `64`）: 累积写入 N 次后触发一次 flush。
+- `PersistenceConfig.FlushIntervalMs`（默认 `50`）: 距上次 flush 超过该毫秒数则触发 flush。
+- 建议：在高吞吐压测环境适度增大 `FlushEveryN` 或 `FlushIntervalMs` 以降低系统调用频次；对低延迟场景可减小以提升数据落盘及时性。
+
 ### Git Submodules
 ```bash
 # Initialize/update submodules

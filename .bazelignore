@@ -1,9 +1,0 @@
-# 仅忽略非构建目录，避免影响 new_local_repository 等依赖获取
-# 注意：不要忽略 ThirdParty，否则 MODULE.bazel 中的本地仓库会失败
-
-# 文档与杂项（不含 Bazel 目标）
-Docs
-wiki
-
-# 外部缓存目录（若存在）
-external

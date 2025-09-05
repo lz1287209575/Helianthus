@@ -5,6 +5,14 @@
         "max_connections": 500,
         "enable_ssl": true
     },
+    "persistence": {
+        "type": "file_based",
+        "data_directory": "./message_queue_data",
+        "message_data_file": "messages.bin",
+        "index_file": "index.bin",
+        "flush_every_n": 64,
+        "flush_interval_ms": 50
+    },
     "database": {
         "type": "postgresql",
         "host": "db.example.com",

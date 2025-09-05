@@ -688,8 +688,35 @@ QueueResult FileBasedPersistence::WriteMessageToFile(MessagePtr Message, size_t&
         MessageDataFile.write(reinterpret_cast<const char*>(SerializedData.data()),
                               SerializedData.size());
 
-        // 刷新文件
-        MessageDataFile.flush();
+        // 批量flush策略：计数或时间间隔触发而非每条立即flush
+        PendingWriteCount.fetch_add(1, std::memory_order_relaxed);
+        PendingWriteBytes.fetch_add(static_cast<uint64_t>(sizeof(MessageSize) + SerializedData.size()),
+                                    std::memory_order_relaxed);
+        bool ShouldFlush = false;
+        auto Now = std::chrono::steady_clock::now();
+        {
+            // 轻量判定，无需加锁（LastFlushTime 仅在此线程域内被使用/初始化后读写）
+            if (LastFlushTime.time_since_epoch().count() == 0)
+            {
+                LastFlushTime = Now;
+            }
+            const auto Elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(Now - LastFlushTime)
+                                     .count();
+            const uint32_t LocalFlushEveryN = Config.FlushEveryN;
+            const uint32_t LocalFlushInterval = Config.FlushIntervalMs;
+            if (PendingWriteCount.load(std::memory_order_relaxed) >= LocalFlushEveryN ||
+                static_cast<uint32_t>(Elapsed) >= LocalFlushInterval)
+            {
+                ShouldFlush = true;
+                LastFlushTime = Now;
+            }
+        }
+        if (ShouldFlush)
+        {
+            MessageDataFile.flush();
+            PendingWriteCount.store(0, std::memory_order_relaxed);
+            PendingWriteBytes.store(0, std::memory_order_relaxed);
+        }
 
         // 记录耗时统计
         auto EndTime = std::chrono::high_resolution_clock::now();
@@ -794,55 +821,68 @@ QueueResult FileBasedPersistence::SerializeMessage(MessagePtr Message,
 {
     try
     {
-        // 简单的序列化实现
-        // 在实际应用中，应该使用更高效的序列化库如 Protocol Buffers
+        auto AppendBytes = [&OutData](const void* Ptr, size_t Size) {
+            const uint8_t* BytePtr = static_cast<const uint8_t*>(Ptr);
+            OutData.insert(OutData.end(), BytePtr, BytePtr + Size);
+        };
 
-        std::stringstream Stream;
+        auto AppendPod = [&AppendBytes](const auto& Value) {
+            AppendBytes(&Value, sizeof(Value));
+        };
+
+        auto AppendString = [&AppendBytes, &AppendPod](const std::string& S) {
+            uint32_t Size = static_cast<uint32_t>(S.size());
+            AppendPod(Size);
+            if (Size > 0)
+            {
+                AppendBytes(S.data(), Size);
+            }
+        };
+
+        // 容量预估，减少多次扩容
+        size_t Estimated = sizeof(Message->Header.Id) + sizeof(Message->Header.Type) +
+                           sizeof(Message->Header.Priority) + sizeof(Message->Header.Delivery) +
+                           sizeof(Message->Header.Timestamp) + sizeof(Message->Header.ExpireTime) +
+                           sizeof(Message->Header.RetryCount) + sizeof(Message->Header.MaxRetries);
+        Estimated += sizeof(uint32_t);  // PropertiesCount
+        for (const auto& KV : Message->Header.Properties)
+        {
+            Estimated += sizeof(uint32_t) + KV.first.size();   // Key
+            Estimated += sizeof(uint32_t) + KV.second.size();  // Value
+        }
+        Estimated += sizeof(Message->Status);
+        {
+            std::string PayloadStr = Message->Payload.AsString();
+            Estimated += sizeof(uint32_t) + PayloadStr.size();
+        }
+        OutData.clear();
+        OutData.reserve(Estimated);
 
         // 序列化消息头
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.Id),
-                     sizeof(Message->Header.Id));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.Type),
-                     sizeof(Message->Header.Type));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.Priority),
-                     sizeof(Message->Header.Priority));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.Delivery),
-                     sizeof(Message->Header.Delivery));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.Timestamp),
-                     sizeof(Message->Header.Timestamp));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.ExpireTime),
-                     sizeof(Message->Header.ExpireTime));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.RetryCount),
-                     sizeof(Message->Header.RetryCount));
-        Stream.write(reinterpret_cast<const char*>(&Message->Header.MaxRetries),
-                     sizeof(Message->Header.MaxRetries));
+        AppendPod(Message->Header.Id);
+        AppendPod(Message->Header.Type);
+        AppendPod(Message->Header.Priority);
+        AppendPod(Message->Header.Delivery);
+        AppendPod(Message->Header.Timestamp);
+        AppendPod(Message->Header.ExpireTime);
+        AppendPod(Message->Header.RetryCount);
+        AppendPod(Message->Header.MaxRetries);
 
         // 序列化消息属性
         uint32_t PropertiesCount = static_cast<uint32_t>(Message->Header.Properties.size());
-        Stream.write(reinterpret_cast<const char*>(&PropertiesCount), sizeof(PropertiesCount));
-        for (const auto& [Key, Value] : Message->Header.Properties)
+        AppendPod(PropertiesCount);
+        for (const auto& KV : Message->Header.Properties)
         {
-            uint32_t KeySize = static_cast<uint32_t>(Key.size());
-            Stream.write(reinterpret_cast<const char*>(&KeySize), sizeof(KeySize));
-            Stream.write(Key.c_str(), KeySize);
-
-            uint32_t ValueSize = static_cast<uint32_t>(Value.size());
-            Stream.write(reinterpret_cast<const char*>(&ValueSize), sizeof(ValueSize));
-            Stream.write(Value.c_str(), ValueSize);
+            AppendString(KV.first);
+            AppendString(KV.second);
         }
 
         // 序列化消息状态
-        Stream.write(reinterpret_cast<const char*>(&Message->Status), sizeof(Message->Status));
+        AppendPod(Message->Status);
 
         // 序列化消息负载
         std::string PayloadStr = Message->Payload.AsString();
-        uint32_t PayloadSize = static_cast<uint32_t>(PayloadStr.size());
-        Stream.write(reinterpret_cast<const char*>(&PayloadSize), sizeof(PayloadSize));
-        Stream.write(PayloadStr.c_str(), PayloadSize);
-
-        // 获取序列化数据
-        std::string SerializedStr = Stream.str();
-        OutData.assign(SerializedStr.begin(), SerializedStr.end());
+        AppendString(PayloadStr);
 
         return QueueResult::SUCCESS;
     }
@@ -861,56 +901,93 @@ QueueResult FileBasedPersistence::DeserializeMessage(const std::vector<uint8_t>&
 {
     try
     {
-        // 简单的反序列化实现
-        std::string SerializedStr(Data.begin(), Data.end());
-        std::stringstream Stream(SerializedStr);
+        auto CheckRemain = [&Data](size_t Offset, size_t Need) -> bool {
+            return Offset + Need <= Data.size();
+        };
+
+        size_t Offset = 0;
+
+        auto ReadBytes = [&Data, &Offset, &CheckRemain](void* Dst, size_t Size) -> bool {
+            if (!CheckRemain(Offset, Size))
+            {
+                return false;
+            }
+            std::memcpy(Dst, Data.data() + Offset, Size);
+            Offset += Size;
+            return true;
+        };
+
+        auto ReadPod = [&ReadBytes](auto& Value) -> bool { return ReadBytes(&Value, sizeof(Value)); };
+
+        auto ReadString = [&ReadBytes, &ReadPod](std::string& S) -> bool {
+            uint32_t Size = 0;
+            if (!ReadPod(Size))
+            {
+                return false;
+            }
+            S.resize(Size);
+            if (Size == 0)
+            {
+                return true;
+            }
+            return ReadBytes(&S[0], Size);
+        };
 
         OutMessage = std::make_shared<Message>();
 
         // 反序列化消息头
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.Id), sizeof(OutMessage->Header.Id));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.Type),
-                    sizeof(OutMessage->Header.Type));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.Priority),
-                    sizeof(OutMessage->Header.Priority));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.Delivery),
-                    sizeof(OutMessage->Header.Delivery));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.Timestamp),
-                    sizeof(OutMessage->Header.Timestamp));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.ExpireTime),
-                    sizeof(OutMessage->Header.ExpireTime));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.RetryCount),
-                    sizeof(OutMessage->Header.RetryCount));
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Header.MaxRetries),
-                    sizeof(OutMessage->Header.MaxRetries));
+        if (!ReadPod(OutMessage->Header.Id) || !ReadPod(OutMessage->Header.Type) ||
+            !ReadPod(OutMessage->Header.Priority) || !ReadPod(OutMessage->Header.Delivery) ||
+            !ReadPod(OutMessage->Header.Timestamp) || !ReadPod(OutMessage->Header.ExpireTime) ||
+            !ReadPod(OutMessage->Header.RetryCount) || !ReadPod(OutMessage->Header.MaxRetries))
+        {
+            H_LOG(MQPersistence,
+                  Helianthus::Common::LogVerbosity::Error,
+                  "反序列化失败：头部字段长度不足");
+            return QueueResult::INVALID_PARAMETER;
+        }
 
         // 反序列化消息属性
-        uint32_t PropertiesCount;
-        Stream.read(reinterpret_cast<char*>(&PropertiesCount), sizeof(PropertiesCount));
+        uint32_t PropertiesCount = 0;
+        if (!ReadPod(PropertiesCount))
+        {
+            H_LOG(MQPersistence,
+                  Helianthus::Common::LogVerbosity::Error,
+                  "反序列化失败：属性计数长度不足");
+            return QueueResult::INVALID_PARAMETER;
+        }
         for (uint32_t i = 0; i < PropertiesCount; ++i)
         {
-            uint32_t KeySize;
-            Stream.read(reinterpret_cast<char*>(&KeySize), sizeof(KeySize));
-            std::string Key(KeySize, '\0');
-            Stream.read(&Key[0], KeySize);
-
-            uint32_t ValueSize;
-            Stream.read(reinterpret_cast<char*>(&ValueSize), sizeof(ValueSize));
-            std::string Value(ValueSize, '\0');
-            Stream.read(&Value[0], ValueSize);
-
-            OutMessage->Header.Properties[Key] = Value;
+            std::string Key;
+            std::string Value;
+            if (!ReadString(Key) || !ReadString(Value))
+            {
+                H_LOG(MQPersistence,
+                      Helianthus::Common::LogVerbosity::Error,
+                      "反序列化失败：属性键值长度不足或损坏");
+                return QueueResult::INVALID_PARAMETER;
+            }
+            OutMessage->Header.Properties.emplace(std::move(Key), std::move(Value));
         }
 
         // 反序列化消息状态
-        Stream.read(reinterpret_cast<char*>(&OutMessage->Status), sizeof(OutMessage->Status));
+        if (!ReadPod(OutMessage->Status))
+        {
+            H_LOG(MQPersistence,
+                  Helianthus::Common::LogVerbosity::Error,
+                  "反序列化失败：消息状态长度不足");
+            return QueueResult::INVALID_PARAMETER;
+        }
 
         // 反序列化消息负载
-        uint32_t PayloadSize;
-        Stream.read(reinterpret_cast<char*>(&PayloadSize), sizeof(PayloadSize));
-
-        std::string PayloadStr(PayloadSize, '\0');
-        Stream.read(&PayloadStr[0], PayloadSize);
+        std::string PayloadStr;
+        if (!ReadString(PayloadStr))
+        {
+            H_LOG(MQPersistence,
+                  Helianthus::Common::LogVerbosity::Error,
+                  "反序列化失败：负载长度不足");
+            return QueueResult::INVALID_PARAMETER;
+        }
         OutMessage->Payload.SetString(PayloadStr);
 
         return QueueResult::SUCCESS;

@@ -1,8 +1,9 @@
 # Helianthus 游戏服务器
 
-[![Helianthus CI/CD Pipeline](https://github.com/lz1287209575/Helianthus/actions/workflows/ci.yml/badge.svg)](https://github.com/lz1287209575/Helianthus/actions/workflows/ci.yml)
-[![C++](https://img.shields.io/badge/C%2B%2B-17%2F20-blue)](https://isocpp.org/)
-[![Bazel](https://img.shields.io/badge/build-Bazel-green)](https://bazel.build/)
+[![Helianthus CI/CD Pipeline](https://github.com/lz1287209575/Helianthus/actions/workflows/ci_cmake.yml/badge.svg)](https://github.com/lz1287209575/Helianthus/actions/workflows/ci_cmake.yml)
+[![C++](https://img.shields.io/badge/C%2B%2B-20-blue)](https://isocpp.org/)
+[![CMake](https://img.shields.io/badge/build-CMake-green)](https://cmake.org/)
+[![Conan](https://img.shields.io/badge/deps-Conan-orange)](https://conan.io/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Helianthus 是一个高性能、可扩展的微服务游戏服务器架构，采用现代C++开发，支持多种脚本语言集成。
@@ -19,7 +20,7 @@ Helianthus 是一个高性能、可扩展的微服务游戏服务器架构，采
 ## 📋 系统要求
 
 - **编译器**: GCC 9+ / Clang 10+ / MSVC 2019+
-- **构建系统**: Bazel 6.0+
+- **构建系统**: CMake 3.20+ + Conan 2.0+
 - **操作系统**: Linux / macOS / Windows
 - **内存**: 建议 8GB+
 - **磁盘**: 2GB+ (包含依赖)
@@ -32,37 +33,42 @@ git clone https://github.com/lz1287209575/helianthus.git
 cd helianthus
 ```
 
-### 2. 安装 Bazel
+### 2. 安装依赖
 ```bash
 # Ubuntu/Debian
-sudo apt install bazel
+sudo apt install cmake ninja-build python3-pip
+pip3 install conan
 
 # macOS
-brew install bazel
+brew install cmake ninja python3
+pip3 install conan
 
 # Windows
-# 下载并安装 Bazel from https://bazel.build/install
+# 安装 CMake, Ninja, Python3 和 Conan
 ```
 
 ### 3. 构建项目
 ```bash
-# 构建所有组件
-bazel build //...
+# 使用构建脚本
+./build.sh  # Linux/macOS
+# 或
+build.bat   # Windows
 
-# 构建特定组件
-bazel build //Shared/Network:network
-
-# 启用脚本支持构建
-bazel build //... --define=ENABLE_LUA_SCRIPTING=1
+# 或手动构建
+mkdir build && cd build
+conan install .. --build=missing
+cmake .. -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake
+cmake --build . --parallel
 ```
 
 ### 4. 运行测试
 ```bash
 # 运行所有测试
-bazel test //...
+cd build && ctest --output-on-failure
 
 # 运行特定测试
-bazel test //Tests/Network:all
+./bin/tests/common_test
+./bin/tests/message_queue_test
 ```
 
 ## 📁 项目结构
@@ -592,3 +598,32 @@ config.EnableReplication = true;
 
 1. Fork 本仓库
 2. 创建特性分支 (`
+
+
+## 🔄 从 Bazel 迁移
+
+本项目已从 Bazel 构建系统迁移到 CMake + Conan，以解决中国大陆网络环境下的依赖下载问题。
+
+### 迁移详情
+- �� 详细迁移说明: [BUILD_CMAKE.md](BUILD_CMAKE.md)
+- 🛠️ 安装指南: [INSTALL.md](INSTALL.md)
+- 🔧 构建配置: [conanfile.txt](conanfile.txt)
+
+### 主要变更
+- **依赖管理**: 从 Bazel 的 `MODULE.bazel` 迁移到 Conan 的 `conanfile.txt`
+- **构建配置**: 从 `BUILD.bazel` 文件迁移到 `CMakeLists.txt`
+- **构建命令**: 从 `bazel build` 迁移到 `cmake --build`
+
+## 📞 获取帮助
+
+如果您在使用过程中遇到问题，请：
+
+1. 查看本文档的故障排除部分
+2. 检查 [BUILD_CMAKE.md](BUILD_CMAKE.md) 和 [INSTALL.md](INSTALL.md)
+3. 检查 GitHub Issues
+4. 提交新的 Issue 或 Pull Request
+
+---
+
+*最后更新: 2024-12-19*  
+*构建系统: CMake + Conan*
