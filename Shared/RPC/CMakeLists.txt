@@ -4,16 +4,22 @@
 set(RPC_SOURCES
     RpcServer.cpp
     RpcClient.cpp
-    RpcProtocol.cpp
-    RpcSerializer.cpp
+    RpcMessage.cpp
+    MessageRouter.cpp
+    NetworkAdapter.cpp
+    NetworkAdapterFixed.cpp
+    NetworkAdapterSimple.cpp
 )
 
 # 头文件
 set(RPC_HEADERS
-    RpcServer.h
-    RpcClient.h
-    RpcProtocol.h
-    RpcSerializer.h
+    IRpcServer.h
+    IRpcClient.h
+    RpcMessage.h
+    MessageRouter.h
+    NetworkAdapter.h
+    NetworkAdapterFixed.h
+    NetworkAdapterSimple.h
     RpcTypes.h
 )
 

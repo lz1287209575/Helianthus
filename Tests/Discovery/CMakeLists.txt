@@ -21,6 +21,9 @@ foreach(test_file ${TEST_SOURCES})
     # 链接库
     target_link_libraries(${test_name} PRIVATE
         helianthus_common
+        helianthus_discovery
+        helianthus_network
+        helianthus_config
         GTest::gtest
         GTest::gtest_main
     )

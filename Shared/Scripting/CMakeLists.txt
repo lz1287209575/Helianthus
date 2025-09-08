@@ -2,20 +2,17 @@
 
 # 源文件
 set(SCRIPTING_SOURCES
-    ScriptEngine.cpp
+    HotReloadManager.cpp
     LuaScriptEngine.cpp
     PythonScriptEngine.cpp
-    JavaScriptEngine.cpp
-    DotNetScriptEngine.cpp
 )
 
 # 头文件
 set(SCRIPTING_HEADERS
-    ScriptEngine.h
+    HotReloadManager.h
+    IScriptEngine.h
     LuaScriptEngine.h
     PythonScriptEngine.h
-    JavaScriptEngine.h
-    DotNetScriptEngine.h
     ScriptingTypes.h
 )
 

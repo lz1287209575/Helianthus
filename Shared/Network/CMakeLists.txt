@@ -5,21 +5,21 @@ set(NETWORK_SOURCES
     NetworkManager.cpp
     Sockets/TcpSocket.cpp
     Sockets/UdpSocket.cpp
-    asio/AsyncTcpSocket.cpp
-    asio/AsyncUdpSocket.cpp
-    asio/AsyncTcpAcceptor.cpp
-    asio/IoContext.cpp
-    asio/ReactorEpoll.cpp
-    asio/ReactorKqueue.cpp
-    asio/ReactorIocp.cpp
-    asio/ProactorIocp.cpp
-    asio/ProactorReactorAdapter.cpp
-    asio/MessageProtocol.cpp
-    asio/ErrorMapping.cpp
-    asio/PerformanceMetrics.cpp
-    asio/ZeroCopyBuffer.cpp
-    asio/BufferPool.cpp
-    asio/MemoryMappedFile.cpp
+    Asio/AsyncTcpSocket.cpp
+    Asio/AsyncUdpSocket.cpp
+    Asio/AsyncTcpAcceptor.cpp
+    Asio/IoContext.cpp
+    Asio/ReactorEpoll.cpp
+    Asio/ReactorKqueue.cpp
+    Asio/ReactorIocp.cpp
+    Asio/ProactorIocp.cpp
+    Asio/ProactorReactorAdapter.cpp
+    Asio/MessageProtocol.cpp
+    Asio/ErrorMapping.cpp
+    Asio/PerformanceMetrics.cpp
+    Asio/ZeroCopyBuffer.cpp
+    Asio/BufferPool.cpp
+    Asio/MemoryMappedFile.cpp
     Security/ITlsChannel.cpp
     Security/MockTlsChannel.cpp
     WinSockInit.cpp
@@ -28,12 +28,11 @@ set(NETWORK_SOURCES
 # 头文件
 set(NETWORK_HEADERS
     NetworkManager.h
-    TcpSocket.h
-    UdpSocket.h
-    WebSocketServer.h
-    ConnectionPool.h
-    NetworkMetrics.h
+    Sockets/TcpSocket.h
+    Sockets/UdpSocket.h
     NetworkTypes.h
+    INetworkManager.h
+    INetworkSocket.h
 )
 
 # 创建库

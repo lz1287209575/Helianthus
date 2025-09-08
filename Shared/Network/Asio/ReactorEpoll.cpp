@@ -446,7 +446,7 @@ size_t ReactorEpoll::CalculateAdaptiveBatchSize() const
     }
 
     // 基于性能统计计算自适应批处理大小
-    std::lock_guard<std::mutex> statsLock(StatsMutex);
+    std::lock_guard<std::mutex> StatsLock(StatsMutex);
 
     if (PerformanceStatsData.TotalBatches == 0)
     {

@@ -608,19 +608,19 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
     if (SockImpl->Fd >= 0)
     {
         // 设置 SO_REUSEADDR 选项（跨平台）
-        int reuseAddr = Config.ReuseAddr ? 1 : 0;
+        int ReuseAddr = Config.ReuseAddr ? 1 : 0;
 #ifdef _WIN32
         if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
                        SOL_SOCKET,
                        SO_REUSEADDR,
-                       reinterpret_cast<const char*>(&reuseAddr),
-                       sizeof(reuseAddr)) < 0)
+                       reinterpret_cast<const char*>(&ReuseAddr),
+                       sizeof(ReuseAddr)) < 0)
 #else
         if (setsockopt(SockImpl->Fd,
                        SOL_SOCKET,
                        SO_REUSEADDR,
-                       reinterpret_cast<const char*>(&reuseAddr),
-                       sizeof(reuseAddr)) < 0)
+                       reinterpret_cast<const char*>(&ReuseAddr),
+                       sizeof(ReuseAddr)) < 0)
 #endif
         {
             // 处理错误
@@ -628,23 +628,23 @@ void TcpSocket::SetSocketOptions(const NetworkConfig& Config)
 
 #ifdef _WIN32
         // Windows 特有选项（如 TCP_NODELAY）
-        int noDelay = Config.NoDelay ? 1 : 0;
+        int NoDelay = Config.NoDelay ? 1 : 0;
         if (setsockopt(static_cast<SOCKET>(SockImpl->Fd),
                        IPPROTO_TCP,
                        TCP_NODELAY,
-                       reinterpret_cast<const char*>(&noDelay),
-                       sizeof(noDelay)) < 0)
+                       reinterpret_cast<const char*>(&NoDelay),
+                       sizeof(NoDelay)) < 0)
         {
             // 处理错误
         }
 #else
         // Unix 特有选项（如 SO_KEEPALIVE）
-        int keepAlive = Config.KeepAlive ? 1 : 0;
+        int KeepAlive = Config.KeepAlive ? 1 : 0;
         if (setsockopt(SockImpl->Fd,
                        SOL_SOCKET,
                        SO_KEEPALIVE,
-                       reinterpret_cast<const char*>(&keepAlive),
-                       sizeof(keepAlive)) < 0)
+                       reinterpret_cast<const char*>(&KeepAlive),
+                       sizeof(KeepAlive)) < 0)
         {
             // 处理错误
         }

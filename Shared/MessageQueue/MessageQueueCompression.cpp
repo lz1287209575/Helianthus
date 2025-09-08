@@ -96,11 +96,11 @@ static bool IsLikelyZlib(const std::vector<char>& Data)
 {
     if (Data.size() < 2)
         return false;
-    unsigned char cmf = static_cast<unsigned char>(Data[0]);
-    unsigned char flg = static_cast<unsigned char>(Data[1]);
-    if ((cmf & 0x0F) != 8)
+    unsigned char Cmf = static_cast<unsigned char>(Data[0]);
+    unsigned char Flg = static_cast<unsigned char>(Data[1]);
+    if ((Cmf & 0x0F) != 8)
         return false;                     // DEFLATE
-    return ((cmf << 8) + flg) % 31 == 0;  // zlib 校验
+    return ((Cmf << 8) + Flg) % 31 == 0;  // zlib 校验
 }
 
 QueueResult MessageQueue::ApplyDecompression(MessagePtr Message, const std::string& QueueName)
@@ -122,25 +122,25 @@ QueueResult MessageQueue::ApplyDecompression(MessagePtr Message, const std::stri
     {
         // 无标记但疑似GZIP，尝试解压
         const auto& In = Message->Payload.Data;
-        size_t guess = In.size() * 8 + 1024;
-        std::vector<char> Out(guess);
-        uLongf dest_len = static_cast<uLongf>(Out.size());
+        size_t Guess = In.size() * 8 + 1024;
+        std::vector<char> Out(Guess);
+        uLongf DestLen = static_cast<uLongf>(Out.size());
         int rc = uncompress(reinterpret_cast<Bytef*>(Out.data()),
-                            &dest_len,
+                            &DestLen,
                             reinterpret_cast<const Bytef*>(In.data()),
                             static_cast<uLongf>(In.size()));
         if (rc == Z_BUF_ERROR)
         {
-            Out.resize(guess * 2);
-            dest_len = static_cast<uLongf>(Out.size());
+            Out.resize(Guess * 2);
+            DestLen = static_cast<uLongf>(Out.size());
             rc = uncompress(reinterpret_cast<Bytef*>(Out.data()),
-                            &dest_len,
+                            &DestLen,
                             reinterpret_cast<const Bytef*>(In.data()),
                             static_cast<uLongf>(In.size()));
         }
         if (rc == Z_OK)
         {
-            Out.resize(static_cast<size_t>(dest_len));
+            Out.resize(static_cast<size_t>(DestLen));
             Message->Payload.Data.swap(Out);
             Message->Payload.Size = Message->Payload.Data.size();
             // 清理潜在旧标记
@@ -380,10 +380,10 @@ QueueResult MessageQueue::CompressMessage(MessagePtr Message, CompressionAlgorit
     const auto& In = Message->Payload.Data;
     std::vector<char> Out;
     Out.resize(In.size() + In.size() / 16 + 64 + 3);
-    uLongf dest_len = static_cast<uLongf>(Out.size());
+    uLongf DestLen = static_cast<uLongf>(Out.size());
     int level = 6;
     int rc = compress2(reinterpret_cast<Bytef*>(Out.data()),
-                       &dest_len,
+                       &DestLen,
                        reinterpret_cast<const Bytef*>(In.data()),
                        static_cast<uLongf>(In.size()),
                        level);
@@ -391,7 +391,7 @@ QueueResult MessageQueue::CompressMessage(MessagePtr Message, CompressionAlgorit
     {
         return QueueResult::INTERNAL_ERROR;
     }
-    Out.resize(static_cast<size_t>(dest_len));
+    Out.resize(static_cast<size_t>(DestLen));
     Message->Payload.Data.swap(Out);
     Message->Payload.Size = Message->Payload.Data.size();
     Message->Header.Properties["Compressed"] = "1";
@@ -417,17 +417,17 @@ QueueResult MessageQueue::DecompressMessage(MessagePtr Message)
     const auto& In = Message->Payload.Data;
     size_t guess = In.size() * 4 + 1024;
     std::vector<char> Out(guess);
-    uLongf dest_len = static_cast<uLongf>(Out.size());
+    uLongf DestLen = static_cast<uLongf>(Out.size());
     int rc = uncompress(reinterpret_cast<Bytef*>(Out.data()),
-                        &dest_len,
+                        &DestLen,
                         reinterpret_cast<const Bytef*>(In.data()),
                         static_cast<uLongf>(In.size()));
     if (rc == Z_BUF_ERROR)
     {
         Out.resize(guess * 4);
-        dest_len = static_cast<uLongf>(Out.size());
+        DestLen = static_cast<uLongf>(Out.size());
         rc = uncompress(reinterpret_cast<Bytef*>(Out.data()),
-                        &dest_len,
+                        &DestLen,
                         reinterpret_cast<const Bytef*>(In.data()),
                         static_cast<uLongf>(In.size()));
     }
@@ -435,7 +435,7 @@ QueueResult MessageQueue::DecompressMessage(MessagePtr Message)
     {
         return QueueResult::INTERNAL_ERROR;
     }
-    Out.resize(static_cast<size_t>(dest_len));
+    Out.resize(static_cast<size_t>(DestLen));
     Message->Payload.Data.swap(Out);
     Message->Payload.Size = Message->Payload.Data.size();
     Message->Header.Properties.erase("Compressed");

@@ -162,7 +162,7 @@ if(HELIANTHUS_BUILD_TESTS)
 endif()
 
 # 安装配置
-install(TARGETS helianthus_common helianthus_message helianthus_message_queue helianthus_config helianthus_reflection helianthus_third_party helianthus_database
+install(TARGETS helianthus_common helianthus_message helianthus_message_queue helianthus_config helianthus_reflection helianthus_third_party helianthus_database helianthus_network helianthus_discovery helianthus_scripting helianthus_rpc
     EXPORT HelianthusTargets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

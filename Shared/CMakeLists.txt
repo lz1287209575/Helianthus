@@ -8,6 +8,10 @@ add_subdirectory(Config)
 add_subdirectory(Reflection)
 add_subdirectory(ThirdParty)
 add_subdirectory(Database)
+add_subdirectory(Network)
+add_subdirectory(Discovery)
+add_subdirectory(Scripting)
+add_subdirectory(RPC)
 
 # 创建主库目标
 add_library(helianthus_shared INTERFACE)
