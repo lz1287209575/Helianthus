@@ -5,6 +5,10 @@ set(RPC_SOURCES
     RpcServer.cpp
     RpcClient.cpp
     RpcMessage.cpp
+    RpcSerializer.cpp
+    RpcMessageHandler.cpp
+    IRpcInterceptor.cpp
+    RpcInterceptors.cpp
     MessageRouter.cpp
     NetworkAdapter.cpp
     NetworkAdapterFixed.cpp
@@ -16,6 +20,10 @@ set(RPC_HEADERS
     IRpcServer.h
     IRpcClient.h
     RpcMessage.h
+    RpcSerializer.h
+    RpcMessageHandler.h
+    IRpcInterceptor.h
+    RpcInterceptors.h
     MessageRouter.h
     NetworkAdapter.h
     NetworkAdapterFixed.h

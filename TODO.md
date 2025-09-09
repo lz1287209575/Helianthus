@@ -1,3 +1,26 @@
+## TODO（项目待办）
+
+### 进行中
+- [ ] 提供脚本/RPC统一反射导出适配接口（refl_step_3）
+- [ ] 实现 HRPC_FACTORY 标记并在生成器中自动注册 RPC 工厂（refl_step_4）
+
+### 已完成
+- [x] 新增类内自动登记方法/属性宏并应用到 HPlayer 测试（refl_step_1）
+- [x] 扩展方法元信息支持静态/实例与参数占位（refl_step_2）
+- [x] 生成 RegisterReflectedServices(IRpcServer&)，自动挂载反射服务
+- [x] 拦截器与日志改造，使用 LogCategory（Rpc）
+- [x] 连接管理死锁修复与回调调用路径校正
+- [x] 全量 ctest 通过（当前状态）
+
+### 待办
+- [ ] 完善 Network 消息路由和负载均衡
+- [ ] 自动挂载演示：在示例/测试中启用并输出 Rpc 日志
+- [ ] 支持按标签筛选自动挂载（如仅挂载含指定 Tag 的服务/方法）
+
+### 备注
+- 生成器：已支持 HCLASS/HPROPERTY/HMETHOD/HFUNCTION 扫描与注册；支持 HMETHOD(Rpc) 自动桥接到 RpcServiceRegistry；支持 HRPC_FACTORY() 生成工厂。
+- 使用：在服务启动阶段调用 `Helianthus::RPC::RegisterReflectedServices(IRpcServer&)` 可自动注册反射服务。
+
 # Helianthus 项目 TODO 清单
 
 ## 📊 项目概览

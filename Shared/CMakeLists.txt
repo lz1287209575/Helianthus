@@ -29,7 +29,7 @@ target_link_libraries(helianthus_shared INTERFACE
     helianthus_message
     helianthus_message_queue
     helianthus_config
-    helianthus_reflection
+    helianthus_reflection_gen
     helianthus_third_party
 )
 

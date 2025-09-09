@@ -20,7 +20,13 @@ foreach(test_file ${TEST_SOURCES})
     
     # 链接库
     target_link_libraries(${test_name} PRIVATE
-        helianthus_shared
+        helianthus_common
+        helianthus_message_queue
+        helianthus_reflection_gen
+        helianthus_rpc
+        helianthus_network
+        helianthus_message
+        helianthus_config
         GTest::gtest
         GTest::gtest_main
     )

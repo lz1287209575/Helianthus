@@ -44,7 +44,6 @@ target_link_libraries(helianthus_message_queue PUBLIC
     helianthus_discovery
     helianthus_database
     helianthus_config
-    helianthus_reflection
     helianthus_scripting
     helianthus_rpc
     ZLIB::ZLIB

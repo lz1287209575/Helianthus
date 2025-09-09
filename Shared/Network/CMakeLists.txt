@@ -3,6 +3,7 @@
 # 源文件
 set(NETWORK_SOURCES
     NetworkManager.cpp
+    ConnectionManager.cpp
     Sockets/TcpSocket.cpp
     Sockets/UdpSocket.cpp
     Asio/AsyncTcpSocket.cpp
@@ -28,6 +29,7 @@ set(NETWORK_SOURCES
 # 头文件
 set(NETWORK_HEADERS
     NetworkManager.h
+    ConnectionManager.h
     Sockets/TcpSocket.h
     Sockets/UdpSocket.h
     NetworkTypes.h

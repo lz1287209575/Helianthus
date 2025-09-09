@@ -32,7 +32,6 @@ target_include_directories(helianthus_scripting PUBLIC
 # 链接依赖
 target_link_libraries(helianthus_scripting PUBLIC
     helianthus_common
-    helianthus_reflection
 )
 
 # 设置编译特性

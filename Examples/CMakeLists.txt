@@ -53,7 +53,6 @@ set(EXAMPLE_PROGRAMS
     performance_test
     performance_optimizer_example
     enhanced_prometheus_example
-    helianthus_reflection_test
     config_example
 )
 
@@ -98,11 +97,6 @@ if(TARGET enhanced_prometheus_example)
     )
 endif()
 
-if(TARGET helianthus_reflection_test)
-    target_link_libraries(helianthus_reflection_test PRIVATE
-        helianthus_reflection
-    )
-endif()
 
 if(TARGET config_example)
     target_link_libraries(config_example PRIVATE

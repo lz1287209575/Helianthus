@@ -271,52 +271,5 @@ void RpcMessage::UpdateUnderlyingMessage()
     UnderlyingMessage = ToMessage();
 }
 
-// JsonRpcSerializer implementation
-std::string JsonRpcSerializer::Serialize(const RpcMessagePayload& Payload)
-{
-    return Payload.ToJson();
-}
-
-bool JsonRpcSerializer::Deserialize(const std::string& Data, RpcMessagePayload& Payload)
-{
-    return Payload.FromJson(Data);
-}
-
-// BinaryRpcSerializer implementation
-std::string BinaryRpcSerializer::Serialize(const RpcMessagePayload& Payload)
-{
-    auto BinaryData = Payload.ToBinary();
-    return std::string(reinterpret_cast<const char*>(BinaryData.data()), BinaryData.size());
-}
-
-bool BinaryRpcSerializer::Deserialize(const std::string& Data, RpcMessagePayload& Payload)
-{
-    std::vector<char> BinaryData(Data.begin(), Data.end());
-    return Payload.FromBinary(BinaryData);
-}
-
-// RpcSerializerFactory implementation
-std::unique_ptr<IRpcSerializer> RpcSerializerFactory::Create(SerializationFormat Format)
-{
-    switch (Format)
-    {
-        case SerializationFormat::JSON:
-            return CreateJson();
-        case SerializationFormat::BINARY:
-            return CreateBinary();
-        default:
-            return CreateJson();
-    }
-}
-
-std::unique_ptr<IRpcSerializer> RpcSerializerFactory::CreateJson()
-{
-    return std::make_unique<JsonRpcSerializer>();
-}
-
-std::unique_ptr<IRpcSerializer> RpcSerializerFactory::CreateBinary()
-{
-    return std::make_unique<BinaryRpcSerializer>();
-}
 
 }  // namespace Helianthus::RPC

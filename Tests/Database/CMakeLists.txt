@@ -47,7 +47,6 @@ foreach(test_file ${TEST_SOURCES})
         helianthus_common
         helianthus_config
         helianthus_database
-        helianthus_reflection
         helianthus_third_party
         GTest::gtest
         GTest::gtest_main
