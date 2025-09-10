@@ -84,9 +84,12 @@ TEST(HPlayerReflectionTest, MethodRegistration)
     auto has = [&](const char* name, const char* tag) {
         for (const auto& M : Meta->Methods)
         {
-            if (M.Name == name && M.Tag == tag)
+            if (M.Name == name)
             {
-                return true;
+                for (const auto& t : M.Tags)
+                {
+                    if (t == tag) return true;
+                }
             }
         }
         return false;

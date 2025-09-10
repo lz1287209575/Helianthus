@@ -231,6 +231,12 @@ CategoryLogger Logger::GetOrCreateCategory(const std::string& CategoryName)
         return CategoryLogger(nullptr);
     }
 
+    // 检查是否正在关闭
+    if (ShuttingDownFlag.load(std::memory_order_acquire))
+    {
+        return CategoryLogger(nullptr);
+    }
+
     auto It = CategoryLoggers.find(CategoryName);
     if (It != CategoryLoggers.end())
         return CategoryLogger(It->second);

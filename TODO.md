@@ -1,13 +1,39 @@
+# Helianthus TODO
+
+## 反射/RPC 当前进度
+- [x] 拆分生成：按类输出 `*_registration.cpp`/`*_services.cpp` 并聚合编译
+- [x] 自动初始化：强制链接全局符号，移除示例手动初始化
+- [x] 方法注册去重：避免重复方法导致计数翻倍
+- [x] 示例验证：`RpcReflectionDemo` 运行通过，按标签筛选正确
+
+## 待办（优先级高）
+- [x] 在注册中写入方法参数名（从 HMETHOD 签名解析并传给 `RegisterMethodEx`）
+- [x] 增量生成：为每类计算哈希（标签/属性/方法+参数名/工厂/头文件），未变更跳过重写（写入 `build/generated/.refl_cache.json`）
+
+## 可选优化
+- [ ] 输出目录按命名空间/目录层级进一步分层
+- [x] 方法元数据扩展：返回类型、权限/可见性、注释/描述
+- [ ] 仅编译变更类：结合 CMake 的对象库或分目标，减少链接时间
+- [ ] 生成器健壮性：更复杂签名/模板/默认参数解析
+
+## 记录
+- 生成入口：`Shared/Reflection/reflection_codegen.py`
+- 生成文件目录：`build/generated/`，按类文件在 `build/generated/classes/`
+- 反射库目标：`helianthus_reflection_gen`
 ## TODO（项目待办）
 
 ### 进行中
-- [ ] 提供脚本/RPC统一反射导出适配接口（refl_step_3）
-- [ ] 实现 HRPC_FACTORY 标记并在生成器中自动注册 RPC 工厂（refl_step_4）
+- （空）
 
 ### 已完成
 - [x] 新增类内自动登记方法/属性宏并应用到 HPlayer 测试（refl_step_1）
 - [x] 扩展方法元信息支持静态/实例与参数占位（refl_step_2）
 - [x] 生成 RegisterReflectedServices(IRpcServer&)，自动挂载反射服务
+- [x] 提供脚本/RPC统一反射导出适配接口（refl_step_3）
+- [x] 实现 HRPC_FACTORY 标记并在生成器中自动注册 RPC 工厂（refl_step_4）
+- [x] HMETHOD 参数名解析并写入注册（RegisterMethodEx）
+- [x] 反射生成增量化与缓存（.refl_cache.json）
+- [x] 方法多标签支持（`MethodMeta.Tags`，生成器输出标签数组）
 - [x] 拦截器与日志改造，使用 LogCategory（Rpc）
 - [x] 连接管理死锁修复与回调调用路径校正
 - [x] 全量 ctest 通过（当前状态）
@@ -16,9 +42,12 @@
 - [ ] 完善 Network 消息路由和负载均衡
 - [ ] 自动挂载演示：在示例/测试中启用并输出 Rpc 日志
 - [ ] 支持按标签筛选自动挂载（如仅挂载含指定 Tag 的服务/方法）
+- [ ] HMETHOD 多标签语法解析（支持 `TagA|TagB`/`TagA,TagB` 并写入 Tags 数组）
+- [ ] 生成输出目录分层（命名空间/目录层级）
+- [ ] 仅编译变更类（结合对象库/分目标，减少链接时间）
 
 ### 备注
-- 生成器：已支持 HCLASS/HPROPERTY/HMETHOD/HFUNCTION 扫描与注册；支持 HMETHOD(Rpc) 自动桥接到 RpcServiceRegistry；支持 HRPC_FACTORY() 生成工厂。
+- 生成器：已支持 HCLASS/HPROPERTY/HMETHOD/HFUNCTION 扫描与注册；支持 HMETHOD(Rpc) 自动桥接到 RpcServiceRegistry；支持 HRPC_FACTORY() 生成工厂；支持参数名解析、返回类型与可见性/描述写入；支持方法多标签输出。
 - 使用：在服务启动阶段调用 `Helianthus::RPC::RegisterReflectedServices(IRpcServer&)` 可自动注册反射服务。
 
 # Helianthus 项目 TODO 清单

@@ -118,6 +118,10 @@ namespace Helianthus::RPC
 {
 // 由代码生成器提供实现：遍历反射服务工厂并注册到给定服务器
 void RegisterReflectedServices(IRpcServer& Server);
+
+// 按标签筛选的自动挂载版本
+void RegisterReflectedServices(IRpcServer& Server, const std::vector<std::string>& RequiredTags);
+
 }
 
 

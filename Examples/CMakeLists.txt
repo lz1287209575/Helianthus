@@ -54,6 +54,7 @@ set(EXAMPLE_PROGRAMS
     performance_optimizer_example
     enhanced_prometheus_example
     config_example
+    RpcReflectionDemo
 )
 
 # 为每个示例程序创建可执行文件
@@ -68,6 +69,7 @@ foreach(example ${EXAMPLE_PROGRAMS})
         target_include_directories(${example} PRIVATE
             ${CMAKE_SOURCE_DIR}
             ${CMAKE_SOURCE_DIR}/Shared
+            ${CMAKE_BINARY_DIR}
         )
         
         # 链接库
@@ -104,6 +106,13 @@ if(TARGET config_example)
     )
 endif()
 
+if(TARGET RpcReflectionDemo)
+    target_link_libraries(RpcReflectionDemo PRIVATE
+        helianthus_rpc
+        helianthus_reflection_gen
+    )
+endif()
+
 if(TARGET rpc_example)
     target_link_libraries(rpc_example PRIVATE
         helianthus_rpc
@@ -122,9 +131,18 @@ if(TARGET lua_hotreload_example OR TARGET game_server_with_hotreload OR TARGET m
     target_link_libraries(multi_language_scripting_example PRIVATE helianthus_scripting)
 endif()
 
-# 安装示例程序
-install(TARGETS ${EXAMPLE_PROGRAMS}
-    RUNTIME DESTINATION bin/examples
-)
+# 安装示例程序 - 只安装实际存在的目标
+set(EXISTING_EXAMPLES)
+foreach(example ${EXAMPLE_PROGRAMS})
+    if(TARGET ${example})
+        list(APPEND EXISTING_EXAMPLES ${example})
+    endif()
+endforeach()
+
+if(EXISTING_EXAMPLES)
+    install(TARGETS ${EXISTING_EXAMPLES}
+        RUNTIME DESTINATION bin/examples
+    )
+endif()
 
 

@@ -217,4 +217,13 @@ void MessageRouter::ProcessMessages()
     std::cout << "[MessageRouter] Message Dispatcher Thread Stop" << std::endl;
 }
 
+MessageRouter::~MessageRouter()
+{
+    // 确保在析构时正确关闭
+    if (IsInitialized)
+    {
+        Shutdown();
+    }
+}
+
 }  // namespace Helianthus::RPC

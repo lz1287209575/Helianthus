@@ -22,7 +22,10 @@ struct PropertyMeta
 struct MethodMeta
 {
     std::string Name;
-    std::string Tag;
+    std::vector<std::string> Tags;
+    std::string ReturnType;
+    std::string Visibility; // Public/Protected/Private
+    std::string Description;
     bool IsStatic{false};
     std::vector<std::string> ParamNames;
 };
@@ -70,19 +73,33 @@ public:
                         const std::string& Tag)
     {
         auto& Meta = Classes[ClassName];
-        Meta.Methods.push_back(MethodMeta{MethodName, Tag, false, {}});
+        MethodMeta M;
+        M.Name = MethodName;
+        M.Tags = {Tag};
+        M.ReturnType = "";
+        M.Visibility = "Public";
+        M.Description = "";
+        M.IsStatic = false;
+        M.ParamNames = {};
+        Meta.Methods.push_back(std::move(M));
     }
 
     void RegisterMethodEx(const std::string& ClassName,
                           const std::string& MethodName,
-                          const std::string& Tag,
+                          std::vector<std::string> Tags,
+                          const std::string& ReturnType,
+                          const std::string& Visibility,
+                          const std::string& Description,
                           bool IsStatic,
                           std::vector<std::string> ParamNames)
     {
         auto& Meta = Classes[ClassName];
         MethodMeta M;
         M.Name = MethodName;
-        M.Tag = Tag;
+        M.Tags = std::move(Tags);
+        M.ReturnType = ReturnType;
+        M.Visibility = Visibility;
+        M.Description = Description;
         M.IsStatic = IsStatic;
         M.ParamNames = std::move(ParamNames);
         Meta.Methods.push_back(std::move(M));

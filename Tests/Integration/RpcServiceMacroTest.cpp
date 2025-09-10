@@ -95,4 +95,21 @@ TEST(RpcAutoMountTest, DISABLED_RegisterReflectedServicesSmoke)
     SUCCEED();
 }
 
+// 测试按标签筛选的自动挂载
+TEST(RpcAutoMountTest, RegisterReflectedServicesWithTagFilter)
+{
+    using namespace Helianthus::RPC;
+    RpcConfig Config{};
+    RpcServer Server(Config);
+    
+    // 测试按 "Rpc" 标签筛选
+    std::vector<std::string> RequiredTags = {"Rpc"};
+    RegisterReflectedServices(Server, RequiredTags);
+    
+    // 验证服务是否被正确注册（如果有带 Rpc 标签的方法）
+    auto RegisteredServices = Server.GetRegisteredServices();
+    // 注意：这里只是验证函数调用不崩溃，实际注册的服务数量取决于代码生成器发现的类
+    SUCCEED();
+}
+
 

@@ -54,7 +54,7 @@ public:
 
 private:
     MessageRouter() = default;
-    ~MessageRouter() = default;
+    ~MessageRouter();
 
     void ProcessMessages();
 

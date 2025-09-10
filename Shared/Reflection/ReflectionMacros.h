@@ -6,13 +6,7 @@
 #include "ReflectionCore.h"
 
 #define HCLASS(...)                                                                                   \
-public:                                                                                               \
-    static void __H_AddClassTag(const char* Tag)                                                      \
-    {                                                                                                  \
-        Helianthus::Reflection::ClassRegistry::Get().AddClassTag(__H_ClassName(), Tag);               \
-    }                                                                                                  \
-    static const char* __H_ClassName() { return __H_CLASS_NAME; }                                      \
-private:
+    /* 这个宏用于标记类，实际功能由代码生成器处理 */
 
 #define GENERATED_BODY()                                                                              \
 public:                                                                                               \
