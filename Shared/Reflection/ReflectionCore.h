@@ -28,6 +28,18 @@ struct MethodMeta
     std::string Description;
     bool IsStatic{false};
     std::vector<std::string> ParamNames;
+    
+    // 新增元数据字段
+    bool IsPureFunction{false};     // 纯函数标记
+    bool IsConst{false};            // const 方法
+    bool IsNoexcept{false};         // noexcept 方法
+    bool IsVirtual{false};          // virtual 方法
+    bool IsOverride{false};         // override 方法
+    bool IsFinal{false};            // final 方法
+    bool IsInline{false};           // inline 方法
+    bool IsDeprecated{false};       // deprecated 方法
+    std::string AccessModifier;     // 访问修饰符
+    std::vector<std::string> Qualifiers; // 其他限定符
 };
 
 struct ClassMeta
@@ -102,6 +114,59 @@ public:
         M.Description = Description;
         M.IsStatic = IsStatic;
         M.ParamNames = std::move(ParamNames);
+        // 新字段使用默认值
+        M.IsPureFunction = false;
+        M.IsConst = false;
+        M.IsNoexcept = false;
+        M.IsVirtual = false;
+        M.IsOverride = false;
+        M.IsFinal = false;
+        M.IsInline = false;
+        M.IsDeprecated = false;
+        M.AccessModifier = Visibility;
+        M.Qualifiers = {};
+        Meta.Methods.push_back(std::move(M));
+    }
+
+    // 新的完整元数据注册函数
+    void RegisterMethodEx(const std::string& ClassName,
+                          const std::string& MethodName,
+                          std::vector<std::string> Tags,
+                          const std::string& ReturnType,
+                          const std::string& Visibility,
+                          const std::string& Description,
+                          bool IsStatic,
+                          std::vector<std::string> ParamNames,
+                          bool IsPureFunction,
+                          bool IsConst,
+                          bool IsNoexcept,
+                          bool IsVirtual,
+                          bool IsOverride,
+                          bool IsFinal,
+                          bool IsInline,
+                          bool IsDeprecated,
+                          const std::string& AccessModifier,
+                          std::vector<std::string> Qualifiers)
+    {
+        auto& Meta = Classes[ClassName];
+        MethodMeta M;
+        M.Name = MethodName;
+        M.Tags = std::move(Tags);
+        M.ReturnType = ReturnType;
+        M.Visibility = Visibility;
+        M.Description = Description;
+        M.IsStatic = IsStatic;
+        M.ParamNames = std::move(ParamNames);
+        M.IsPureFunction = IsPureFunction;
+        M.IsConst = IsConst;
+        M.IsNoexcept = IsNoexcept;
+        M.IsVirtual = IsVirtual;
+        M.IsOverride = IsOverride;
+        M.IsFinal = IsFinal;
+        M.IsInline = IsInline;
+        M.IsDeprecated = IsDeprecated;
+        M.AccessModifier = AccessModifier;
+        M.Qualifiers = std::move(Qualifiers);
         Meta.Methods.push_back(std::move(M));
     }
     void AddClassTag(const std::string& ClassName, const std::string& Tag)

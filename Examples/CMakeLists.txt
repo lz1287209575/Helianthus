@@ -55,6 +55,7 @@ set(EXAMPLE_PROGRAMS
     enhanced_prometheus_example
     config_example
     RpcReflectionDemo
+    MetaExtensionDemo
 )
 
 # 为每个示例程序创建可执行文件
@@ -108,6 +109,13 @@ endif()
 
 if(TARGET RpcReflectionDemo)
     target_link_libraries(RpcReflectionDemo PRIVATE
+        helianthus_rpc
+        helianthus_reflection_gen
+    )
+endif()
+
+if(TARGET MetaExtensionDemo)
+    target_link_libraries(MetaExtensionDemo PRIVATE
         helianthus_rpc
         helianthus_reflection_gen
     )

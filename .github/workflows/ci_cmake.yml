@@ -138,6 +138,34 @@ jobs:
           install/
         retention-days: 7
 
+    - name: Incremental rebuild (single class micro-change)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # 记录初始时间戳
+        echo "== Touch one header to simulate micro change =="
+        TARGET_HDR=Examples/MetaExtensionDemo.h
+        test -f ${TARGET_HDR} && sed -i '1i \\// ci-touch' ${TARGET_HDR}
+        cd build
+        /usr/bin/time -f 'INCR_BUILD_SECONDS=%E' -o ../incr_metrics.txt cmake --build . --config Release --parallel || true
+        # 恢复文件（去掉插入的第一行）
+        cd ..
+        test -f ${TARGET_HDR} && sed -i '1d' ${TARGET_HDR}
+        echo "Incremental build completed."
+
+    - name: Publish incremental build metrics
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        echo "== Incremental Build Metrics ==" | tee -a incr_metrics.txt
+        cat incr_metrics.txt | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload incremental metrics artifact
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v3
+      with:
+        name: incremental-build-metrics
+        path: incr_metrics.txt
+        retention-days: 7
+
   # 代码质量检查
   code-quality:
     name: Code Quality

@@ -212,11 +212,8 @@ Manager.GenerateAllHelianthusReflectionCode("Generated");
 ### 1. 代码生成器
 
 ```bash
-# 生成反射代码
-bazel run //Shared/Reflection:reflection_codegen -- \
-    --input=src/ \
-    --output=generated/ \
-    --language=cpp
+# 生成反射代码（项目内置工具，默认在构建前执行）
+python3 Shared/Reflection/reflection_codegen.py /path/to/src /path/to/build/generated
 ```
 
 ### 2. 调试工具
@@ -237,6 +234,17 @@ void PrintAllTypes() {
     }
 }
 ```
+
+## 📘 反射标签与自动注册（快速指南）
+
+- 业务标签写在 HMETHOD 中（`PureFunction/Math/Utility/Deprecated` 等），C++ 语义（static/virtual/inline/const/noexcept/override/final）由函数签名自动推断，不写入 Tags。
+- 类标签 `NoAutoRegister`：仅跳过该类工厂自动注册，方法元信息仍会注册，便于按标签筛选。
+- 全局开关 `HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER`（默认 OFF）：跳过所有类的工厂自动注册。
+- 自动挂载 API：
+  - `Helianthus::RPC::RegisterReflectedServices(IRpcServer&)`
+  - `Helianthus::RPC::RegisterReflectedServices(IRpcServer&, const std::vector<std::string>& RequiredTags)`
+
+详见：`Docs/Reflection_Tag_And_AutoRegister_Guide.md`
 
 ### 3. 性能优化
 

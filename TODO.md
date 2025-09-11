@@ -13,6 +13,14 @@
 ## 可选优化
 - [ ] 输出目录按命名空间/目录层级进一步分层
 - [x] 方法元数据扩展：返回类型、权限/可见性、注释/描述
+- [x] HMETHOD 多标签语法解析（支持 `TagA|TagB` 和 `TagA,TagB` 格式）
+- [x] 自动挂载演示：在示例/测试中启用并输出 Rpc 日志
+- [x] 反射元数据扩展：保留业务标签（PureFunction/Math/Utility/Deprecated），C++ 语义改为由签名推断
+- [x] 方法限定符支持：从函数签名解析 const/noexcept/override/final/inline/static/virtual
+- [x] 访问修饰符支持：可通过标签 Public/Protected/Private/Friend（可选）
+- [x] 标签筛选修复：多标签按数组写入注册，服务按方法标签匹配挂载
+- [x] 类标签 `NoAutoRegister`：仅跳过工厂自动注册，仍输出方法元信息
+- [x] 全局开关 `HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER`（默认 OFF）：跳过所有类工厂注册
 - [ ] 仅编译变更类：结合 CMake 的对象库或分目标，减少链接时间
 - [ ] 生成器健壮性：更复杂签名/模板/默认参数解析
 
@@ -37,18 +45,24 @@
 - [x] 拦截器与日志改造，使用 LogCategory（Rpc）
 - [x] 连接管理死锁修复与回调调用路径校正
 - [x] 全量 ctest 通过（当前状态）
+- [x] 反射元数据扩展：通过标签系统实现功能标记和限定符支持
+ - [x] 从函数签名推断 C++ 语义限定，过滤出现在 Tags 中的 C++ 关键字
+ - [x] 修复服务方法注册写入标签为数组，按标签筛选正常生效
+ - [x] 新增类级控制：`HCLASS(...,NoAutoRegister)`
+ - [x] 新增 CMake 开关：`HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER`（默认关闭）
 
 ### 待办
 - [ ] 完善 Network 消息路由和负载均衡
-- [ ] 自动挂载演示：在示例/测试中启用并输出 Rpc 日志
-- [ ] 支持按标签筛选自动挂载（如仅挂载含指定 Tag 的服务/方法）
-- [ ] HMETHOD 多标签语法解析（支持 `TagA|TagB`/`TagA,TagB` 并写入 Tags 数组）
+- [x] 自动挂载演示：在示例/测试中启用并输出 Rpc 日志
+- [x] 支持按标签筛选自动挂载（如仅挂载含指定 Tag 的服务/方法）
+- [x] HMETHOD 多标签语法解析（支持 `TagA|TagB`/`TagA,TagB` 并写入 Tags 数组）
 - [ ] 生成输出目录分层（命名空间/目录层级）
 - [ ] 仅编译变更类（结合对象库/分目标，减少链接时间）
 
 ### 备注
-- 生成器：已支持 HCLASS/HPROPERTY/HMETHOD/HFUNCTION 扫描与注册；支持 HMETHOD(Rpc) 自动桥接到 RpcServiceRegistry；支持 HRPC_FACTORY() 生成工厂；支持参数名解析、返回类型与可见性/描述写入；支持方法多标签输出。
+- 生成器：已支持 HCLASS/HPROPERTY/HMETHOD/HFUNCTION 扫描与注册；支持 HMETHOD(Rpc) 自动桥接到 RpcServiceRegistry；支持 HRPC_FACTORY() 生成工厂；支持参数名解析、返回类型与可见性/描述写入；支持方法多标签输出；支持注释提取作为方法描述。
 - 使用：在服务启动阶段调用 `Helianthus::RPC::RegisterReflectedServices(IRpcServer&)` 可自动注册反射服务。
+- 自动挂载：支持按标签筛选挂载，支持多标签语法（`TagA|TagB` 和 `TagA,TagB`），支持详细的 RPC 日志输出。
 
 # Helianthus 项目 TODO 清单
 

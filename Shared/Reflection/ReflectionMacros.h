@@ -15,7 +15,7 @@ private:
 
 #define HFUNCTION() /* marker for future codegen; runtime registration helper below */
 
-#define HMETHOD(TagLiteral) /* marker for codegen; helper macro below */
+#define HMETHOD(...) /* marker for codegen; helper macro below */
 
 #define HPROPERTY(TagLiteral) /* marker; register via helper macro below */
 

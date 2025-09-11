@@ -214,4 +214,14 @@ Infrastructure subsystems (Configuration, Logging, Metrics, CI/CD) are ✅ COMPL
 3. **Service discovery mechanism**
 4. **Basic service structure** (Gateway, Auth, Player)
 5. **Reflection system foundation**
+   - Reflection/RPC 现状：
+     - 代码生成器：`Shared/Reflection/reflection_codegen.py`
+     - 多标签解析：支持 `TagA|TagB` / `TagA,TagB`，注册为标签数组
+     - 方法元信息：参数名、返回类型、可见性、描述（注释提取）
+     - C++ 语义限定符：从签名解析（static/virtual/inline/const/noexcept/override/final），不再以标签表达
+     - 业务标签：保留 `PureFunction/Math/Utility/Deprecated` 等业务语义
+     - 类标签：`HCLASS(...,NoAutoRegister)` 禁止工厂自动注册但保留方法元信息
+     - 全局开关：`HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER`（默认 OFF）跳过所有类工厂自动注册
+     - 自动挂载：`Helianthus::RPC::RegisterReflectedServices(IRpcServer&)` 支持按方法标签筛选挂载
+   - 示例：`Examples/MetaExtensionDemo.*` 展示 PureFunction 与多标签筛选
 6. **Performance optimization** (serialization, batching, memory)

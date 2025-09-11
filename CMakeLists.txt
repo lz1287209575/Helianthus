@@ -37,6 +37,7 @@ option(HELIANTHUS_USE_TCMALLOC "Use TCMalloc for memory management" ON)
 option(HELIANTHUS_ENABLE_LOGGING "Enable logging system" ON)
 option(HELIANTHUS_BUILD_TESTS "Build tests" ON)
 option(HELIANTHUS_BUILD_EXAMPLES "Build examples" ON)
+option(HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER "Skip auto-registering reflection factories (use manual or class tags)" OFF)
 
 # 设置预处理器定义
 if(HELIANTHUS_ENABLE_LUA)
@@ -61,6 +62,10 @@ endif()
 
 if(HELIANTHUS_ENABLE_LOGGING)
     add_compile_definitions(HELIANTHUS_ENABLE_LOGGING=1)
+endif()
+
+if(HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER)
+    add_compile_definitions(HELIANTHUS_REFLECTION_SKIP_FACTORY_AUTO_REGISTER=1)
 endif()
 
 # 包含目录

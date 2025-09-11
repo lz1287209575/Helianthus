@@ -30,6 +30,14 @@ foreach(test_file ${TEST_SOURCES})
         GTest::gtest
         GTest::gtest_main
     )
+
+    # 将生成目录中 Tests/ 下的 per-class 片段编进测试目标，提供 RegisterRpc_* 符号
+    file(GLOB_RECURSE TEST_GEN_PARTS
+        ${CMAKE_BINARY_DIR}/generated/classes/Tests/*_registration.cpp
+        ${CMAKE_BINARY_DIR}/generated/classes/Tests/*_services.cpp)
+    if(TEST_GEN_PARTS)
+        target_sources(${test_name} PRIVATE ${TEST_GEN_PARTS})
+    endif()
     
     # 设置编译特性
     target_compile_features(${test_name} PRIVATE cxx_std_20)
