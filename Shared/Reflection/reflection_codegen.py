@@ -276,9 +276,43 @@ def split_params(param_str: str):
     buf = []
     depth_angle = 0
     depth_paren = 0
+    depth_brace = 0
+    in_single = False
+    in_double = False
+    escape = False
     i = 0
     while i < len(param_str):
         ch = param_str[i]
+        if in_single:
+            buf.append(ch)
+            if not escape and ch == '\\':
+                escape = True
+            elif escape:
+                escape = False
+            elif ch == '\'':
+                in_single = False
+            i += 1
+            continue
+        if in_double:
+            buf.append(ch)
+            if not escape and ch == '\\':
+                escape = True
+            elif escape:
+                escape = False
+            elif ch == '"':
+                in_double = False
+            i += 1
+            continue
+        if ch == '\'':
+            in_single = True
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            buf.append(ch)
+            i += 1
+            continue
         if ch == '<':
             depth_angle += 1
         elif ch == '>':
@@ -289,7 +323,12 @@ def split_params(param_str: str):
         elif ch == ')':
             if depth_paren > 0:
                 depth_paren -= 1
-        elif ch == ',' and depth_angle == 0 and depth_paren == 0:
+        elif ch == '{':
+            depth_brace += 1
+        elif ch == '}':
+            if depth_brace > 0:
+                depth_brace -= 1
+        elif ch == ',' and depth_angle == 0 and depth_paren == 0 and depth_brace == 0:
             parts.append(''.join(buf).strip())
             buf = []
             i += 1
@@ -311,8 +350,8 @@ def extract_param_name(param: str):
     # 去除 C++ 属性 [[...]] 与 __attribute__(...)
     param = re.sub(r"\[\[[^\]]*\]\]", " ", param)
     param = re.sub(r"__attribute__\s*\(.*?\)", " ", param)
-    # 函数指针形如: int (*Func)(int) 或 void (*cb)(int)
-    m = re.search(r"\(\s*[*&]\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)", param)
+    # 函数指针/成员函数指针: int (*Func)(int), void (Cls:: *cb)(int)
+    m = re.search(r"\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*::\s*)?[*&]\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)", param)
     if m:
         return m.group(1)
     # 普通指针/引用或数组: type& Name[] / type * Name
@@ -567,11 +606,16 @@ def generate_per_class_files(classes_dir, all_classes, cache):
         for tag, method in meths:
             params = param_map.get((tag, method), [])
             ret = return_map.get((tag, method), '')
-            # 仅保留业务语义标签：移除 C++ 语义限定符（Static/Virtual/Const/Noexcept/Override/Final/Inline）
-            raw_tags = tags_map.get((tag, method), [tag])
-            method_tags = [t for t in raw_tags if t not in ['Static','Virtual','Const','Noexcept','Override','Final','Inline']]
-            # 仅保留业务语义标签
-            raw_tags = tags_map.get((tag, method), [tag])
+            # 仅保留业务语义标签：优先使用签名解析得到的 tags_map
+            raw_tags = tags_map.get((tag, method))
+            if raw_tags is None:
+                # 回退：按方法名匹配任一记录
+                for (tkey, mkey), v in tags_map.items():
+                    if mkey == method and v:
+                        raw_tags = v
+                        break
+            if raw_tags is None:
+                raw_tags = _parse_tags(tag)
             method_tags = [t for t in raw_tags if t not in ['Static','Virtual','Const','Noexcept','Override','Final','Inline']]
             comment = comment_map.get((tag, method), '')
             qualifiers = qualifier_map.get((tag, method), {})
@@ -627,8 +671,15 @@ def generate_per_class_files(classes_dir, all_classes, cache):
             if key in seen_methods:
                 continue
             seen_methods.add(key)
-            # 仅保留业务语义标签
-            raw_tags = tags_map.get((tag, method), [tag])
+            # 仅保留业务语义标签：优先使用签名解析得到的 tags_map
+            raw_tags = tags_map.get((tag, method))
+            if raw_tags is None:
+                for (tkey, mkey), v in tags_map.items():
+                    if mkey == method and v:
+                        raw_tags = v
+                        break
+            if raw_tags is None:
+                raw_tags = _parse_tags(tag)
             method_tags = [t for t in raw_tags if t not in ['Static','Virtual','Const','Noexcept','Override','Final','Inline']]
             tags_literal = ', '.join([f'"{t}"' for t in method_tags])
             svc.append(f'Helianthus::RPC::RpcServiceRegistry::Get().RegisterMethod("{class_name}", Helianthus::RPC::RpcMethodMeta{{"{method}", "ReflectedRpc", "", "", {{{tags_literal}}}, "", 100}});')

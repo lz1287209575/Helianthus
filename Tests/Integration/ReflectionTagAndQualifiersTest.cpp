@@ -20,6 +20,10 @@ public:
 
     // 业务标签：Utility；限定符来自签名：inline const
     HMETHOD(Utility) inline int GetValue() const { return 42; }
+
+    // 复杂签名：模板与默认参数、函数指针参数
+    HMETHOD(Utility,Advanced)
+    void Complex(const std::vector<std::pair<int,std::string>>& Items = {}, int (*Transform)(int) = nullptr) {}
 };
 
 TEST(ReflectionTagAndQualifiersTest, TagFilterAndQualifiers)
@@ -40,7 +44,7 @@ TEST(ReflectionTagAndQualifiersTest, TagFilterAndQualifiers)
 
     // 校验方法元信息已注册，且标签为业务标签
     auto Meta = RpcServiceRegistry::Get().GetMeta("MiniService");
-    bool FoundAdd = false, FoundGetValue = false;
+    bool FoundAdd = false, FoundGetValue = false, FoundComplex = false;
     for (const auto& M : Meta.Methods)
     {
         if (M.MethodName == "Add")
@@ -59,9 +63,19 @@ TEST(ReflectionTagAndQualifiersTest, TagFilterAndQualifiers)
             ASSERT_EQ(std::find(M.Tags.begin(), M.Tags.end(), std::string("Inline")), M.Tags.end());
             ASSERT_EQ(std::find(M.Tags.begin(), M.Tags.end(), std::string("Const")), M.Tags.end());
         }
+        if (M.MethodName == "Complex")
+        {
+            FoundComplex = true;
+            bool HasAdvanced = false;
+            for (const auto& T : M.Tags) {
+                if (T == "Advanced" || T.find("Advanced") != std::string::npos) { HasAdvanced = true; break; }
+            }
+            ASSERT_TRUE(HasAdvanced);
+        }
     }
     ASSERT_TRUE(FoundAdd);
     ASSERT_TRUE(FoundGetValue);
+    ASSERT_TRUE(FoundComplex);
 
     // 按标签筛选挂载：Math 应匹配到 MiniService（Add）
     auto Server = std::make_shared<RpcServer>();
